@@ -63,6 +63,26 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 	}
 }
 
+/*
+when ODIN_PLATFORM_SUBTARGET == .Android {
+	@(export)
+	main :: proc "c" (argc: c.int, argv: [^]cstring) -> c.int {
+		context = {}
+		main2()
+	}
+} else {
+	main :: proc () {
+		main2()
+	}
+}
+*/
+
+@(export)
+dyn_main :: proc "c" () {
+	context = {}
+	main()
+}
+
 main :: proc () {
 	fmt.println("main")
 	context.logger = log.create_console_logger()

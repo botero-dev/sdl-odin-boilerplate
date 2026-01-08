@@ -11,7 +11,11 @@ cp ../../clay.h clay.c;
 # Linux
 echo "Compiling clay linux"
 
-rm -f clay-odin/linux/clay.a && clang -c -DCLAY_IMPLEMENTATION -o clay.o -ffreestanding -static -target x86_64-unknown-linux-gnu clay.c -fPIC -O3 && ar r clay-odin/linux/clay.a clay.o;
+#rm -f clay-odin/linux/clay.a && clang -c -DCLAY_IMPLEMENTATION -o clay.o -ffreestanding -static -target x86_64-unknown-linux-gnu clay.c -fPIC -O3 && ar r clay-odin/linux/clay.a clay.o;
+
+rm -f clay-odin/linux/clay.a && clang -c -DCLAY_IMPLEMENTATION -o clay.o -ffreestanding -static -target aarch64-linux-android clay.c -fPIC -O3 && ar r clay-odin/linux/clay.a clay.o;
+
+
 # Linux Debug
 #rm -f clay-odin/linux/clay.a && clang -c -DCLAY_IMPLEMENTATION -o clay.o -ffreestanding -static -target x86_64-unknown-linux-gnu clay.c -fPIC -O1 -g && ar r clay-odin/linux/clay.a clay.o;
 
