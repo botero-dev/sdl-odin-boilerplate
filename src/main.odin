@@ -90,10 +90,24 @@ SDL_main :: proc "c" (argc: c.int, argv: [^]cstring) -> c.int {
 	return 0;
 }
 
+/*
+Logger_Proc :: #type proc(data: rawptr, level: Level, text: string, options: Options, location := #caller_location);
+*/
+Logger_Proc :: runtime.Logger_Proc
+
+log_proc :: proc(data: rawptr, level: runtime.Logger_Level, text: string, options: runtime.Logger_Options, location := #caller_location) {
+	temporary := strings.clone_to_cstring(text)
+	SDL.Log("%s", temporary)
+}
+
+
 // entry point for .so load in android
 @(export)
 android_main :: proc "c" (appstate: rawptr) {
 	context = runtime.default_context()
+	context.logger = runtime.Logger {
+		procedure = log_proc
+	}
 }
 
 main :: proc() {
@@ -101,9 +115,15 @@ main :: proc() {
 }
 
 main2 :: proc () {
-	fmt.println("main")
-	context.logger = log.create_console_logger()
-    ctx = context
+	context.logger = runtime.Logger {
+		procedure = log_proc
+	}
+	ctx = context
+	fmt.println("sdl main")
+	log.info("sdl main")
+	log.info("sdl main")
+	
+
     //args := os.args
 	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 	} else {
@@ -129,6 +149,8 @@ RequestHandler :: struct {
 
 // async on web, synchronous on desktop
 request_data :: proc (url: cstring, user_data: rawptr, callback: proc(result: RequestResult)) {
+	
+	log.info("request_data", url)
 	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 		fetch_attr := emscripten.emscripten_fetch_attr_t {}
 		emscripten.emscripten_fetch_attr_init(&fetch_attr)
@@ -145,8 +167,21 @@ request_data :: proc (url: cstring, user_data: rawptr, callback: proc(result: Re
 		emscripten.emscripten_fetch(&fetch_attr, url)
 	} else {
 
+		target_url := url
+		when ODIN_PLATFORM_SUBTARGET == .Android {
+			base := "."//SDL.GetBasePath()
+			//target_url = fmt.ctprintf("%s/%s", base, url)
+		}
+		
+		log.info("loading", target_url)
+
+		io := SDL.IOFromFile(target_url, "r")
+
 		file_size: uint = ---
-		file_data :=  ([^]byte) (SDL.LoadFile(url, &file_size))
+		file_data :=  ([^]byte) (SDL.LoadFile_IO(io, &file_size, true))
+
+		log.info("loaded", target_url, "with size", file_size)
+		
 
 		result := RequestResult {
 			success = true,
@@ -155,7 +190,6 @@ request_data :: proc (url: cstring, user_data: rawptr, callback: proc(result: Re
 		}
 
 		callback(result)
-
 	}
 }
 
@@ -211,7 +245,7 @@ GalleryImage :: struct {
 	texture: ^SDL.Texture,
 }
 
-images: [dynamic]GalleryImage
+images: [dynamic]GalleryImage = {}
 
 parse_files :: proc (result: RequestResult) {
 	bytes := result.bytes
@@ -244,16 +278,32 @@ parse_files :: proc (result: RequestResult) {
 }
 
 assign_font :: proc (result: RequestResult) {
-	bytes := result.bytes
-    io := SDL.IOFromConstMem(&bytes[0], len(bytes))
-    font = TTF.OpenFontIO(io, false, 16)
+	context.logger = runtime.Logger {
+		procedure = log_proc
+	}
 
+	log.info("assign_font a")
+	bytes := result.bytes
+    log.info("assign_font b", bytes)
+	if len(bytes) == 0 {
+		return
+	}
+	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
+    log.info("assign_font c", bytes)
+	font = TTF.OpenFontIO(io, false, 16)
+	log.info("assign_font d", bytes)
+	
     if font == nil {
         fmt.println("unable to load font:", SDL.GetError())
     }
-
+	log.info("assign_font e", bytes)
+	
     text = TTF.CreateText(engine, font, "My Text", 0)
+	log.info("assign_font f", bytes)
+	
     TTF.SetTextColor(text, 255, 255, 255, 255)
+	log.info("assign_font g", bytes)
+	
 }
 
 
@@ -397,7 +447,10 @@ app_tick :: proc (dt: f64) {
 }
 
 get_next_img_idx :: proc(idx: int) -> int {
-	return (idx + 1) % len(images)
+	if images != nil {
+		return (idx + 1) % len(images)
+	}
+	return 0
 }
 
 
