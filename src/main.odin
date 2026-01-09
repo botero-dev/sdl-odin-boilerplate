@@ -79,11 +79,28 @@ when ODIN_PLATFORM_SUBTARGET == .Android {
 
 @(export)
 dyn_main :: proc "c" () {
-	context = {}
-	main()
+	context = runtime.default_context()
+	main2()
 }
 
-main :: proc () {
+@(export)
+SDL_main :: proc "c" (argc: c.int, argv: [^]cstring) -> c.int {
+	context = runtime.default_context()
+	main2()
+	return 0;
+}
+
+// entry point for .so load in android
+@(export)
+android_main :: proc "c" (appstate: rawptr) {
+	context = runtime.default_context()
+}
+
+main :: proc() {
+	main2()
+}
+
+main2 :: proc () {
 	fmt.println("main")
 	context.logger = log.create_console_logger()
     ctx = context
