@@ -164,7 +164,8 @@ request_data :: proc (url: cstring, user_data: rawptr, callback: proc(result: Re
 		callback_info.ctx = context
 
 		fetch_attr.userData = callback_info
-		emscripten.emscripten_fetch(&fetch_attr, url)
+		target_url := fmt.ctprintf("content/%s", url)
+		emscripten.emscripten_fetch(&fetch_attr, target_url)
 	} else {
 
 		target_url := url
