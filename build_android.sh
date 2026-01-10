@@ -1,55 +1,36 @@
-export ODIN_ANDROID_NDK="/home/abotero/android_sdk/ndk/27.0.12077973"
+export ANDROID_HOME="/home/abotero/android_sdk"
+export ODIN_ANDROID_NDK="$ANDROID_HOME/ndk/27.0.12077973"
+export ODIN_ROOT=/home/abotero/abotero/odin
 
 set -e
 
-#/home/abotero/abotero/webtest/../odin/odin build src -extra-linker-flags:"-L/home/abotero/abotero/webtest/build/linux/sdl/lib -L/home/abotero/abotero/webtest/build/linux/sdl_image/lib -L/home/abotero/abotero/webtest/build/linux/sdl_ttf/lib" -target=linux_arm64 -subtarget=android -build-mode=shared
+# ideally, we would compile our odin binary after gradle compiled SDL, but
+# before it is packaged. But for now we just run gradle twice.
 
-# todo: compile clay with android triple aarch64-linux-android
+pushd build/android
 
-/home/abotero/abotero/webtest/../odin/odin build src -target=linux_arm64 -subtarget=android -build-mode=shared -extra-linker-flags:"-L/home/abotero/abotero/webtest/build/android/app/build/intermediates/cxx/Debug/4z245n3s/obj/local/arm64-v8a"
+./gradlew buildDebug
+popd
 
-#cp src.so build/android/app/jni/src/libs/libmain.so
-cp src.so build/android/app/libs/arm64-v8a/libmain.so
+
+echo "odin build android arm64"
+
+/home/abotero/abotero/webtest/../odin/odin build src -target=linux_arm64 -subtarget=android -build-mode=shared \
+	-extra-linker-flags:"-Lbuild/android/app/build/intermediates/cxx/Debug/4z245n3s/obj/local/arm64-v8a" \
+	-out:"build/android/app/libs/arm64-v8a/libmain.so" -show-system-calls
+
+echo "odin build android arm32"
+
+/home/abotero/abotero/webtest/../odin/odin build src -target=linux_arm32 -subtarget=android -build-mode=shared \
+	-extra-linker-flags:"-Lbuild/android/app/build/intermediates/cxx/Debug/4z245n3s/obj/local/armeabi-v7a" \
+	-out:"build/android/app/libs/armeabi-v7a/libmain.so" -show-system-calls
+
+# -show-system-calls
+# -show-timings
+
+echo "finished compiling, gradle now"
 
 pushd build/android
 
 ./gradlew installDebug
 popd
-
-#ar rcs src.a *.o
-#cp src.a build/android/app/jni/src/src.a
-
-#rm *.o
-
-
-exit 0
-
-/home/abotero/android_sdk/ndk/27.0.12077973/ndk-build \
-  NDK_PROJECT_PATH=null \
-  APP_BUILD_SCRIPT=/home/abotero/abotero/webtest/build/android/app/jni/Android.mk \
-  NDK_APPLICATION_MK=/home/abotero/abotero/webtest/build/android/app/jni/Application.mk \
-  APP_ABI=arm64-v8a \
-  NDK_ALL_ABIS=arm64-v8a \
-  NDK_DEBUG=1 \
-  NDK_OUT=/home/abotero/abotero/webtest/build/android/app/build/intermediates/cxx/Debug/4z245n3s/obj \
-  NDK_LIBS_OUT=/home/abotero/abotero/webtest/build/android/app/build/intermediates/cxx/Debug/4z245n3s/lib \
-  APP_PLATFORM=android-21 \
-  APP_SHORT_COMMANDS=false \
-  LOCAL_SHORT_COMMANDS=false \
-  -B \
-  -n
-
-
-/home/abotero/android_sdk/ndk/27.0.12077973/ndk-build \
-  NDK_PROJECT_PATH=null \
-  APP_BUILD_SCRIPT=/home/abotero/abotero/webtest/build/android/app/jni/Android.mk \
-  NDK_APPLICATION_MK=/home/abotero/abotero/webtest/build/android/app/jni/Application.mk \
-  APP_ABI=arm64-v8a \
-  NDK_ALL_ABIS=arm64-v8a \
-  NDK_DEBUG=1 \
-  NDK_OUT=/home/abotero/abotero/webtest/build/android/app/build/intermediates/cxx/Debug/4z245n3s/obj \
-  NDK_LIBS_OUT=/home/abotero/abotero/webtest/build/android/app/build/intermediates/cxx/Debug/4z245n3s/lib \
-  APP_PLATFORM=android-21 \
-  SDL3 \
-  SDL3_image \
-  SDL3_ttf

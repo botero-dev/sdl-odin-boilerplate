@@ -279,32 +279,21 @@ parse_files :: proc (result: RequestResult) {
 }
 
 assign_font :: proc (result: RequestResult) {
-	context.logger = runtime.Logger {
-		procedure = log_proc
-	}
 
-	log.info("assign_font a")
 	bytes := result.bytes
-    log.info("assign_font b", bytes)
-	if len(bytes) == 0 {
+    if len(bytes) == 0 {
 		return
 	}
 	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
-    log.info("assign_font c", bytes)
-	font = TTF.OpenFontIO(io, false, 16)
-	log.info("assign_font d", bytes)
-	
+    font = TTF.OpenFontIO(io, false, 16)
+
     if font == nil {
         fmt.println("unable to load font:", SDL.GetError())
     }
-	log.info("assign_font e", bytes)
-	
+
     text = TTF.CreateText(engine, font, "My Text", 0)
-	log.info("assign_font f", bytes)
-	
+
     TTF.SetTextColor(text, 255, 255, 255, 255)
-	log.info("assign_font g", bytes)
-	
 }
 
 
@@ -357,6 +346,7 @@ sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult
     context = ctx
 	ui_dirty = true
     retval := SDL.AppResult.CONTINUE
+	log.info("sdl event:", event.type)
 	#partial switch event.type {
 	case .MOUSE_MOTION :
 			clay.SetPointerState({event.motion.x, event.motion.y}, (event.motion.state & SDL.BUTTON_LMASK) != {} )
@@ -373,6 +363,8 @@ sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult
 	case .WINDOW_RESIZED:
 		//fmt.println("event windiw_resized:", event.window)
 		win_size = {event.window.data1, event.window.data2}
+		ui_dirty = true
+		log.info("ui dirty: true")
 	case:
 		//fmt.println("event.type:", event.type)
 
@@ -409,6 +401,7 @@ sdl_app_iterate :: proc "c" (appstate: rawptr) -> SDL.AppResult {
 
 	app_tick(delta_time)
 
+	ui_dirty = true
 	app_draw()
 	return .CONTINUE
 }

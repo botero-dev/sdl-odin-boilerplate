@@ -5,12 +5,20 @@ import "core:c"
 when ODIN_OS == .Windows {
 	foreign import Clay "windows/clay.lib"
 } else when ODIN_OS == .Linux {
-	foreign import Clay "linux/clay.a"
+	when ODIN_PLATFORM_SUBTARGET == .Android {
+		when ODIN_ARCH == .arm64 {
+			foreign import Clay "android/clay-arm64.a"
+		} else {
+			foreign import Clay "android/clay-arm32.a"
+		}
+	} else {
+		foreign import Clay "linux/clay.a"
+	}
 } else when ODIN_OS == .Darwin {
 	when ODIN_ARCH == .arm64 {
-		foreign import Clay "macos-arm64/clay.a"
+		foreign import Clay "macos/clay-arm64.a"
 	} else {
-		foreign import Clay "macos/clay.a"
+		foreign import Clay "macos/clay-x64.a"
 	}
 } else when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 	foreign import Clay "wasm/clay.o"
