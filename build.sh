@@ -144,7 +144,6 @@ echo "${compile_cmd[@]}"
 "${compile_cmd[@]}"
 
 if [[ "$TARGET" = "web" ]]; then
-	mkdir -p "$PACKAGE_PATH/web"
 	source_emsdk
 
 	link_cmd=(\

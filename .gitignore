@@ -1,4 +1,12 @@
-build/
-vendor/
-content/
-platform/android/.gradle
+/build
+/content
+/platform/android/.gradle
+
+# Ignore everything by default, we can force add to our repo as needed
+/vendor
+
+*.a
+*.o
+*.lib
+
+!*.odin
