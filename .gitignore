@@ -1,3 +1,4 @@
 build/
 vendor/
 content/
+platform/android/.gradle

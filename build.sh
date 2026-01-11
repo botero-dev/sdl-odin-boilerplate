@@ -26,21 +26,20 @@ SDLTTF_PATH="$SCRIPT_PATH/../SDL_ttf"
 # you don't need to source emsdk_env as we do here manually
 EMSDK_PATH="$SCRIPT_PATH/../emsdk"
 
-
 if [[ "$TARGET" = "" ]]; then
 	TARGET="linux"
 fi
 
-
-#TARGET="linux"
-#TARGET="web" # when it is web, cmake with emcmake
+source_emsdk() {
+	if [ -z "$EMSDK" ]; then
+		echo "Loading emsdk environment"
+		source "$EMSDK_PATH/emsdk_env.sh"
+	fi
+}
 
 cmake_cmd() {
 	if [[ "$TARGET" = "web" ]]; then
-		if [ -z "$EMSDK" ]; then
-			echo "Loading emsdk environment"
-			source "$EMSDK_PATH/emsdk_env.sh"
-		fi
+		source_emsdk
 		echo emcmake cmake "$@"
 		emcmake cmake "$@"
 	else
@@ -49,14 +48,15 @@ cmake_cmd() {
 	fi
 }
 
+BUILD_PATH="$SCRIPT_PATH/build"
+
 # ensure that SDL is built
-BUILD_PATH="build/$TARGET"
+BUILD_SRC_PATH="$BUILD_PATH/src/$TARGET"
+BUILD_OBJ_PATH="$BUILD_PATH/obj/$TARGET"
+INSTALL_PATH="$BUILD_PATH/lib/$TARGET"
+#BUILD_LIB_PATH="$INSTALL_PATH/lib"
+PACKAGE_PATH="$BUILD_PATH/package/$TARGET"
 
-BUILD_PATH="$(pwd)/$BUILD_PATH"
-
-SDL_LIBRARY="sdl/libSDL3"
-SDLIMG_LIBRARY="sdl_image/libSDL3_image"
-SDLTTF_LIBRARY="sdl_ttf/libSDL3_ttf"
 
 SUFFIX=".ext"
 if [[ "$TARGET" = "linux" ]]; then
@@ -66,44 +66,43 @@ if [[ "$TARGET" = "web" ]]; then
 	SUFFIX=".a"
 fi
 
-SDL_LIBRARY="${SDL_LIBRARY}${SUFFIX}"
-SDLIMG_LIBRARY="${SDLIMG_LIBRARY}${SUFFIX}"
-SDLTTF_LIBRARY="${SDLTTF_LIBRARY}${SUFFIX}"
+SDL_LIBRARY="libSDL3${SUFFIX}"
+SDLIMG_LIBRARY="libSDL3_image${SUFFIX}"
+SDLTTF_LIBRARY="libSDL3_ttf${SUFFIX}"
 
+if [ ! -e "$INSTALL_PATH/lib/$SDL_LIBRARY" ]; then
+    mkdir -p "$BUILD_SRC_PATH/sdl"
+    pushd "$BUILD_SRC_PATH/sdl"
 
-
-if [ ! -e "$BUILD_PATH/$SDL_LIBRARY" ]; then
-
-    mkdir -p "$BUILD_PATH/sdl"
-    pushd "$BUILD_PATH/sdl"
-
-	cmake_cmd "$SDL_PATH" -DCMAKE_INSTALL_PREFIX="$(pwd)"
+	cmake_cmd "$SDL_PATH" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
     make "-j$(nproc)"
-	if [[ "$TARGET" = "linux" ]]; then
+
+#	if [[ "$TARGET" = "linux" ]]; then
 		make install
-	fi
+	# fi
 	popd
 fi
 
-if [ ! -e "$BUILD_PATH/$SDLIMG_LIBRARY" ]; then
-    mkdir -p "$BUILD_PATH/sdl_image"
-    pushd "$BUILD_PATH/sdl_image"
-    cmake_cmd "$SDLIMG_PATH" -DSDL3_DIR="$BUILD_PATH/sdl" -DCMAKE_INSTALL_PREFIX="$(pwd)"
+if [ ! -e "$INSTALL_PATH/lib/$SDLIMG_LIBRARY" ]; then
+    mkdir -p "$BUILD_SRC_PATH/sdl_image"
+    pushd "$BUILD_SRC_PATH/sdl_image"
+
+    cmake_cmd "$SDLIMG_PATH" -DSDL3_DIR="$BUILD_SRC_PATH/sdl" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
     make "-j$(nproc)"
-    if [[ "$TARGET" = "linux" ]]; then
+    # if [[ "$TARGET" = "linux" ]]; then
 		make install
-	fi
+	# fi
 	popd
 fi
 
-if [ ! -e "$BUILD_PATH/$SDLTTF_LIBRARY" ]; then
-    mkdir -p "$BUILD_PATH/sdl_ttf"
-    pushd "$BUILD_PATH/sdl_ttf"
-    cmake_cmd cmake "$SDLTTF_PATH" -DSDL3_DIR="$BUILD_PATH/sdl" -DSDLTTF_VENDORED=true -DSDLTTF_SAMPLES=false -DCMAKE_INSTALL_PREFIX="$(pwd)"
+if [ ! -e "$INSTALL_PATH/lib/$SDLTTF_LIBRARY" ]; then
+    mkdir -p "$BUILD_SRC_PATH/sdl_ttf"
+    pushd "$BUILD_SRC_PATH/sdl_ttf"
+    cmake_cmd "$SDLTTF_PATH" -DSDL3_DIR="$BUILD_SRC_PATH/sdl" -DSDLTTF_VENDORED=true -DSDLTTF_SAMPLES=false -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
     make "-j$(nproc)"
-	if [[ "$TARGET" = "linux" ]]; then
+	# if [[ "$TARGET" = "linux" ]]; then
 		make install
-	fi
+	# fi
 	popd
 fi
 
@@ -113,29 +112,30 @@ echo "Compiling"
 compile_cmd=("$ODIN_PATH/odin" build src)
 
 if [[ "$TARGET" = "linux" ]]; then
-	current_dir=$(pwd)
-	# LD_LIBRARY_PATH="$current_dir/$BUILD_PATH/sdl:$LD_LIBRARY_PATH"
-	# LD_LIBRARY_PATH="$current_dir/$BUILD_PATH/sdl_image:$LD_LIBRARY_PATH"
-	# LD_LIBRARY_PATH="$current_dir/$BUILD_PATH/sdl_ttf:$LD_LIBRARY_PATH"
-
-	# export LD_LIBRARY_PATH
-	# echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
-	linker_flags=""
-	linker_flags="$linker_flags -L$BUILD_PATH/sdl/lib"
-	linker_flags="$linker_flags -L$BUILD_PATH/sdl_image/lib"
-	linker_flags="$linker_flags -L$BUILD_PATH/sdl_ttf/lib"
-
 	compile_cmd+=(
-		-extra-linker-flags:"$linker_flags"
+		-extra-linker-flags:"-L$INSTALL_PATH/lib"
 	)
 fi
-if [[ "$TARGET" = "web" ]]; then
+
+
+mkdir -p "$PACKAGE_PATH"
+
+if [[ "$TARGET" = "linux" ]]; then
+
+	compile_cmd+=(
+		-debug
+		-out:"$PACKAGE_PATH/game.bin"
+	)
+
+elif [[ "$TARGET" = "web" ]]; then
+	mkdir -p "$BUILD_OBJ_PATH/web"
+
 	compile_cmd+=(
 		-target:js_wasm32
 		-define:ODIN_DEFAULT_TO_EMSCRIPTEN_ALLOCATOR=true
 		-build-mode:obj
 		-debug
-		-out:game.wasm.o
+		-out:"$BUILD_OBJ_PATH/game.wasm.o"
 #      -show-system-calls
 	)
 fi
@@ -144,22 +144,18 @@ echo "${compile_cmd[@]}"
 "${compile_cmd[@]}"
 
 if [[ "$TARGET" = "web" ]]; then
-
-	if [ -z "$EMSDK" ]; then
-		echo "source $EMSDK_PATH/emsdk_env.sh"
-		echo "  (this step can be skipped if you source beforehand)"
-		source "$EMSDK_PATH/emsdk_env.sh" >/dev/null 2>&1
-	fi
+	mkdir -p "$PACKAGE_PATH/web"
+	source_emsdk
 
 	link_cmd=(\
 		emcc \
-		-o "index.html" \
-		"game.wasm.o" \
+		-o "$PACKAGE_PATH/index.html" \
+		"$BUILD_OBJ_PATH/game.wasm.o" \
 		"src/clay-odin/wasm/clay.o" \
-		"$BUILD_PATH/$SDL_LIBRARY" \
-		"$BUILD_PATH/$SDLIMG_LIBRARY" \
-		"$BUILD_PATH/$SDLTTF_LIBRARY" \
-		--shell-file "index_template.html" \
+		"$INSTALL_PATH/lib/$SDL_LIBRARY" \
+		"$INSTALL_PATH/lib/$SDLIMG_LIBRARY" \
+		"$INSTALL_PATH/lib/$SDLTTF_LIBRARY" \
+		--shell-file "platform/web/index_template.html" \
 		-sERROR_ON_UNDEFINED_SYMBOLS=0 \
 		-sFETCH \
 		-sASSERTIONS=1\
@@ -170,5 +166,17 @@ if [[ "$TARGET" = "web" ]]; then
 
 	echo "${link_cmd[@]}"
 	"${link_cmd[@]}"
+
+	cp "platform/web/odin.js" "$PACKAGE_PATH"
 fi
 echo "done"
+
+
+PACKAGE_CONTENT_PATH="$PACKAGE_PATH/content"
+if [ -L "$PACKAGE_CONTENT_PATH" ] && [ -e "$PACKAGE_CONTENT_PATH" ]; then
+    echo "Valid symlink"
+else
+	echo "creating symlink to content folder"
+	rm -f "$PACKAGE_CONTENT_PATH"
+	ln -s "$SCRIPT_PATH/content" "$PACKAGE_CONTENT_PATH"
+fi

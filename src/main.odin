@@ -29,7 +29,7 @@ text: ^TTF.Text
 
 clay_memory: []byte
 
-win_size: [2]i32 = {640, 480}
+win_size: [2]i32 = {960, 640}
 
 ///////////////////////////////////////////////////////
 // desktop/wasm handling
@@ -159,6 +159,8 @@ request_data :: proc (url: cstring, user_data: rawptr, callback: proc(result: Re
 		when ODIN_PLATFORM_SUBTARGET == .Android {
 			base := "."//SDL.GetBasePath()
 			//target_url = fmt.ctprintf("%s/%s", base, url)
+		} else {
+			target_url = fmt.ctprintf("content/%s", url)
 		}
 		
 		log.info("loading", target_url)
@@ -249,7 +251,7 @@ parse_files :: proc (result: RequestResult) {
 		img_idx := uint(len(images))
 
         append(&images, image) // crash on web
-        full_path := fmt.tprintf("content/%s", path)
+        full_path := fmt.tprintf("gallery/%s", path)
 
 		c_path := strings.clone_to_cstring(full_path)
 
@@ -300,17 +302,16 @@ sdl_app_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL
         return .FAILURE
     }
 
-    if (!SDL.CreateWindowAndRenderer("examples", win_size.x, win_size.y, {}, &window, &renderer)){
+    if (!SDL.CreateWindowAndRenderer("examples", win_size.x, win_size.y, {.RESIZABLE}, &window, &renderer)){
         return .FAILURE
     }
-	SDL.SetWindowResizable(window, true)
 
     engine = TTF.CreateRendererTextEngine(renderer)
 
 
     context = ctx
     request_data("Play-Regular.ttf", nil, assign_font)
-    request_data("content/files.txt", nil, parse_files)
+    request_data("gallery/files.txt", nil, parse_files)
 
     min_size := clay.MinMemorySize()
 
@@ -332,7 +333,7 @@ sdl_app_quit :: proc "c" (appstate: rawptr, result: SDL.AppResult) {
 sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
     context = ctx
 	retval := SDL.AppResult.CONTINUE
-	log.info("sdl event:", event.type)
+	//log.info("sdl event:", event.type)
 	#partial switch event.type {
 	case .MOUSE_MOTION :
 			clay.SetPointerState({event.motion.x, event.motion.y}, (event.motion.state & SDL.BUTTON_LMASK) != {} )
