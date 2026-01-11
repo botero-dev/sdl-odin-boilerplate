@@ -63,20 +63,6 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 	}
 }
 
-/*
-when ODIN_PLATFORM_SUBTARGET == .Android {
-	@(export)
-	main :: proc "c" (argc: c.int, argv: [^]cstring) -> c.int {
-		context = {}
-		main2()
-	}
-} else {
-	main :: proc () {
-		main2()
-	}
-}
-*/
-
 @(export)
 dyn_main :: proc "c" () {
 	context = runtime.default_context()
@@ -108,6 +94,7 @@ android_main :: proc "c" (appstate: rawptr) {
 	context.logger = runtime.Logger {
 		procedure = log_proc
 	}
+	log.info("android_main")
 }
 
 main :: proc() {
@@ -344,8 +331,7 @@ sdl_app_quit :: proc "c" (appstate: rawptr, result: SDL.AppResult) {
 
 sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
     context = ctx
-	ui_dirty = true
-    retval := SDL.AppResult.CONTINUE
+	retval := SDL.AppResult.CONTINUE
 	log.info("sdl event:", event.type)
 	#partial switch event.type {
 	case .MOUSE_MOTION :
@@ -361,10 +347,13 @@ sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult
 	case .QUIT:
 		retval = .SUCCESS
 	case .WINDOW_RESIZED:
-		//fmt.println("event windiw_resized:", event.window)
 		win_size = {event.window.data1, event.window.data2}
 		ui_dirty = true
-		log.info("ui dirty: true")
+
+	case .WINDOW_PIXEL_SIZE_CHANGED:
+		win_size = {event.window.data1, event.window.data2}
+		ui_dirty = true
+
 	case:
 		//fmt.println("event.type:", event.type)
 
@@ -402,6 +391,7 @@ sdl_app_iterate :: proc "c" (appstate: rawptr) -> SDL.AppResult {
 	app_tick(delta_time)
 
 	ui_dirty = true
+
 	app_draw()
 	return .CONTINUE
 }

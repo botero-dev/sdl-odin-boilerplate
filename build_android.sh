@@ -17,13 +17,13 @@ echo "odin build android arm64"
 
 /home/abotero/abotero/webtest/../odin/odin build src -target=linux_arm64 -subtarget=android -build-mode=shared \
 	-extra-linker-flags:"-Lbuild/android/app/build/intermediates/cxx/Debug/4z245n3s/obj/local/arm64-v8a" \
-	-out:"build/android/app/libs/arm64-v8a/libmain.so" -show-system-calls
+	-out:"build/android/app/libs/arm64-v8a/libmain.so" # -show-system-calls
 
 echo "odin build android arm32"
 
 /home/abotero/abotero/webtest/../odin/odin build src -target=linux_arm32 -subtarget=android -build-mode=shared \
 	-extra-linker-flags:"-Lbuild/android/app/build/intermediates/cxx/Debug/4z245n3s/obj/local/armeabi-v7a" \
-	-out:"build/android/app/libs/armeabi-v7a/libmain.so" -show-system-calls
+	-out:"build/android/app/libs/armeabi-v7a/libmain.so" #-show-system-calls
 
 # -show-system-calls
 # -show-timings
