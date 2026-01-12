@@ -3,7 +3,7 @@
 /platform/android/.gradle
 
 # Ignore everything by default, we can force add to our repo as needed
-/vendor
+/vendor/clay
 
 *.a
 *.o

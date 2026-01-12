@@ -10,7 +10,7 @@ ar r clay-odin/macos/clay-x64.a clay.o
 
 # ARM Mac
 rm -f clay-odin/macos/clay-arm64.a
-clang -c -DCLAY_IMPLEMENTATION -g -o clay.o -static -target aarch64-apple-darwin clay.c -fPIC -O3
+clang -c -DCLAY_IMPLEMENTATION -g -o clay.o -static clay.c -fPIC -O3
 ar r clay-odin/macos/clay-arm64.a clay.o
 
 # x64 Windows
