@@ -13,7 +13,11 @@ set -e
 #  - cd SDL && git checkout release-3.2.24
 #
 
-SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ "$(uname)" = "Linux" ]]; then
+	SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+	SCRIPT_PATH="c:/abotero/webtest"
+fi
 ODIN_PATH="$SCRIPT_PATH/../odin"
 
 SDL_PATH="$SCRIPT_PATH/../SDL"
@@ -27,7 +31,11 @@ SDLTTF_PATH="$SCRIPT_PATH/../SDL_ttf"
 EMSDK_PATH="$SCRIPT_PATH/../emsdk"
 
 if [[ "$TARGET" = "" ]]; then
-	TARGET="linux"
+	if [[ "$(uname)" = "Linux" ]]; then
+		TARGET="linux"
+	else
+		TARGET="win"
+	fi
 fi
 
 source_emsdk() {
@@ -49,6 +57,7 @@ cmake_cmd() {
 }
 
 BUILD_PATH="$SCRIPT_PATH/build"
+BUILD_CONFIG="Debug"
 
 # ensure that SDL is built
 BUILD_SRC_PATH="$BUILD_PATH/src/$TARGET"
@@ -57,29 +66,34 @@ INSTALL_PATH="$BUILD_PATH/lib/$TARGET"
 #BUILD_LIB_PATH="$INSTALL_PATH/lib"
 PACKAGE_PATH="$BUILD_PATH/package/$TARGET"
 
+PREFIX="lib"
+PREFIX=""
 
 SUFFIX=".ext"
 if [[ "$TARGET" = "linux" ]]; then
 	SUFFIX=".so"
 fi
+if [[ "$TARGET" = "win" ]]; then
+	SUFFIX=".lib"
+fi
 if [[ "$TARGET" = "web" ]]; then
 	SUFFIX=".a"
 fi
 
-SDL_LIBRARY="libSDL3${SUFFIX}"
-SDLIMG_LIBRARY="libSDL3_image${SUFFIX}"
-SDLTTF_LIBRARY="libSDL3_ttf${SUFFIX}"
+#PREFIX="$PREFIX/$BUILD_CONFIG"
+
+SDL_LIBRARY="${PREFIX}SDL3${SUFFIX}"
+SDLIMG_LIBRARY="${PREFIX}SDL3_image${SUFFIX}"
+SDLTTF_LIBRARY="${PREFIX}SDL3_ttf${SUFFIX}"
 
 if [ ! -e "$INSTALL_PATH/lib/$SDL_LIBRARY" ]; then
     mkdir -p "$BUILD_SRC_PATH/sdl"
     pushd "$BUILD_SRC_PATH/sdl"
 
 	cmake_cmd "$SDL_PATH" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
-    make "-j$(nproc)"
+    cmake --build . --parallel --config "$BUILD_CONFIG"
+	cmake --install . --config "$BUILD_CONFIG"
 
-#	if [[ "$TARGET" = "linux" ]]; then
-		make install
-	# fi
 	popd
 fi
 
@@ -88,10 +102,9 @@ if [ ! -e "$INSTALL_PATH/lib/$SDLIMG_LIBRARY" ]; then
     pushd "$BUILD_SRC_PATH/sdl_image"
 
     cmake_cmd "$SDLIMG_PATH" -DSDL3_DIR="$BUILD_SRC_PATH/sdl" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
-    make "-j$(nproc)"
-    # if [[ "$TARGET" = "linux" ]]; then
-		make install
-	# fi
+    cmake --build . --parallel --config "$BUILD_CONFIG"
+	cmake --install . --config "$BUILD_CONFIG"
+
 	popd
 fi
 
@@ -99,10 +112,9 @@ if [ ! -e "$INSTALL_PATH/lib/$SDLTTF_LIBRARY" ]; then
     mkdir -p "$BUILD_SRC_PATH/sdl_ttf"
     pushd "$BUILD_SRC_PATH/sdl_ttf"
     cmake_cmd "$SDLTTF_PATH" -DSDL3_DIR="$BUILD_SRC_PATH/sdl" -DSDLTTF_VENDORED=true -DSDLTTF_SAMPLES=false -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
-    make "-j$(nproc)"
-	# if [[ "$TARGET" = "linux" ]]; then
-		make install
-	# fi
+    cmake --build . --parallel --config "$BUILD_CONFIG"
+	cmake --install . --config "$BUILD_CONFIG"
+
 	popd
 fi
 
