@@ -13,12 +13,10 @@ import "core:log"
 
 import "base:runtime"
 
-import "emscripten"
 
 import clay "clay-odin"
 
 ctx: runtime.Context
-
 
 window: ^SDL.Window
 renderer: ^SDL.Renderer
@@ -26,192 +24,10 @@ engine: ^TTF.TextEngine
 font: ^TTF.Font
 text: ^TTF.Text
 
-
 clay_memory: []byte
 
 win_size: [2]i32 = {960, 640}
 
-///////////////////////////////////////////////////////
-// desktop/wasm handling
-
-when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
-
-	@export
-	main_start :: proc "c" () {
-		sdl_app_init(nil, 0, nil)
-	}
-
-	@export
-	web_window_size_changed :: proc "c" (w: c.int, h: c.int) {
-		SDL.SetWindowSize(window, w, h)
-	}
-
-	@export
-	main_update :: proc "c" () -> bool {
-		event: SDL.Event
-		context = ctx
-		for (SDL.PollEvent(&event)) {
-			sdl_app_event(nil, &event)
-		}
-		return sdl_app_iterate(nil) == .CONTINUE
-	}
-
-
-	@export
-	main_end :: proc "c" () {
-		sdl_app_quit(nil, {})
-	}
-}
-
-@(export)
-dyn_main :: proc "c" () {
-	context = runtime.default_context()
-	main2()
-}
-
-@(export)
-SDL_main :: proc "c" (argc: c.int, argv: [^]cstring) -> c.int {
-	context = runtime.default_context()
-	main2()
-	return 0;
-}
-
-/*
-Logger_Proc :: #type proc(data: rawptr, level: Level, text: string, options: Options, location := #caller_location);
-*/
-Logger_Proc :: runtime.Logger_Proc
-
-log_proc :: proc(data: rawptr, level: runtime.Logger_Level, text: string, options: runtime.Logger_Options, location := #caller_location) {
-	temporary := strings.clone_to_cstring(text)
-	SDL.Log("%s", temporary)
-}
-
-
-// entry point for .so load in android
-@(export)
-android_main :: proc "c" (appstate: rawptr) {
-	context = runtime.default_context()
-	context.logger = runtime.Logger {
-		procedure = log_proc
-	}
-	log.info("android_main")
-}
-
-main :: proc() {
-	main2()
-}
-
-main2 :: proc () {
-	context.logger = runtime.Logger {
-		procedure = log_proc
-	}
-	ctx = context
-	fmt.println("sdl main")
-	log.info("sdl main")
-	log.info("sdl main")
-	
-
-    //args := os.args
-	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
-	} else {
-        SDL.EnterAppMainCallbacks(0, nil, sdl_app_init, sdl_app_iterate, sdl_app_event, sdl_app_quit)
-    }
-}
-
-
-///////////////////////////////////////////////////////
-
-RequestResult :: struct {
-	success: bool,
-	bytes: []byte,
-	user_data: rawptr,
-}
-
-RequestHandler :: struct {
-	ctx: runtime.Context,
-	user_handler: proc(result: RequestResult),
-	user_data: rawptr,
-}
-
-
-// async on web, synchronous on desktop
-request_data :: proc (url: cstring, user_data: rawptr, callback: proc(result: RequestResult)) {
-	
-	log.info("request_data", url)
-	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
-		fetch_attr := emscripten.emscripten_fetch_attr_t {}
-		emscripten.emscripten_fetch_attr_init(&fetch_attr)
-		fetch_attr.onsuccess = fetch_success
-		fetch_attr.onerror = fetch_error
-		fetch_attr.attributes = emscripten.EMSCRIPTEN_FETCH_LOAD_TO_MEMORY
-
-		callback_info := new(RequestHandler)
-		callback_info.user_handler = callback
-		callback_info.user_data = user_data
-		callback_info.ctx = context
-
-		fetch_attr.userData = callback_info
-		target_url := fmt.ctprintf("content/%s", url)
-		emscripten.emscripten_fetch(&fetch_attr, target_url)
-	} else {
-
-		target_url := url
-		when ODIN_PLATFORM_SUBTARGET == .Android {
-			base := "."//SDL.GetBasePath()
-			//target_url = fmt.ctprintf("%s/%s", base, url)
-		} else {
-			target_url = fmt.ctprintf("content/%s", url)
-		}
-		
-		log.info("loading", target_url)
-
-		io := SDL.IOFromFile(target_url, "r")
-
-		file_size: uint = ---
-		file_data :=  ([^]byte) (SDL.LoadFile_IO(io, &file_size, true))
-
-		log.info("loaded", target_url, "with size", file_size)
-		
-
-		result := RequestResult {
-			success = true,
-			bytes = file_data[0:file_size],
-			user_data = user_data,
-		}
-
-		callback(result)
-	}
-}
-
-
-fetch_error :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
-	request_handler := (^RequestHandler)(fetch_result.userData)
-	context = request_handler.ctx
-	result := RequestResult {
-		success = false,
-		user_data = request_handler.user_data,
-	}
-    request_handler.user_handler(result)
-	free(request_handler)
-}
-
-
-fetch_success :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
-	request_handler := (^RequestHandler)(fetch_result.userData)
-	context = request_handler.ctx
-	result := RequestResult {
-		success = true,
-		user_data = request_handler.user_data,
-		bytes = (([^]byte)(fetch_result.data))[0:fetch_result.numBytes],
-	}
-
-    request_handler.user_handler(result)
-	free(request_handler)
-}
-
-
-
-///////////////////////////////////////////////////////
 
 clay_error_handler :: proc "c" (errorData: clay.ErrorData) {
     context = ctx
@@ -333,7 +149,7 @@ sdl_app_quit :: proc "c" (appstate: rawptr, result: SDL.AppResult) {
 sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
     context = ctx
 	retval := SDL.AppResult.CONTINUE
-	//log.info("sdl event:", event.type)
+	log.info("sdl event:", event.type)
 	#partial switch event.type {
 	case .MOUSE_MOTION :
 			clay.SetPointerState({event.motion.x, event.motion.y}, (event.motion.state & SDL.BUTTON_LMASK) != {} )
@@ -354,9 +170,19 @@ sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult
 	case .WINDOW_PIXEL_SIZE_CHANGED:
 		win_size = {event.window.data1, event.window.data2}
 		ui_dirty = true
+	case .PEN_PROXIMITY_IN, .PEN_PROXIMITY_OUT:
+		log.info(event.pproximity)
+	case .PEN_DOWN, .PEN_UP:
+		log.info(event.ptouch)
+	case .PEN_BUTTON_DOWN, .PEN_BUTTON_UP:
+		log.info(event.pbutton)
+	case .PEN_MOTION:
+		log.info(event.pmotion)
+	case .PEN_AXIS:
+		log.info(event.paxis)
 
-	case:
-		//fmt.println("event.type:", event.type)
+//	case:
+//		fmt.println("event.type:", event.type)
 
 	}
     return retval
@@ -443,31 +269,6 @@ app_draw :: proc () {
 	if ui_dirty {
 		ui_dirty = false
 
-/*
-        SDL.SetRenderDrawColor(renderer, 0, 0, 0, 255)
-		//SDL.RenderClear(renderer)
-
-		rect := SDL.FRect{w = f32(texture_size.x), h = f32(texture_size.y)}
-		rect.w = 100
-		rect.h = 100
-
-		//SDL.SetRenderDrawBlendMode(renderer, .ADD)
-		SDL.SetRenderDrawColor(renderer, 255, 0, 0, 255)
-		SDL.RenderFillRect(renderer, &rect)
-		SDL.SetRenderDrawColor(renderer, 255, 0, 255, 255)
-		SDL.RenderRect(renderer, &rect)
-
-		if texture != nil {
-			rect.w = f32(texture.w)
-			rect.h = f32(texture.h)
-			SDL.RenderTexture(renderer, texture, nil, &rect)
-		}
-
-		if text != nil {
-			TTF.DrawRendererText(text, 100, 100)
-		}
-
-*/
 		clay.SetLayoutDimensions({f32(win_size.x), f32(win_size.y)})
 		free_all(context.temp_allocator)
 		render_commands := create_layout()
@@ -478,10 +279,6 @@ app_draw :: proc () {
 }
 
 
-
-
-
-
 ui_dirty: bool = true
 
 // Define some colors.
@@ -490,18 +287,6 @@ COLOR_RED :: clay.Color{168, 66, 28, 255}
 COLOR_ORANGE :: clay.Color{0, 138, 50, 255}
 COLOR_ORANGE_LIGHT :: clay.Color{50, 188, 100, 255}
 COLOR_BLACK :: clay.Color{0, 0, 0, 255}
-
-COLOR_IMAGES := []clay.Color {
-	{255,    0,    0, 255},
-	{255,  255,    0, 255},
-	{  0,  255,    0, 255},
-	{  0,  255,  255, 255},
-	{  0,    0,  255, 255},
-	{255,    0,  255, 255},
-}
-
-// Layout config is just a struct that can be declared statically, or inline
-
 
 // An example function to create your layout tree
 create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
@@ -640,7 +425,12 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 
 select_directory :: proc() {
 	fmt.println("select_directory")
-	SDL.ShowOpenFolderDialog(select_directory_callback, nil, nil, nil, true)
+	//ShowOpenFolderDialog         :: proc(callback: DialogFileCallback, userdata: rawptr, window: ^Window, default_location: cstring, allow_many: bool) ---
+	SDL.ShowOpenFolderDialog(select_directory_callback, nil, window, nil, true)
+
+	//ShowOpenFileDialog           :: proc(callback: DialogFileCallback, userdata: rawptr, window: ^Window, filters: [^]DialogFileFilter, nfilters: c.int, default_location: cstring, allow_many: bool) ---
+	//SDL.ShowOpenFileDialog(select_directory_callback, nil, window, nil, 0, nil, false)
+
 }
 
 select_directory_callback: SDL.DialogFileCallback : proc "c" (userdata: rawptr, filelist: [^]cstring, filter: c.int) {
@@ -648,8 +438,18 @@ select_directory_callback: SDL.DialogFileCallback : proc "c" (userdata: rawptr, 
 	if filelist == nil {
 		error := SDL.GetError()
 		fmt.println("got error:", error)
-	} else {
-		fmt.println("got file list: ", filelist)
+		return
+	}
+	idx := 0
+	file := filelist[idx]
+	if file == nil {
+		fmt.println("got no files, user cancelled input")
+		return
+	}
+	for file != nil {
+		fmt.println("got file idx:", idx, file)
+		idx += 1
+		file = filelist[idx]
 	}
 
 }
@@ -678,12 +478,6 @@ HandlerInfo :: struct {
 	handler: ButtonHandlerType,
 	ctx: runtime.Context,
 	data: rawptr,
-}
-
-button_handler :: proc(a: clay.ElementId, b: clay.PointerData, c: rawptr) {
-	if (b.state == .PressedThisFrame) {
-		fmt.println("Just pressed!")
-	}
 }
 
 HandleButton :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, userData: rawptr) {

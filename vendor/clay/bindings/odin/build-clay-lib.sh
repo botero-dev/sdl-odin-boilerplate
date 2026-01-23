@@ -22,15 +22,16 @@ rm -f clay-odin/linux/clay.a
 clang -c -DCLAY_IMPLEMENTATION -o clay.o -ffreestanding -static -target x86_64-unknown-linux-gnu clay.c -fPIC -O3
 ar r clay-odin/linux/clay.a clay.o
 
+mkdir -p clay-odin/android
 # Android ARM64
 rm -f clay-odin/android/clay-arm64.a
 clang -c -DCLAY_IMPLEMENTATION -o clay.o -ffreestanding -static -target aarch64-linux-android clay.c -fPIC -O3
-ar r clay-odin/linux/clay-arm64.a clay.o
+ar r clay-odin/android/clay-arm64.a clay.o
 
 # Android ARM32
-rm -f clay-odin/android/clay-arm64.a
+rm -f clay-odin/android/clay-arm32.a
 clang -c -DCLAY_IMPLEMENTATION -o clay.o -ffreestanding -static -target armv7a-linux-android clay.c -fPIC -O3
-ar r clay-odin/linux/clay-arm64.a clay.o
+ar r clay-odin/android/clay-arm32.a clay.o
 
 # WASM
 rm -f clay-odin/wasm/clay.o
