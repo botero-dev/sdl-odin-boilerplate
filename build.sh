@@ -91,7 +91,7 @@ if [ ! -e "$INSTALL_PATH/lib/$SDL_LIBRARY" ]; then
     pushd "$BUILD_SRC_PATH/sdl"
 
 	cmake_cmd "$SDL_PATH" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
-    cmake --build . --parallel --config "$BUILD_CONFIG"
+    cmake --build . --config "$BUILD_CONFIG" --parallel
 	cmake --install . --config "$BUILD_CONFIG"
 
 	popd
@@ -101,8 +101,8 @@ if [ ! -e "$INSTALL_PATH/lib/$SDLIMG_LIBRARY" ]; then
     mkdir -p "$BUILD_SRC_PATH/sdl_image"
     pushd "$BUILD_SRC_PATH/sdl_image"
 
-    cmake_cmd "$SDLIMG_PATH" -DSDL3_DIR="$BUILD_SRC_PATH/sdl" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
-    cmake --build . --parallel --config "$BUILD_CONFIG"
+    cmake_cmd "$SDLIMG_PATH" -DSDL3_DIR="$BUILD_SRC_PATH/sdl" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH" -DSDLIMG_AVIF=OFF
+    cmake --build . --config "$BUILD_CONFIG" --parallel
 	cmake --install . --config "$BUILD_CONFIG"
 
 	popd
@@ -111,8 +111,8 @@ fi
 if [ ! -e "$INSTALL_PATH/lib/$SDLTTF_LIBRARY" ]; then
     mkdir -p "$BUILD_SRC_PATH/sdl_ttf"
     pushd "$BUILD_SRC_PATH/sdl_ttf"
-    cmake_cmd "$SDLTTF_PATH" -DSDL3_DIR="$BUILD_SRC_PATH/sdl" -DSDLTTF_VENDORED=true -DSDLTTF_SAMPLES=false -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
-    cmake --build . --parallel --config "$BUILD_CONFIG"
+    cmake_cmd "$SDLTTF_PATH" -DSDL3_DIR="$BUILD_SRC_PATH/sdl" -DSDLTTF_SAMPLES=false -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
+    cmake --build . --config "$BUILD_CONFIG" --parallel
 	cmake --install . --config "$BUILD_CONFIG"
 
 	popd
@@ -139,6 +139,13 @@ if [[ "$TARGET" = "linux" ]]; then
 		-out:"$PACKAGE_PATH/game.bin"
 	)
 
+elif [[ "$TARGET" = "win" ]]; then
+
+	compile_cmd+=(
+		-debug
+		-out:"$PACKAGE_PATH/game.exe"
+	)
+
 elif [[ "$TARGET" = "web" ]]; then
 	mkdir -p "$BUILD_OBJ_PATH/web"
 
@@ -155,7 +162,12 @@ fi
 echo "${compile_cmd[@]}"
 "${compile_cmd[@]}"
 
-if [[ "$TARGET" = "web" ]]; then
+if [[ "$TARGET" = "win" ]]; then
+	INSTALL_PATH_BASH=$(echo "$INSTALL_PATH" | sed 's|^\([A-Za-z]\):/|/\1/|')
+	PACKAGE_PATH_BASH=$(echo "$PACKAGE_PATH" | sed 's|^\([A-Za-z]\):/|/\1/|')
+	cp "$INSTALL_PATH_BASH/bin/"* "$PACKAGE_PATH_BASH"
+
+elif [[ "$TARGET" = "web" ]]; then
 	source_emsdk
 
 	link_cmd=(\
@@ -186,6 +198,8 @@ echo "done"
 PACKAGE_CONTENT_PATH="$PACKAGE_PATH/content"
 if [ -L "$PACKAGE_CONTENT_PATH" ] && [ -e "$PACKAGE_CONTENT_PATH" ]; then
     echo "Valid symlink"
+elif [ -d "$PACKAGE_CONTENT_PATH" ]; then
+    echo "Content is directory (not symlink). Skipping"
 else
 	echo "creating symlink to content folder"
 	rm -f "$PACKAGE_CONTENT_PATH"

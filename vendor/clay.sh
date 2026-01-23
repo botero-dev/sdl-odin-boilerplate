@@ -28,7 +28,14 @@ if [ ! -d "clay" ]; then
 fi
 
 pushd clay/bindings/odin
-./build-clay-lib.sh
+if uname | grep -q "MINGW64"; then
+	rm -f clay-odin/windows/clay.lib
+	mkdir -p clay-odin/windows
+	clang -c -DCLAY_IMPLEMENTATION -o clay-odin/windows/clay.lib -ffreestanding -target x86_64-pc-windows-msvc -fuse-ld=llvm-lib -static -O3 clay.c
+
+else
+	./build-clay-lib.sh
+fi
 popd
 
 rm -rf ../src/clay-odin
