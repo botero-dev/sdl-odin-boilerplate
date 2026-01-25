@@ -33,16 +33,6 @@ clay_error_handler :: proc "c" (errorData: clay.ErrorData) {
     fmt.println(errorData)
 }
 
-clay_measure_text :: proc "c" (
-    text: clay.StringSlice,
-    config: ^clay.TextElementConfig,
-    userData: rawptr,
-) -> clay.Dimensions {
-    return {
-        width = f32(text.length * i32(config.fontSize)) * 0.5,
-        height = f32(config.fontSize),
-    }
-}
 
 GalleryImage :: struct {
 	img_path: string,
@@ -304,7 +294,12 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
     // Begin constructing the layout.
     clay.BeginLayout()
 
-	text_config = clay.TextConfig({ textColor = color_text, fontSize = border_policy(16) })
+
+	text_config = clay.TextConfig({
+		textColor = color_text,
+		fontSize = border_policy(16),
+		textAlignment = .Center,
+	})
 
     // An example of laying out a UI with a fixed-width sidebar and flexible-width main content
     // NOTE: To create a scope for child components, the Odin API uses `if` with components that have children
@@ -447,58 +442,6 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 
 text_config: ^clay.TextElementConfig
 
-dpi := f32(1.0)
-border_policy :: proc (border: $T) -> u16 {
-	return u16(math.round(f32(border) * dpi)) // could also be ceil or floor
-}
-
-DPI_ElementDeclaration :: proc (decl: clay.ElementDeclaration) -> clay.ElementDeclaration {
-	result := decl
-	result.cornerRadius = DPI_CornerRadius(decl.cornerRadius)
-	result.border.width = DPI_BorderWidth(result.border.width)
-	result.layout.padding = DPI_Padding(result.layout.padding)
-	result.layout.childGap = border_policy(result.layout.childGap)
-	if result.layout.sizing.width.type == .Fixed {
-		result.layout.sizing.width.constraints.sizeMinMax.min *= dpi
-		result.layout.sizing.width.constraints.sizeMinMax.max *= dpi
-	}
-	if result.layout.sizing.height.type == .Fixed {
-		result.layout.sizing.height.constraints.sizeMinMax.min *= dpi
-		result.layout.sizing.height.constraints.sizeMinMax.max *= dpi
-	}
-
-	return result
-}
-DPI :: DPI_ElementDeclaration
-
-DPI_BorderWidth :: proc (input: clay.BorderWidth) -> clay.BorderWidth {
-	return clay.BorderWidth {
-		border_policy(input.left),
-		border_policy(input.right),
-		border_policy(input.top),
-		border_policy(input.bottom),
-		border_policy(input.betweenChildren),
-	}
-}
-
-DPI_CornerRadius :: proc (radii: clay.CornerRadius) -> clay.CornerRadius {
-	return clay.CornerRadius {
-		dpi * (radii.topLeft),
-		dpi * (radii.topRight),
-		dpi * (radii.bottomLeft),
-		dpi * (radii.bottomRight),
-	}
-}
-
-DPI_Padding :: proc (padding: clay.Padding) -> clay.Padding {
-	return clay.Padding {
-		border_policy(padding.left),
-		border_policy(padding.right),
-		border_policy(padding.top),
-		border_policy(padding.bottom),
-	}
-}
-
 
 
 select_directory :: proc() {
@@ -557,9 +500,11 @@ dpi_levels := []f32 {
 playback_last :: proc() {
 	fmt.println("last")
 	dpi_index = (dpi_index + 1) % len(dpi_levels)
-	dpi = dpi_levels[dpi_index]
+	new_dpi := dpi_levels[dpi_index]
+	DPI_set(new_dpi)
 	log.info("set dpi to:", dpi)
 }
+
 
 
 // ClayButtonHandlerType :: #type proc(id: clay.ElementId, pointerData: clay.PointerData, userdata: rawptr)

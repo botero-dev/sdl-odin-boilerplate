@@ -4,6 +4,7 @@ package main
 import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:c"
 
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
@@ -11,6 +12,102 @@ import TTF "vendor:sdl3/ttf"
 import clay "clay-odin"
 
 vec2 :: [2]f32
+
+
+// TextElementConfig :: struct {
+// 	userData:           rawptr,
+// 	textColor:          Color,
+// 	fontId:             u16,
+// 	fontSize:           u16,
+// 	letterSpacing:      u16,
+// 	lineHeight:         u16,
+// 	wrapMode:           TextWrapMode,
+// 	textAlignment:      TextAlignment,
+// }
+
+// StringSlice :: struct {
+// 	length: c.int32_t,
+// 	chars:  [^]c.char,
+// 	baseChars:  [^]c.char,
+// }
+
+
+clay_measure_text :: proc "c" (
+    text: clay.StringSlice,
+    config: ^clay.TextElementConfig,
+    userData: rawptr,
+) -> clay.Dimensions {
+	context = ctx
+	font := get_font_with_size(config.fontSize)
+	if font == nil {
+		return {}
+	}
+	size := [2]c.int{}
+	success := TTF.GetStringSize(font, cstring(text.chars), uint(text.length), &size.x, &size.y)
+    return {
+        width = f32(size.x),
+        height = f32(size.y),
+    }
+}
+
+
+
+dpi := f32(1.0)
+DPI_set :: proc(new_dpi: f32) {
+	dpi = new_dpi
+}
+
+border_policy :: proc (border: $T) -> u16 {
+	return u16(math.round(f32(border) * dpi)) // could also be ceil or floor
+}
+
+DPI_ElementDeclaration :: proc (decl: clay.ElementDeclaration) -> clay.ElementDeclaration {
+	result := decl
+	result.cornerRadius = DPI_CornerRadius(decl.cornerRadius)
+	result.border.width = DPI_BorderWidth(result.border.width)
+	result.layout.padding = DPI_Padding(result.layout.padding)
+	result.layout.childGap = border_policy(result.layout.childGap)
+	if result.layout.sizing.width.type == .Fixed {
+		result.layout.sizing.width.constraints.sizeMinMax.min *= dpi
+		result.layout.sizing.width.constraints.sizeMinMax.max *= dpi
+	}
+	if result.layout.sizing.height.type == .Fixed {
+		result.layout.sizing.height.constraints.sizeMinMax.min *= dpi
+		result.layout.sizing.height.constraints.sizeMinMax.max *= dpi
+	}
+
+	return result
+}
+
+DPI :: DPI_ElementDeclaration
+
+DPI_BorderWidth :: proc (input: clay.BorderWidth) -> clay.BorderWidth {
+	return clay.BorderWidth {
+		border_policy(input.left),
+		border_policy(input.right),
+		border_policy(input.top),
+		border_policy(input.bottom),
+		border_policy(input.betweenChildren),
+	}
+}
+
+DPI_CornerRadius :: proc (radii: clay.CornerRadius) -> clay.CornerRadius {
+	return clay.CornerRadius {
+		dpi * (radii.topLeft),
+		dpi * (radii.topRight),
+		dpi * (radii.bottomLeft),
+		dpi * (radii.bottomRight),
+	}
+}
+
+DPI_Padding :: proc (padding: clay.Padding) -> clay.Padding {
+	return clay.Padding {
+		border_policy(padding.left),
+		border_policy(padding.right),
+		border_policy(padding.top),
+		border_policy(padding.bottom),
+	}
+}
 
 render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 	for idx in 0..<i32(render_commands.length) {
@@ -49,14 +146,14 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
             text_data := render_command.renderData.text
             color := text_data.textColor
 
-			text = get_text_with_font_size(int(text_data.fontSize))
+			text = get_text_with_font_size(text_data.fontSize)
 
 			if text != nil {
 			    TTF.SetTextColor(text, u8(color[0]*255), u8(color[1]*255), u8(color[2]*255), u8(color[3]*255))
                 string_slice := text_data.stringContents
                 TTF.SetTextString(text, cstring(string_slice.chars), uint(string_slice.length))
                 TTF.SetTextWrapWidth(text, 0)
-                TTF.DrawRendererText(text, box.x, box.y)
+                TTF.DrawRendererText(text, math.round(box.x), math.round(box.y))
             }
 
 		case .Image:
@@ -94,7 +191,7 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 
 
 font_io: ^SDL.IOStream
-fonts: map[int]^TTF.Font
+fonts: map[u16]^TTF.Font
 text: ^TTF.Text
 
 set_font_io :: proc(io: ^SDL.IOStream) {
@@ -102,7 +199,7 @@ set_font_io :: proc(io: ^SDL.IOStream) {
 	log.info("set font io")
 }
 
-get_font_with_size :: proc(size: int) -> ^TTF.Font {
+get_font_with_size :: proc(size: u16) -> ^TTF.Font {
 	font, ok := fonts[size]
 	if !ok {
 		if font_io == nil {
@@ -118,7 +215,7 @@ get_font_with_size :: proc(size: int) -> ^TTF.Font {
 	return font
 }
 
-get_text_with_font_size :: proc(size: int) -> ^TTF.Text {
+get_text_with_font_size :: proc(size: u16) -> ^TTF.Text {
 	//log.info("get_text_with_size")
 	font := get_font_with_size(size)
 	if font == nil {
