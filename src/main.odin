@@ -10,6 +10,7 @@ import "core:fmt"
 import "core:c"
 import "core:strings"
 import "core:log"
+import "core:math"
 
 import "base:runtime"
 
@@ -109,9 +110,11 @@ sdl_app_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL
     fmt.println("hello")
     _ = SDL.SetAppMetadata("Example", "1.0", "com.example")
 
-    if (!SDL.Init(SDL.INIT_VIDEO)) {
+    if (!SDL.Init({.VIDEO, .JOYSTICK, .GAMEPAD})) {
         return .FAILURE
     }
+	SDL.SetJoystickEventsEnabled(true)
+	SDL.SetGamepadEventsEnabled(true)
 
     if !TTF.Init() {
         fmt.println("Failed to initialize TTF engine")
@@ -149,7 +152,7 @@ sdl_app_quit :: proc "c" (appstate: rawptr, result: SDL.AppResult) {
 sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
     context = ctx
 	retval := SDL.AppResult.CONTINUE
-	log.info("sdl event:", event.type)
+	//log.info("sdl event:", event.type)
 	#partial switch event.type {
 	case .MOUSE_MOTION :
 			clay.SetPointerState({event.motion.x, event.motion.y}, (event.motion.state & SDL.BUTTON_LMASK) != {} )
@@ -180,6 +183,11 @@ sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult
 		log.info(event.pmotion)
 	case .PEN_AXIS:
 		log.info(event.paxis)
+
+	case .JOYSTICK_AXIS_MOTION:
+		log.info(event.jaxis)
+	case .JOYSTICK_UPDATE_COMPLETE:
+		log.info(event.jdevice)
 
 //	case:
 //		fmt.println("event.type:", event.type)
@@ -255,6 +263,27 @@ app_tick :: proc (dt: f64) {
 			current_img_idx = get_next_img_idx(current_img_idx)
 		}
 	}
+	num_joys: c.int
+	joys := SDL.GetJoysticks(&num_joys)
+	for joy_idx in 0..<num_joys {
+		joy_id := joys[joy_idx]
+		joystick := SDL.GetJoystickFromID(joy_id)
+		//log.info(joystick)
+		if !SDL.JoystickConnected(joystick) {
+			SDL.OpenJoystick(joy_id)
+		}
+		axes := SDL.GetNumJoystickAxes(joystick)
+		// log.info("axes:", axes)
+		if axes == -1 {
+			// log.info("error:", SDL.GetError())
+		}
+		for axis_idx in 0..<axes {
+			// axis := SDL.GetJoystickAxis(joystick, axis_idx)
+			// log.info("has joystick:", axis_idx, axis)
+		}
+
+	}
+
 }
 
 get_next_img_idx :: proc(idx: int) -> int {
@@ -379,20 +408,30 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 			},
         }) {
 
-			toolbar := clay.ElementDeclaration {
-				layout = { layoutDirection = .TopToBottom },
-				backgroundColor = COLOR_LIGHT,
-			}
+			section_style := DPI(clay.ElementDeclaration {
+				layout = {
+					layoutDirection = .TopToBottom,
+					padding = {4, 4, 4, 4},
+				},
+				cornerRadius = {20, 20, 20, 20},
+				backgroundColor = color_frame,
+			})
 
-			if clay.UI(clay.ID("ToolBarSection"))(toolbar) {
+			subsection_style := DPI({
+				layout = {
+					layoutDirection = .LeftToRight,
+					childGap = 3,
+				},
+			})
+
+
+			if clay.UI(clay.ID("ToolBarSection"))(section_style) {
 				clay.Text(
                     "Gallery Config",
                     clay.TextConfig({ textColor = COLOR_RED, fontSize = 16 }),
                 )
 
-				if clay.UI()({
-					layout = {layoutDirection = .LeftToRight}
-				}){
+				if clay.UI()(subsection_style){
 					sidebar_item_component("Select Folder", proc(c: rawptr) {
 						select_directory()
 					})
@@ -400,14 +439,12 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 				}
 			}
 
-			if clay.UI(clay.ID("ToolBarSection2"))(toolbar) {
+			if clay.UI(clay.ID("ToolBarSection2"))(section_style) {
 				clay.Text(
                     "Slideshow",
                     clay.TextConfig({ textColor = COLOR_RED, fontSize = 16 }),
                 )
-				if clay.UI()({
-					layout = {layoutDirection = .LeftToRight}
-				}){
+				if clay.UI()(subsection_style){
 					sidebar_item_component("First", proc(c: rawptr) { playback_first()})
 					sidebar_item_component("Previous", proc(c: rawptr) { playback_previous()})
 					sidebar_item_component("PlayPause", proc(c: rawptr) { playback_playpause()})
@@ -422,6 +459,60 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
     // Returns a list of render commands
     return clay.EndLayout()
 }
+
+dpi := f32(1.0)
+border_policy :: proc (border: $T) -> u16 {
+	return u16(math.round(f32(border) * dpi)) // could also be ceil or floor
+}
+
+DPI_ElementDeclaration :: proc (decl: clay.ElementDeclaration) -> clay.ElementDeclaration {
+	result := decl
+	result.cornerRadius = DPI_CornerRadius(decl.cornerRadius)
+	result.border.width = DPI_BorderWidth(result.border.width)
+	result.layout.padding = DPI_Padding(result.layout.padding)
+	result.layout.childGap = border_policy(result.layout.childGap)
+	if result.layout.sizing.width.type == .Fixed {
+		result.layout.sizing.width.constraints.sizeMinMax.min *= dpi
+		result.layout.sizing.width.constraints.sizeMinMax.max *= dpi
+	}
+	if result.layout.sizing.height.type == .Fixed {
+		result.layout.sizing.height.constraints.sizeMinMax.min *= dpi
+		result.layout.sizing.height.constraints.sizeMinMax.max *= dpi
+	}
+
+	return result
+}
+DPI :: DPI_ElementDeclaration
+
+DPI_BorderWidth :: proc (input: clay.BorderWidth) -> clay.BorderWidth {
+	return clay.BorderWidth {
+		border_policy(input.left),
+		border_policy(input.right),
+		border_policy(input.top),
+		border_policy(input.bottom),
+		border_policy(input.betweenChildren),
+	}
+}
+
+DPI_CornerRadius :: proc (radii: clay.CornerRadius) -> clay.CornerRadius {
+	return clay.CornerRadius {
+		dpi * (radii.topLeft),
+		dpi * (radii.topRight),
+		dpi * (radii.bottomLeft),
+		dpi * (radii.bottomRight),
+	}
+}
+
+DPI_Padding :: proc (padding: clay.Padding) -> clay.Padding {
+	return clay.Padding {
+		border_policy(padding.left),
+		border_policy(padding.right),
+		border_policy(padding.top),
+		border_policy(padding.bottom),
+	}
+}
+
+
 
 select_directory :: proc() {
 	fmt.println("select_directory")
@@ -466,8 +557,19 @@ playback_playpause :: proc() {
 playback_next :: proc() {
 	fmt.println("next")
 }
+dpi_index := 1
+dpi_levels := []f32 {
+	0.8,
+	1,
+	1.5,
+	2,
+	3,
+	4,
+}
 playback_last :: proc() {
 	fmt.println("last")
+	dpi_index = (dpi_index + 1) % len(dpi_levels)
+	dpi = dpi_levels[dpi_index]
 }
 
 
@@ -491,20 +593,29 @@ HandleButton :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, use
 	}
 }
 
+color_idle := clay.Color {0, 0, 0, 1}
+color_border := clay.Color {0.5, 0.5, 0.5, 1}
+color_frame := clay.Color {0.2, 0.2, 0.2, 1}
+color_hover := clay.Color {0.4, 0.4, 0.4, 1}
+
 // Re-useable components are just normal procs.
 sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil, user_data: rawptr = nil) {
     sidebar_item_layout := clay.LayoutConfig {
         sizing = {
-            width = clay.SizingFixed(50),
-            height = clay.SizingFixed(50),
+            width = clay.SizingFixed(64),
+            height = clay.SizingFixed(64),
         },
     }
 
-	colors := []clay.Color {COLOR_ORANGE, COLOR_ORANGE_LIGHT}
-	if clay.UI(clay.ID(label))({
+	if clay.UI(clay.ID(label))(DPI({
         layout = sidebar_item_layout,
-        backgroundColor = colors[clay.Hovered() ? 1 : 0],
-    }) {
+		cornerRadius = {20, 20, 20, 20},
+        backgroundColor = clay.Hovered() ? color_hover : color_idle,
+		border = {
+			width = {1, 1, 1, 1, 0},
+			color = color_border,
+		},
+    })) {
 
 		if callback != nil {
 			info := new(HandlerInfo, context.temp_allocator)

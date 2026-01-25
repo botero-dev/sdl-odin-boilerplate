@@ -65,11 +65,6 @@ CornerRadius :: struct {
 	bottomRight: c.float,
 }
 
-BorderData :: struct {
-	width: u32,
-	color: Color,
-}
-
 ElementId :: struct {
 	id:       u32,
 	offset:   u32,

@@ -66,17 +66,18 @@ INSTALL_PATH="$BUILD_PATH/lib/$TARGET"
 #BUILD_LIB_PATH="$INSTALL_PATH/lib"
 PACKAGE_PATH="$BUILD_PATH/package/$TARGET"
 
-PREFIX="lib"
 PREFIX=""
 
 SUFFIX=".ext"
 if [[ "$TARGET" = "linux" ]]; then
 	SUFFIX=".so"
+	PREFIX="lib"
 fi
 if [[ "$TARGET" = "win" ]]; then
 	SUFFIX=".lib"
 fi
 if [[ "$TARGET" = "web" ]]; then
+	PREFIX="lib"
 	SUFFIX=".a"
 fi
 
