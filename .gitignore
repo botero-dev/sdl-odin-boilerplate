@@ -5,6 +5,8 @@
 # Ignore everything by default, we can force add to our repo as needed
 /vendor/clay
 
+/src/clay-odin
+
 *.a
 *.o
 *.lib

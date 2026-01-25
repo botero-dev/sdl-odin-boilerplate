@@ -405,13 +405,8 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 			subsection_style := DPI({
 				layout = {
 					layoutDirection = .LeftToRight,
-					childGap = 3,
+					childGap = 4,
 				},
-				border = {
-					width = {0, 0, 0, 0, 1},
-					color = color_border,
-				},
-				backgroundColor = {1, 0, 0, 1},
 			})
 
 
@@ -588,7 +583,7 @@ HandleButton :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, use
 }
 
 color_idle := clay.Color {0, 0, 0, 1}
-color_border := clay.Color {0.5, 0.5, 0.5, 1}
+color_border := clay.Color {0.3, 0.3, 0.3, 1}
 color_frame := clay.Color {0.2, 0.2, 0.2, 1}
 color_hover := clay.Color {0.4, 0.4, 0.4, 1}
 color_text := clay.Color {0.8, 0.8, 0.8, 1}
@@ -607,10 +602,10 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
         layout = sidebar_item_layout,
 		cornerRadius = {20, 20, 20, 20},
         backgroundColor = clay.Hovered() ? color_hover : color_idle,
-		// border = {
-		// 	width = {1, 1, 1, 1, 0},
-		// 	color = color_border,
-		// },
+		border = {
+			width = {1, 1, 1, 1, 0},
+		 	color = color_border,
+		},
     })) {
 
 		if callback != nil {
