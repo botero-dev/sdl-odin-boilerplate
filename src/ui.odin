@@ -49,11 +49,13 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
             text_data := render_command.renderData.text
             color := text_data.textColor
 
-            if text != nil {
-                TTF.SetTextColor(text, u8(color[0]), u8(color[1]), u8(color[2]), u8(color[3]))
+			text = get_text_with_font_size(int(text_data.fontSize))
+
+			if text != nil {
+			    TTF.SetTextColor(text, u8(color[0]*255), u8(color[1]*255), u8(color[2]*255), u8(color[3]*255))
                 string_slice := text_data.stringContents
                 TTF.SetTextString(text, cstring(string_slice.chars), uint(string_slice.length))
-                TTF.SetTextWrapWidth(text, i32(box.width))
+                TTF.SetTextWrapWidth(text, 0)
                 TTF.DrawRendererText(text, box.x, box.y)
             }
 
@@ -89,6 +91,50 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 
     }
 }
+
+
+font_io: ^SDL.IOStream
+fonts: map[int]^TTF.Font
+text: ^TTF.Text
+
+set_font_io :: proc(io: ^SDL.IOStream) {
+	font_io = io
+	log.info("set font io")
+}
+
+get_font_with_size :: proc(size: int) -> ^TTF.Font {
+	font, ok := fonts[size]
+	if !ok {
+		if font_io == nil {
+			return nil
+		}
+		font = TTF.OpenFontIO(font_io, false, f32(size))
+		fonts[size] = font
+	}
+
+    if font == nil {
+        fmt.println("unable to load font:", SDL.GetError())
+    }
+	return font
+}
+
+get_text_with_font_size :: proc(size: int) -> ^TTF.Text {
+	//log.info("get_text_with_size")
+	font := get_font_with_size(size)
+	if font == nil {
+		return nil
+	}
+	if text == nil {
+		text = TTF.CreateText(engine, font, "My Text", 0)
+		TTF.SetTextColor(text, 255, 255, 255, 255)
+	}
+	else {
+		TTF.SetTextFont(text, font)
+	}
+	return text
+}
+
+
 
 draw_box_filled :: proc (box: clay.BoundingBox, rect: clay.RectangleRenderData) {
 

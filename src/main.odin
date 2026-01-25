@@ -22,8 +22,6 @@ ctx: runtime.Context
 window: ^SDL.Window
 renderer: ^SDL.Renderer
 engine: ^TTF.TextEngine
-font: ^TTF.Font
-text: ^TTF.Text
 
 clay_memory: []byte
 
@@ -91,19 +89,9 @@ assign_font :: proc (result: RequestResult) {
 		return
 	}
 	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
-    font = TTF.OpenFontIO(io, false, 16)
 
-    if font == nil {
-        fmt.println("unable to load font:", SDL.GetError())
-    }
-
-    text = TTF.CreateText(engine, font, "My Text", 0)
-
-    TTF.SetTextColor(text, 255, 255, 255, 255)
+	set_font_io(io)
 }
-
-
-
 
 sdl_app_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResult {
     context = ctx
@@ -310,17 +298,13 @@ app_draw :: proc () {
 
 ui_dirty: bool = true
 
-// Define some colors.
-COLOR_LIGHT :: clay.Color{224, 215, 210, 255}
-COLOR_RED :: clay.Color{168, 66, 28, 255}
-COLOR_ORANGE :: clay.Color{0, 138, 50, 255}
-COLOR_ORANGE_LIGHT :: clay.Color{50, 188, 100, 255}
-COLOR_BLACK :: clay.Color{0, 0, 0, 255}
 
 // An example function to create your layout tree
 create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
     // Begin constructing the layout.
     clay.BeginLayout()
+
+	text_config = clay.TextConfig({ textColor = color_text, fontSize = border_policy(16) })
 
     // An example of laying out a UI with a fixed-width sidebar and flexible-width main content
     // NOTE: To create a scope for child components, the Odin API uses `if` with components that have children
@@ -428,7 +412,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 			if clay.UI(clay.ID("ToolBarSection"))(section_style) {
 				clay.Text(
                     "Gallery Config",
-                    clay.TextConfig({ textColor = COLOR_RED, fontSize = 16 }),
+                    text_config,
                 )
 
 				if clay.UI()(subsection_style){
@@ -442,7 +426,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 			if clay.UI(clay.ID("ToolBarSection2"))(section_style) {
 				clay.Text(
                     "Slideshow",
-                    clay.TextConfig({ textColor = COLOR_RED, fontSize = 16 }),
+                    text_config,
                 )
 				if clay.UI()(subsection_style){
 					sidebar_item_component("First", proc(c: rawptr) { playback_first()})
@@ -459,6 +443,8 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
     // Returns a list of render commands
     return clay.EndLayout()
 }
+
+text_config: ^clay.TextElementConfig
 
 dpi := f32(1.0)
 border_policy :: proc (border: $T) -> u16 {
@@ -597,6 +583,7 @@ color_idle := clay.Color {0, 0, 0, 1}
 color_border := clay.Color {0.5, 0.5, 0.5, 1}
 color_frame := clay.Color {0.2, 0.2, 0.2, 1}
 color_hover := clay.Color {0.4, 0.4, 0.4, 1}
+color_text := clay.Color {0.8, 0.8, 0.8, 1}
 
 // Re-useable components are just normal procs.
 sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil, user_data: rawptr = nil) {
@@ -626,7 +613,7 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 		}
 		clay.Text(
             label,
-            clay.TextConfig({ textColor = COLOR_RED, fontSize = 16 }),
+            text_config,
         )
 	}
 }
