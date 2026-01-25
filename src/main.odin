@@ -396,6 +396,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 				layout = {
 					layoutDirection = .TopToBottom,
 					padding = {4, 4, 4, 4},
+					childAlignment = {.Center, .Top}
 				},
 				cornerRadius = {20, 20, 20, 20},
 				backgroundColor = color_frame,
@@ -406,6 +407,11 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 					layoutDirection = .LeftToRight,
 					childGap = 3,
 				},
+				border = {
+					width = {0, 0, 0, 0, 1},
+					color = color_border,
+				},
+				backgroundColor = {1, 0, 0, 1},
 			})
 
 
@@ -431,7 +437,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 				if clay.UI()(subsection_style){
 					sidebar_item_component("First", proc(c: rawptr) { playback_first()})
 					sidebar_item_component("Previous", proc(c: rawptr) { playback_previous()})
-					sidebar_item_component("PlayPause", proc(c: rawptr) { playback_playpause()})
+					sidebar_item_component("Play\nPause", proc(c: rawptr) { playback_playpause()})
 					sidebar_item_component("Next", proc(c: rawptr) { playback_next()})
 					sidebar_item_component("Last", proc(c: rawptr) { playback_last()})
 				}
@@ -545,6 +551,7 @@ playback_next :: proc() {
 }
 dpi_index := 1
 dpi_levels := []f32 {
+	0.5,
 	0.8,
 	1,
 	1.5,
@@ -556,6 +563,7 @@ playback_last :: proc() {
 	fmt.println("last")
 	dpi_index = (dpi_index + 1) % len(dpi_levels)
 	dpi = dpi_levels[dpi_index]
+	log.info("set dpi to:", dpi)
 }
 
 
@@ -592,16 +600,17 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
             width = clay.SizingFixed(64),
             height = clay.SizingFixed(64),
         },
+		childAlignment = {.Center, .Center}
     }
 
 	if clay.UI(clay.ID(label))(DPI({
         layout = sidebar_item_layout,
 		cornerRadius = {20, 20, 20, 20},
         backgroundColor = clay.Hovered() ? color_hover : color_idle,
-		border = {
-			width = {1, 1, 1, 1, 0},
-			color = color_border,
-		},
+		// border = {
+		// 	width = {1, 1, 1, 1, 0},
+		// 	color = color_border,
+		// },
     })) {
 
 		if callback != nil {

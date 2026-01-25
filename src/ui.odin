@@ -23,7 +23,7 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 			if corners == {0, 0, 0, 0} {
 				//fmt.println(render_command)
 				color := rect.backgroundColor
-				SDL.SetRenderDrawColor(renderer, u8(color[0]), u8(color[1]), u8(color[2]), u8(color[3]))
+				SDL.SetRenderDrawColor(renderer, u8(color[0] * 255), u8(color[1] * 255), u8(color[2] * 255), u8(color[3]) * 255)
 				SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
 				rect2 := SDL.FRect{
 					w = box.width,
@@ -250,8 +250,6 @@ draw_rounded_corner :: proc (
 
 	segments: u8
 	radius: f32 = math.abs(start_pos.x) + math.abs(start_pos.y)
-	mat_c: f32
-	mat_s: f32
 
 	segments = u8(math.min(127, math.floor(radius/math.ln(radius*1.6+1))))
 	if segments < 2 {
@@ -259,8 +257,8 @@ draw_rounded_corner :: proc (
 	}
 	//log.info("segments", segments)
 	delta_angle := (math.TAU/4) / f32(segments)
-	mat_c = math.cos(delta_angle)
-	mat_s = math.sin(delta_angle)
+	mat_cos := math.cos(delta_angle)
+	mat_sin := math.sin(delta_angle)
 
 	start_vert := u8(num_vertices)
 	start_idx := num_indices
@@ -269,8 +267,8 @@ draw_rounded_corner :: proc (
 
 	for segment in 1..<segments {
 		vert_pos = {
-			vert_pos.x * mat_c - vert_pos.y * mat_s,
-			vert_pos.x * mat_s + vert_pos.y * mat_c,
+			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
+			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
 		}
 		vertices_buf[num_vertices] = origin + vert_pos
 		num_vertices += 1
@@ -392,14 +390,19 @@ draw_rounded_border :: proc (renderer: ^SDL.Renderer, color: SDL.FColor, width_h
 	vertices_buf[0] = { corner.x,                         centerpoint.y }
 	vertices_buf[1] = { centerpoint.x + v_radius_inner.x, keep_y ? corner.y + width_h : centerpoint.y }
 	increment := math.TAU / 4 / f32(segments)
-	angle: f32 = 0
+	mat_cos := math.cos(increment)
+	mat_sin := math.sin(increment)
+
+	vert_pos := vec2{1, 0}
 	for idx in 1..<segments {
-		angle += increment
-		direction := [2]f32 { math.cos(angle), math.sin(angle) }
-		vertices_buf[idx*2] = centerpoint + (direction * v_radius)
+		vert_pos = {
+			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
+			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
+		}
+		vertices_buf[idx*2] = centerpoint + (vert_pos * v_radius)
 		vertices_buf[idx*2+1] = centerpoint + ([2]f32{
-			keep_x ? 1.0 : direction.x,
-			keep_y ? 1.0 : direction.y,
+			keep_x ? 1.0 : vert_pos.x,
+			keep_y ? 1.0 : vert_pos.y,
 		} * v_radius_inner)
 	}
 	vertices_buf[segments*2] =   { centerpoint.x, corner.y }
