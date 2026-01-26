@@ -263,7 +263,7 @@ draw_box_filled :: proc (box: clay.BoundingBox, rect: clay.RectangleRenderData) 
 
 //	uv_center := ZERO_PIX_CLAMP + (PIXEL_Y * (width+1) * 0.5)
 	uv_outer :=  ZERO_PIX_CLAMP + (PIXEL_Y * (0.5 - PAD))
-	log.info(uv_outer)
+//	log.info(uv_outer)
 
 	uvs_buf[0] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.topLeft + 0.5))
 	uvs_buf[1] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.topRight + 0.5))
@@ -434,26 +434,49 @@ draw_rounded_corner :: proc (
 
 draw_box_border :: proc (box: clay.BoundingBox, border: clay.BorderRenderData) {
 
-	color := border.color
+	ab_box := [4]f32 {
+		box.x, box.y, box.width, box.height,
+	}
+
 	borderwidth := border.width
+	ab_border := [4]f32 {
+		f32(borderwidth.left),
+		f32(borderwidth.right),
+		f32(borderwidth.top),
+		f32(borderwidth.bottom),
+	}
+
 	corners := border.cornerRadius
-	rect := box
+	ab_corners := [4]f32 {
+		corners.topLeft, corners.topRight, corners.bottomLeft, corners.bottomRight
+	}
+	draw_box_border2(renderer, ab_box, border.color, ab_border, ab_corners)
+}
+
+draw_box_border2 :: proc (renderer: ^SDL.Renderer, rect: [4]f32, color: [4]f32, borders: [4]f32, in_corners: [4]f32) {
+	box := clay.BoundingBox{rect[0], rect[1], rect[2], rect[3]}
+	corners := clay.CornerRadius{in_corners[0], in_corners[1], in_corners[2], in_corners[3]}
 
     SDL.SetRenderDrawColor(renderer, u8(color[0] * 255), u8(color[1] * 255), u8(color[2] * 255), u8(color[3] * 255))
 	SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
 
     rect2: SDL.FRect
 
+	BORDER_LEFT :: 0
+	BORDER_RIGHT :: 1
+	BORDER_TOP :: 2
+	BORDER_BOTTOM :: 3
+
 	// top border
 	rect2.y = box.y
-	rect2.h = f32(borderwidth.top)
+	rect2.h = borders[BORDER_TOP]
 	rect2.x = box.x + corners.topLeft
 	rect2.w = box.width - corners.topLeft - corners.topRight
 	SDL.RenderFillRect(renderer, &rect2)
 
 	// bottom border
-	rect2.y = box.y + box.height - f32(borderwidth.bottom)
-	rect2.h = f32(borderwidth.bottom)
+	rect2.y = box.y + box.height - borders[BORDER_BOTTOM]
+	rect2.h = borders[BORDER_BOTTOM]
 	rect2.x = box.x + corners.bottomLeft
 	rect2.w = box.width - corners.bottomLeft - corners.bottomRight
 	SDL.RenderFillRect(renderer, &rect2)
@@ -461,62 +484,104 @@ draw_box_border :: proc (box: clay.BoundingBox, border: clay.BorderRenderData) {
 	// left border
 	rect2.y = box.y + corners.topLeft
 	rect2.h = box.height - corners.topLeft - corners.bottomLeft
-	rect2.w = f32(borderwidth.left)
+	rect2.w = borders[BORDER_LEFT]
 	rect2.x = box.x
 	SDL.RenderFillRect(renderer, &rect2)
 
 	// right border
 	rect2.y = box.y + corners.topRight
 	rect2.h = box.height - corners.topRight - corners.bottomRight
-	rect2.x = box.x + box.width - f32(borderwidth.right)
-	rect2.w = f32(borderwidth.right)
+	rect2.x = box.x + box.width - borders[BORDER_RIGHT]
+	rect2.w = borders[BORDER_RIGHT]
     SDL.RenderFillRect(renderer, &rect2)
 
 	segments :: 4 // maybe calculate based on perimeter and pixel precision?
 	angle: f32 = math.TAU / 2
 
 	fcolor := SDL.FColor(color)
+	// antialias stencil is drawn as premultiplied
+	fcolor.r *= fcolor.a
+	fcolor.g *= fcolor.a
+	fcolor.b *= fcolor.a
+
+	vertices_buf: [1000]vec2
+	uvs_buf: [1000]vec2
+	indices_buf: [2000]u8
+
+	buffer := DrawBuffer {
+		0, 0,
+		vertices_buf[:],
+		uvs_buf[:],
+		nil,
+		indices_buf[:],
+	}
+
 
 	if corners.topLeft != 0 {
-		draw_rounded_border(renderer, fcolor, f32(borderwidth.top), f32(borderwidth.left), corners.topLeft, 0, {box.x, box.y})
+		draw_rounded_border(&buffer, borders[BORDER_TOP], borders[BORDER_LEFT], corners.topLeft, 0, {box.x, box.y})
 	}
 	if corners.topRight != 0 {
-		draw_rounded_border(renderer, fcolor, f32(borderwidth.top), f32(borderwidth.right), corners.topRight, 1, {box.x+box.width, box.y})
+		draw_rounded_border(&buffer, borders[BORDER_TOP], borders[BORDER_RIGHT], corners.topRight, 1, {box.x+box.width, box.y})
 	}
 	if corners.bottomLeft != 0 {
-		draw_rounded_border(renderer, fcolor, f32(borderwidth.bottom), f32(borderwidth.left), corners.bottomLeft, 2, {box.x, box.y+box.height})
+		draw_rounded_border(&buffer, borders[BORDER_BOTTOM], borders[BORDER_LEFT], corners.bottomLeft, 2, {box.x, box.y+box.height})
 	}
 	if corners.bottomRight != 0 {
-		draw_rounded_border(renderer, fcolor, f32(borderwidth.bottom), f32(borderwidth.right), corners.bottomRight, 3, {box.x+box.width, box.y+box.height})
+		draw_rounded_border(&buffer, borders[BORDER_BOTTOM], borders[BORDER_RIGHT], corners.bottomRight, 3, {box.x+box.width, box.y+box.height})
 	}
 
+	SDL.RenderGeometryRaw(
+		renderer,
+		helper, // texture
+		&buffer.vertices[0][0], 8, // verts + stride
+		&fcolor, 0, // color + stride
+		&buffer.uvs[0][0], 8, // uvs
+		buffer.num_vertices,
+		&buffer.indices[0], buffer.num_indices,
+		1,
+	)
+
 	/*
-	SDL.SetRenderDrawColor(renderer, 255, 0, 0, 80)
+	Sdl.SetRenderDrawColor(renderer, 255, 0, 0, 80)
 	full := SDL.FRect{box.x, box.y, box.width, box.height}
     SDL.RenderRect(renderer, &full)
 
 	SDL.SetRenderDrawColor(renderer, 0, 255, 0, 80)
 	safe := SDL.FRect{
-		box.x + f32(borderwidth.left),
-		box.y + f32(borderwidth.top),
-		box.width - f32(borderwidth.left) - f32(borderwidth.right),
-		box.height - f32(borderwidth.bottom) - f32(borderwidth.top),
+		box.x + borders[left),
+		box.y + borders[top),
+		box.width - borders[left) - borders[right),
+		box.height - borders[bottom) - borders[top),
 	}
     SDL.RenderRect(renderer, &safe)
 */
 }
 
+DrawBuffer :: struct {
+	num_vertices: i32,
+	num_indices: i32,
+	vertices: []vec2,
+	uvs: []vec2,
+	colors: [][4]f32,
+	indices: []u8,
+}
+
+
 
 // corner_idx indices: (top_left, top_right, bottom_left, bottom_right)
-draw_rounded_border :: proc (renderer: ^SDL.Renderer, color: SDL.FColor, width_h: f32, width_v: f32, radius: f32, corner_idx: int, corner: vec2) {
-	segments  := u8(math.min(127, math.floor(radius/math.ln(radius*1.6+1))))
+draw_rounded_border :: proc (buffer: ^DrawBuffer, width_h: f32, width_v: f32, radius: f32, corner_idx: int, corner: vec2) {
+	segments  := u8(math.min(30, math.floor(radius/math.ln(radius*1.6+1))))
+	vertices_buf := buffer.vertices[buffer.num_vertices:]
+	uvs_buf := buffer.uvs[buffer.num_vertices:]
+	indices_buf := buffer.indices[buffer.num_indices:]
+
 	num_vertices : i32 = i32(segments) * 2 + 2
 	num_indices : i32 = i32(segments) * 6
-	vertices_buf: [1000]vec2
-	uvs_buf: [1000]vec2
-	indices_buf: [2000]u8
+	start_index := u8(buffer.num_vertices)
 
-	// keeping it as vec makes some stuff easier
+	buffer.num_vertices += num_vertices
+	buffer.num_indices += num_indices
+
 	PAD :: 1
 
 	keep_x := width_v > radius
@@ -539,10 +604,16 @@ draw_rounded_border :: proc (renderer: ^SDL.Renderer, color: SDL.FColor, width_h
 	v_radius_inner := flip * vec2{radius-width_v-PAD, radius-width_h-PAD}
 
 	// draw from centerpoint +- x to centerpoint +- y
-	base := vec2{0.5, 0.5} / TEX_SIZE
-	uv_outer :f32 = 0.5 - PAD
-	uv_innerh :f32 = width_h + PAD + 0.5
-	uv_innerv :f32 = width_v + PAD + 0.5
+	STROKE_OFFSET :: 0
+	STROKE_CONTRAST :: 1.4 // a way to compensate for gamma-blended lines,
+	base := vec2{0.5, 0.5} / TEX_SIZE + STROKE_OFFSET
+
+
+	uv_outer :f32 = (0.5 - PAD) * STROKE_CONTRAST
+
+	uv_innerh :f32 = (width_h + PAD + 0.5 ) * STROKE_CONTRAST
+	uv_innerv :f32 = (width_v + PAD + 0.5 ) * STROKE_CONTRAST
+
 	uvs_buf[0] = base + ({uv_outer, uv_innerv} / TEX_SIZE)
 	uvs_buf[1] = base + ({uv_innerv, uv_outer} / TEX_SIZE)
 
@@ -563,8 +634,8 @@ draw_rounded_border :: proc (renderer: ^SDL.Renderer, color: SDL.FColor, width_h
 			keep_x ? 1.0 : vert_pos.x,
 			keep_y ? 1.0 : vert_pos.y,
 		} * v_radius_inner)
-		uvs_buf[idx*2] = base + ({uv_outer, uv_innerv* vert_pos.x + uv_innerh * vert_pos.y} / TEX_SIZE)
-		uvs_buf[idx*2+1] = base + ({uv_innerv* vert_pos.x + uv_innerh * vert_pos.y, uv_outer} / TEX_SIZE)
+		uvs_buf[idx*2] = base + ({uv_outer, uv_innerv* vert_pos.x* vert_pos.x + uv_innerh * vert_pos.y* vert_pos.y} / TEX_SIZE)
+		uvs_buf[idx*2+1] = base + ({uv_innerv* vert_pos.x* vert_pos.x + uv_innerh * vert_pos.y * vert_pos.y, uv_outer} / TEX_SIZE)
 	}
 	vertices_buf[segments*2] =   { centerpoint.x, centerpoint.y + v_radius.y }
 	vertices_buf[segments*2+1] = { keep_x ? corner.x + width_v : centerpoint.x, centerpoint.y + v_radius_inner.y}
@@ -575,23 +646,11 @@ draw_rounded_border :: proc (renderer: ^SDL.Renderer, color: SDL.FColor, width_h
 
 	for idx_wide in 0..<segments {
 		idx := u8(idx_wide)
-		indices_buf[idx * 6]     = idx * 2
-		indices_buf[idx * 6 + 1] = idx * 2 + 1
-		indices_buf[idx * 6 + 2] = idx * 2 + 2
-		indices_buf[idx * 6 + 3] = idx * 2 + 2
-		indices_buf[idx * 6 + 4] = idx * 2 + 1
-		indices_buf[idx * 6 + 5] = idx * 2 + 3
+		indices_buf[idx * 6]     = start_index + idx * 2
+		indices_buf[idx * 6 + 1] = start_index + idx * 2 + 1
+		indices_buf[idx * 6 + 2] = start_index + idx * 2 + 2
+		indices_buf[idx * 6 + 3] = start_index + idx * 2 + 2
+		indices_buf[idx * 6 + 4] = start_index + idx * 2 + 1
+		indices_buf[idx * 6 + 5] = start_index + idx * 2 + 3
 	}
-
-	fcolor := color
-
-	SDL.RenderGeometryRaw(
-		renderer,
-		helper, // texture
-		&vertices_buf[0][0], 8, // verts + stride
-		&fcolor, 0, // color + stride
-		&uvs_buf[0][0], 8, // uvs
-		num_vertices,
-		&indices_buf, num_indices, 1
-	)
 }

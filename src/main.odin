@@ -292,15 +292,74 @@ app_draw :: proc () {
 
 		render_layout(&render_commands)
 
-		size := f32(64 * 32)
-		target_pos := SDL.FRect {50, 50, size, size}
+		/*
+		// code I used for drawing some pixels to a buffer and then draw them huge with nearest filtering
 
-		draw_line(renderer, {100, 100}, {200, 200}, 5)
-		draw_line(renderer, {100, 120}, {200, 220}, 5.1)
-		draw_line(renderer, {100, 140}, {200, 240}, 5.2)
-		draw_line(renderer, {100, 160}, {200, 260}, 5.3)
-		draw_line(renderer, {100, 180}, {200, 280}, 5.4)
-		draw_line(renderer, {100, 200}, {200, 300}, 5.5)
+		SIZE :: 64
+
+		if render_target == nil {
+			render_target = SDL.CreateTexture(renderer, .RGBA32, .TARGET, SIZE, SIZE)
+			SDL.SetTextureScaleMode(render_target, .NEAREST)
+			SDL.SetTextureBlendMode(render_target, {.BLEND_PREMULTIPLIED})
+		}
+
+		SDL.SetRenderTarget(renderer, render_target)
+		SDL.SetRenderDrawColor(renderer, 0,0,0,0)
+		SDL.RenderClear(renderer)
+
+		SDL.SetRenderDrawColor(renderer, 255,0,0,255)
+		SDL.RenderPoint(renderer, 0, 0)
+		SDL.RenderPoint(renderer, 0, SIZE-1)
+		SDL.RenderPoint(renderer, SIZE-1, SIZE-1)
+		SDL.RenderPoint(renderer, SIZE-1, 0)
+
+		BORDERH :: 1
+		BORDERV :: 1
+		RADIUS :: 16
+		draw_box_border2(
+			renderer,
+			{2, 2, 60, 60}, // size
+			{1, 1, 1, 1}, // color
+			{BORDERV, BORDERV, BORDERH, BORDERH}, // borders
+			{RADIUS, RADIUS, RADIUS, RADIUS}
+		)
+
+		SDL.SetRenderTarget(renderer, nil)
+
+		rect := SDL.FRect{0, 0, 64, 64}
+
+		target_pos := SDL.FPoint{20, 20}
+		SCALE :: 24
+		target_right := SDL.FPoint{target_pos.x + SIZE * SCALE,target_pos.y}
+		target_down := SDL.FPoint{target_pos.x, target_pos.y + SIZE * SCALE}
+
+		SDL.RenderTextureAffine(renderer, render_target, &rect, &target_pos, &target_right, &target_down)
+
+		vertices_buf: [1000]vec2
+		uvs_buf: [1000]vec2
+		indices_buf: [2000]u8
+
+		buffer := DrawBuffer {
+			0, 0,
+			vertices_buf[:],
+			uvs_buf[:],
+			nil,
+			indices_buf[:],
+		}
+
+		draw_rounded_border(&buffer, BORDERH, BORDERV, RADIUS, 0, {2, 2})
+		draw_rounded_border(&buffer, BORDERH, BORDERV, RADIUS, 1, {62, 2})
+
+		for idx in 0..<buffer.num_vertices {
+			vert := buffer.vertices[idx]
+			uv := buffer.uvs[idx]
+			pos := vert * SCALE + {target_pos.x, target_pos.y}
+			draw_line(renderer, pos - {2, 0}, pos + {2, 0}, 5)
+			text := fmt.ctprintf("%f %f", uv.x, uv.y)
+			SDL.RenderDebugText(renderer, pos.x, pos.y, text)
+		}
+
+		*/
 
 		SDL.RenderPresent(renderer)
 	}
@@ -549,7 +608,7 @@ HandleButton :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, use
 }
 
 color_idle := clay.Color {0, 0, 0, 1}
-color_border := clay.Color {0.3, 0.3, 0.3, 1}
+color_border := clay.Color {1, 1, 1, 0.3}
 color_frame := clay.Color {0.2, 0.2, 0.2, 1}
 //color_frame := clay.Color {1, 1, 1, 1}
 color_hover := clay.Color {0.4, 0.4, 0.4, 1}
