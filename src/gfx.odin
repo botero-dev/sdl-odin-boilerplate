@@ -8,6 +8,12 @@ import "core:math/linalg"
 
 helper: ^SDL.Texture
 
+TEX_SIZE :: 2
+ZERO_PIX_CLAMP := vec2{0.5, 1.5} / TEX_SIZE
+PIXEL_X := vec2{1, 0} / TEX_SIZE
+PIXEL_Y := vec2{1, 0} / TEX_SIZE
+
+
 gfx_init :: proc () {
 	helper = SDL.CreateTexture(renderer, .RGBA32, .TARGET, 2, 2)
 	SDL.SetRenderTarget(renderer, helper)
@@ -25,8 +31,8 @@ draw_line :: proc(renderer: ^SDL.Renderer, start: vec2, end: vec2, width: f32) {
 	dir := linalg.normalize(end-start)
 	dir_side := vec2{dir.y, -dir.x}
 
-	PAD :: 2
-	side := dir_side * (width * 0.5 + PAD + 1)
+	PAD :: 1
+	side := dir_side * (width * 0.5 + PAD)
 	vstart := start + vec2{0.5, 0.5}
 	vend := end + vec2{0.5, 0.5}
 	vertices := []vec2{
@@ -38,20 +44,18 @@ draw_line :: proc(renderer: ^SDL.Renderer, start: vec2, end: vec2, width: f32) {
 		vend + side,
 	}
 
-	TEX_SIZE :: 2
-	ZERO_PIX_CLAMP := vec2{0.5, 1.5} / TEX_SIZE
-	PIXEL_X := vec2{1, 0} / TEX_SIZE
-	PIXEL_Y := vec2{1, 0} / TEX_SIZE
+	uv_center := ZERO_PIX_CLAMP + (PIXEL_Y * (width+1) * 0.5)
+	uv_outer :=  ZERO_PIX_CLAMP - (PIXEL_Y * (PAD-1 +0.5))
+
 	uvs := []vec2{
-		ZERO_PIX_CLAMP - (PAD*PIXEL_Y),
-		ZERO_PIX_CLAMP + (PIXEL_Y * width * 0.5),
-		ZERO_PIX_CLAMP - (PAD*PIXEL_Y),
-		ZERO_PIX_CLAMP - (PAD*PIXEL_Y),
-		ZERO_PIX_CLAMP + (PIXEL_Y * width * 0.5),
-		ZERO_PIX_CLAMP - (PAD*PIXEL_Y),
+		uv_outer,
+		uv_center,
+		uv_outer,
+		uv_outer,
+		uv_center,
+		uv_outer,
 	}
-	log.info("verts: ", vertices)
-	log.info("uvs:   ", uvs)
+
 	indices := []u8{
 		0, 1, 3, 1, 3, 4, 1, 2, 4, 2, 4, 5
 	}

@@ -236,6 +236,7 @@ get_text_with_font_size :: proc(size: u16) -> ^TTF.Text {
 draw_box_filled :: proc (box: clay.BoundingBox, rect: clay.RectangleRenderData) {
 
 	vertices_buf: [1000]vec2
+	uvs_buf: [1000]vec2
 	indices_buf: [2000]u8
 
 	num_vertices: i32 = 0
@@ -244,6 +245,9 @@ draw_box_filled :: proc (box: clay.BoundingBox, rect: clay.RectangleRenderData) 
 	corners := rect.cornerRadius
 
 	// center full rect
+	PAD :: 1 // expand for antialiasing
+
+	//HALF_PIXEL :: vec2{0.5, 0.5}
 	boxmin := vec2{box.x,             box.y}
 	boxmax := vec2{box.x + box.width, box.y + box.height}
 
@@ -257,6 +261,16 @@ draw_box_filled :: proc (box: clay.BoundingBox, rect: clay.RectangleRenderData) 
 	vertices_buf[2] = botleft
 	vertices_buf[3] = botright
 
+//	uv_center := ZERO_PIX_CLAMP + (PIXEL_Y * (width+1) * 0.5)
+	uv_outer :=  ZERO_PIX_CLAMP + (PIXEL_Y * (0.5 - PAD))
+	log.info(uv_outer)
+
+	uvs_buf[0] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.topLeft + 0.5))
+	uvs_buf[1] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.topRight + 0.5))
+	uvs_buf[2] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.bottomLeft + 0.5))
+	uvs_buf[3] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.bottomRight + 0.5))
+
+
 	indices_buf[0] = 0
 	indices_buf[1] = 1
 	indices_buf[2] = 2
@@ -266,17 +280,27 @@ draw_box_filled :: proc (box: clay.BoundingBox, rect: clay.RectangleRenderData) 
 
 	// top bottom left right rectangles
 
-	vertices_buf[4] = {topleft.x,  boxmin.y}
-	vertices_buf[5] = {topright.x, boxmin.y}
+	vertices_buf[4] = {topleft.x,  boxmin.y - PAD}
+	vertices_buf[5] = {topright.x, boxmin.y - PAD}
 
-	vertices_buf[6] = {botleft.x,  boxmax.y}
-	vertices_buf[7] = {botright.x, boxmax.y}
+	vertices_buf[6] = {botleft.x,  boxmax.y + PAD}
+	vertices_buf[7] = {botright.x, boxmax.y + PAD}
 
-	vertices_buf[8] = {boxmin.x,  topleft.y}
-	vertices_buf[9] = {boxmin.x,  botleft.y}
+	vertices_buf[8] = {boxmin.x - PAD,  topleft.y}
+	vertices_buf[9] = {boxmin.x - PAD,  botleft.y}
 
-	vertices_buf[10] = {boxmax.x,  topright.y}
-	vertices_buf[11] = {boxmax.x,  botright.y}
+	vertices_buf[10] = {boxmax.x + PAD,  topright.y}
+	vertices_buf[11] = {boxmax.x + PAD,  botright.y}
+
+	uvs_buf[4] = uv_outer
+	uvs_buf[5] = uv_outer
+	uvs_buf[6] = uv_outer
+	uvs_buf[7] = uv_outer
+	uvs_buf[8] = uv_outer
+	uvs_buf[9] = uv_outer
+	uvs_buf[10] = uv_outer
+	uvs_buf[11] = uv_outer
+
 
 	num_vertices = 12
 
@@ -312,35 +336,47 @@ draw_box_filled :: proc (box: clay.BoundingBox, rect: clay.RectangleRenderData) 
 
 	// rounded corners
 
-	draw_rounded_corner(vertices_buf[:], indices_buf[:], &num_vertices, &num_indices,0, 8, 4,  { -corners.topLeft, 0 }, topleft)
-	draw_rounded_corner(vertices_buf[:], indices_buf[:], &num_vertices, &num_indices,1, 5, 10, { 0, -corners.topRight }, topright)
-	draw_rounded_corner(vertices_buf[:], indices_buf[:], &num_vertices, &num_indices,3, 11, 7, { corners.bottomRight, 0 }, botright)
-	draw_rounded_corner(vertices_buf[:], indices_buf[:], &num_vertices, &num_indices,2, 6, 9,  { 0, corners.bottomLeft }, botleft)
+	draw_rounded_corner(vertices_buf[:], indices_buf[:], uvs_buf[:], &num_vertices, &num_indices,0, 8, 4)
+	draw_rounded_corner(vertices_buf[:], indices_buf[:], uvs_buf[:], &num_vertices, &num_indices,1, 5, 10)
+	draw_rounded_corner(vertices_buf[:], indices_buf[:], uvs_buf[:], &num_vertices, &num_indices,3, 11, 7)
+	draw_rounded_corner(vertices_buf[:], indices_buf[:], uvs_buf[:], &num_vertices, &num_indices,2, 6, 9)
 
 	//num_vertices = i32(start_vert)
 	//num_indices = start_idx + 12
 
 	// submit
 	fcolor := SDL.FColor(rect.backgroundColor)
+	SDL.SetRenderTextureAddressMode(renderer, .CLAMP, .CLAMP)
 
 	SDL.RenderGeometryRaw(
 		renderer,
-		nil, // texture
+		helper, // texture
 		&vertices_buf[0][0], 8, // verts, stride
 		&fcolor, 0, // color, stride
-		nil, 0, // uvs
+		&uvs_buf[0][0], 8, // uvs
 		num_vertices,
 		&indices_buf, num_indices, 1
 	)
 
+	/*
+	SDL.SetRenderDrawColor(renderer, 255, 0, 0, 50)
+	rect := SDL.FRect{
+		box.x, box.y, box.width, box.height
+	}
+	SDL.RenderRect(renderer, &rect)
+*/
 }
 
 
 draw_rounded_corner :: proc (
-	vertices_buf: []vec2, indices_buf: []u8,
+	vertices_buf: []vec2, indices_buf: []u8, uvs_buf: []vec2,
 	ptr_num_vertices: ^i32, ptr_num_indices: ^i32,
-	pivot_idx: u8, left_idx: u8, right_idx: u8,
-	start_pos: vec2, origin: vec2) {
+	pivot_idx: u8, left_idx: u8, right_idx: u8) {
+
+	origin := vertices_buf[pivot_idx]
+	start_pos := vertices_buf[left_idx] - origin
+
+	border_uv := uvs_buf[left_idx]
 
 	num_vertices := ptr_num_vertices^
 		num_indices := ptr_num_indices^
@@ -368,6 +404,7 @@ draw_rounded_corner :: proc (
 			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
 		}
 		vertices_buf[num_vertices] = origin + vert_pos
+		uvs_buf[num_vertices] = border_uv
 		num_vertices += 1
 	}
 
@@ -452,6 +489,21 @@ draw_box_border :: proc (box: clay.BoundingBox, border: clay.BorderRenderData) {
 	if corners.bottomRight != 0 {
 		draw_rounded_border(renderer, fcolor, f32(borderwidth.bottom), f32(borderwidth.right), corners.bottomRight, 3, {box.x+box.width, box.y+box.height})
 	}
+
+	/*
+	SDL.SetRenderDrawColor(renderer, 255, 0, 0, 80)
+	full := SDL.FRect{box.x, box.y, box.width, box.height}
+    SDL.RenderRect(renderer, &full)
+
+	SDL.SetRenderDrawColor(renderer, 0, 255, 0, 80)
+	safe := SDL.FRect{
+		box.x + f32(borderwidth.left),
+		box.y + f32(borderwidth.top),
+		box.width - f32(borderwidth.left) - f32(borderwidth.right),
+		box.height - f32(borderwidth.bottom) - f32(borderwidth.top),
+	}
+    SDL.RenderRect(renderer, &safe)
+*/
 }
 
 
@@ -461,30 +513,40 @@ draw_rounded_border :: proc (renderer: ^SDL.Renderer, color: SDL.FColor, width_h
 	num_vertices : i32 = i32(segments) * 2 + 2
 	num_indices : i32 = i32(segments) * 6
 	vertices_buf: [1000]vec2
+	uvs_buf: [1000]vec2
 	indices_buf: [2000]u8
 
 	// keeping it as vec makes some stuff easier
-	v_radius := vec2 {radius, radius}
-	v_radius_inner := v_radius - vec2{width_v, width_h}
+	PAD :: 1
 
 	keep_x := width_v > radius
 	keep_y := width_h > radius
 
+	flip := vec2{1, 1}
 	// corners 0 and 2 are in the left, so centerpoint is to the right
 	if corner_idx % 2 == 0 {
-		v_radius.x *= -1
-		v_radius_inner.x *= -1
+		flip.x *= -1
 	}
 
 	// corners 0 and 1 are in the top, so centerpoint is below
 	if corner_idx & 2 == 0 {
-		v_radius.y *= -1
-		v_radius_inner.y *= -1
+		flip.y *= -1
 	}
-	centerpoint := corner - v_radius
+
+	centerpoint := corner - (flip * radius)
+
+	v_radius := flip * (radius + PAD)
+	v_radius_inner := flip * vec2{radius-width_v-PAD, radius-width_h-PAD}
 
 	// draw from centerpoint +- x to centerpoint +- y
-	vertices_buf[0] = { corner.x,                         centerpoint.y }
+	base := vec2{0.5, 0.5} / TEX_SIZE
+	uv_outer :f32 = 0.5 - PAD
+	uv_innerh :f32 = width_h + PAD + 0.5
+	uv_innerv :f32 = width_v + PAD + 0.5
+	uvs_buf[0] = base + ({uv_outer, uv_innerv} / TEX_SIZE)
+	uvs_buf[1] = base + ({uv_innerv, uv_outer} / TEX_SIZE)
+
+	vertices_buf[0] = { centerpoint.x + v_radius.x,       centerpoint.y }
 	vertices_buf[1] = { centerpoint.x + v_radius_inner.x, keep_y ? corner.y + width_h : centerpoint.y }
 	increment := math.TAU / 4 / f32(segments)
 	mat_cos := math.cos(increment)
@@ -501,9 +563,15 @@ draw_rounded_border :: proc (renderer: ^SDL.Renderer, color: SDL.FColor, width_h
 			keep_x ? 1.0 : vert_pos.x,
 			keep_y ? 1.0 : vert_pos.y,
 		} * v_radius_inner)
+		uvs_buf[idx*2] = base + ({uv_outer, uv_innerv* vert_pos.x + uv_innerh * vert_pos.y} / TEX_SIZE)
+		uvs_buf[idx*2+1] = base + ({uv_innerv* vert_pos.x + uv_innerh * vert_pos.y, uv_outer} / TEX_SIZE)
 	}
-	vertices_buf[segments*2] =   { centerpoint.x, corner.y }
+	vertices_buf[segments*2] =   { centerpoint.x, centerpoint.y + v_radius.y }
 	vertices_buf[segments*2+1] = { keep_x ? corner.x + width_v : centerpoint.x, centerpoint.y + v_radius_inner.y}
+
+	uvs_buf[segments*2] = base + ({uv_outer, uv_innerh} / TEX_SIZE)
+	uvs_buf[segments*2+1] = base + ({uv_innerh, uv_outer} / TEX_SIZE)
+
 
 	for idx_wide in 0..<segments {
 		idx := u8(idx_wide)
@@ -519,10 +587,10 @@ draw_rounded_border :: proc (renderer: ^SDL.Renderer, color: SDL.FColor, width_h
 
 	SDL.RenderGeometryRaw(
 		renderer,
-		nil, // texture
+		helper, // texture
 		&vertices_buf[0][0], 8, // verts + stride
 		&fcolor, 0, // color + stride
-		nil, 0, // uvs
+		&uvs_buf[0][0], 8, // uvs
 		num_vertices,
 		&indices_buf, num_indices, 1
 	)

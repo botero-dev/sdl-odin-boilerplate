@@ -295,10 +295,12 @@ app_draw :: proc () {
 		size := f32(64 * 32)
 		target_pos := SDL.FRect {50, 50, size, size}
 
-		start := vec2{100, 100}
-		end := vec2{200, 100}
-		width := f32(9)
-		draw_line(renderer, start, end, width)
+		draw_line(renderer, {100, 100}, {200, 200}, 5)
+		draw_line(renderer, {100, 120}, {200, 220}, 5.1)
+		draw_line(renderer, {100, 140}, {200, 240}, 5.2)
+		draw_line(renderer, {100, 160}, {200, 260}, 5.3)
+		draw_line(renderer, {100, 180}, {200, 280}, 5.4)
+		draw_line(renderer, {100, 200}, {200, 300}, 5.5)
 
 		SDL.RenderPresent(renderer)
 	}
@@ -549,6 +551,7 @@ HandleButton :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, use
 color_idle := clay.Color {0, 0, 0, 1}
 color_border := clay.Color {0.3, 0.3, 0.3, 1}
 color_frame := clay.Color {0.2, 0.2, 0.2, 1}
+//color_frame := clay.Color {1, 1, 1, 1}
 color_hover := clay.Color {0.4, 0.4, 0.4, 1}
 color_text := clay.Color {0.8, 0.8, 0.8, 1}
 
@@ -564,7 +567,7 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 
 	if clay.UI(clay.ID(label))(DPI({
         layout = sidebar_item_layout,
-		cornerRadius = {20, 20, 20, 20},
+		cornerRadius = {16, 16, 16, 16},
         backgroundColor = clay.Hovered() ? color_hover : color_idle,
 		border = {
 			width = {1, 1, 1, 1, 0},
