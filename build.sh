@@ -91,7 +91,7 @@ if [ ! -e "$INSTALL_PATH/lib/$SDL_LIBRARY" ]; then
     mkdir -p "$BUILD_SRC_PATH/sdl"
     pushd "$BUILD_SRC_PATH/sdl"
 
-	cmake_cmd "$SDL_PATH" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
+	cmake_cmd "$SDL_PATH" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH" -DSDL_X11_XTEST=OFF
     cmake --build . --config "$BUILD_CONFIG" --parallel
 	cmake --install . --config "$BUILD_CONFIG"
 

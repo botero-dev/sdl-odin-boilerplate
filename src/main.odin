@@ -11,6 +11,7 @@ import "core:c"
 import "core:strings"
 import "core:log"
 import "core:math"
+import "core:math/linalg"
 
 import "base:runtime"
 
@@ -25,7 +26,7 @@ engine: ^TTF.TextEngine
 
 clay_memory: []byte
 
-win_size: [2]i32 = {960, 640}
+win_size: [2]i32 = {1900, 640}
 
 
 clay_error_handler :: proc "c" (errorData: clay.ErrorData) {
@@ -116,6 +117,8 @@ sdl_app_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL
     clay_arena := clay.CreateArenaWithCapacityAndMemory(uint(min_size), &clay_memory[0])
     clay.Initialize(clay_arena, {f32(win_size.x), f32(win_size.y)}, { handler = clay_error_handler })
     clay.SetMeasureTextFunction(clay_measure_text, nil)
+
+	gfx_init()
 
     return .CONTINUE
 }
@@ -272,6 +275,9 @@ get_next_img_idx :: proc(idx: int) -> int {
 }
 
 
+render_target: ^SDL.Texture
+
+
 app_draw :: proc () {
 	if ui_dirty {
 		ui_dirty = false
@@ -279,7 +285,20 @@ app_draw :: proc () {
 		clay.SetLayoutDimensions({f32(win_size.x), f32(win_size.y)})
 		free_all(context.temp_allocator)
 		render_commands := create_layout()
+
+		SDL.SetRenderTarget(renderer, nil)
+		SDL.SetRenderDrawColor(renderer, 0, 0, 0, 0)
+		SDL.RenderClear(renderer)
+
 		render_layout(&render_commands)
+
+		size := f32(64 * 32)
+		target_pos := SDL.FRect {50, 50, size, size}
+
+		start := vec2{100, 100}
+		end := vec2{200, 100}
+		width := f32(9)
+		draw_line(renderer, start, end, width)
 
 		SDL.RenderPresent(renderer)
 	}
