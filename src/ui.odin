@@ -149,7 +149,7 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 			text = get_text_with_font_size(text_data.fontSize)
 
 			if text != nil {
-			    TTF.SetTextColor(text, u8(color[0]*255), u8(color[1]*255), u8(color[2]*255), u8(color[3]*255))
+				TTF.SetTextColor(text, u8(color[0]*255), u8(color[1]*255), u8(color[2]*255), u8(color[3]*255))
                 string_slice := text_data.stringContents
                 TTF.SetTextString(text, cstring(string_slice.chars), uint(string_slice.length))
                 TTF.SetTextWrapWidth(text, 0)
@@ -223,7 +223,6 @@ get_text_with_font_size :: proc(size: u16) -> ^TTF.Text {
 	}
 	if text == nil {
 		text = TTF.CreateText(engine, font, "My Text", 0)
-		TTF.SetTextColor(text, 255, 255, 255, 255)
 	}
 	else {
 		TTF.SetTextFont(text, font)

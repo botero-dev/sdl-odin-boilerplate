@@ -59,7 +59,7 @@ draw_line :: proc(renderer: ^SDL.Renderer, start: vec2, end: vec2, width: f32) {
 	indices := []u8{
 		0, 1, 3, 1, 3, 4, 1, 2, 4, 2, 4, 5
 	}
-	color := SDL.FColor{1, 1, 1, 1}
+	color := SDL.FColor{1, 0, 0, 1}
 
 	SDL.SetRenderTextureAddressMode(renderer, .CLAMP, .CLAMP)
 
@@ -75,6 +75,6 @@ draw_line :: proc(renderer: ^SDL.Renderer, start: vec2, end: vec2, width: f32) {
 	)
 
 	SDL.SetRenderDrawColor(renderer, 255, 0, 0, 255)
-	SDL.RenderPoint(renderer, start.x, start.y)
-	SDL.RenderPoint(renderer, end.x, end.y)
+//	SDL.RenderPoint(renderer, start.x, start.y)
+//	SDL.RenderPoint(renderer, end.x, end.y)
 }

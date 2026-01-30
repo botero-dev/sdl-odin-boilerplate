@@ -18,7 +18,6 @@ import "base:runtime"
 
 import clay "clay-odin"
 
-ctx: runtime.Context
 
 window: ^SDL.Window
 renderer: ^SDL.Renderer
@@ -30,7 +29,7 @@ win_size: [2]i32 = {1900, 640}
 
 
 clay_error_handler :: proc "c" (errorData: clay.ErrorData) {
-    context = ctx
+    context = get_global_context()
     fmt.println(errorData)
 }
 
@@ -84,9 +83,10 @@ assign_font :: proc (result: RequestResult) {
 	set_font_io(io)
 }
 
-sdl_app_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResult {
-    context = ctx
+app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResult {
     fmt.println("hello")
+	log.info("hello_log")
+    fmt.println("hello2")
     _ = SDL.SetAppMetadata("Example", "1.0", "com.example")
 
     if (!SDL.Init({.VIDEO, .JOYSTICK, .GAMEPAD})) {
@@ -106,8 +106,6 @@ sdl_app_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL
 
     engine = TTF.CreateRendererTextEngine(renderer)
 
-
-    context = ctx
     request_data("Play-Regular.ttf", nil, assign_font)
     request_data("gallery/files.txt", nil, parse_files)
 
@@ -123,15 +121,7 @@ sdl_app_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL
     return .CONTINUE
 }
 
-
-sdl_app_quit :: proc "c" (appstate: rawptr, result: SDL.AppResult) {
-	context = ctx
-    fmt.println("quit")
-}
-
-
-sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
-    context = ctx
+app_event :: proc (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
 	retval := SDL.AppResult.CONTINUE
 	//log.info("sdl event:", event.type)
 	#partial switch event.type {
@@ -185,11 +175,7 @@ desired_delay_ticks: u64 = 1_000_000_000 / 60
 next_iterate_ticks: u64 = 0
 
 
-
-
-sdl_app_iterate :: proc "c" (appstate: rawptr) -> SDL.AppResult {
-    context = ctx
-
+app_iterate :: proc (appstate: rawptr) -> SDL.AppResult {
 	current_ticks := SDL.GetTicksNS()
 	missing_ticks: i64 = i64(next_iterate_ticks) - i64(current_ticks)
 
@@ -292,7 +278,7 @@ app_draw :: proc () {
 
 		render_layout(&render_commands)
 
-		/*
+		if false {
 		// code I used for drawing some pixels to a buffer and then draw them huge with nearest filtering
 
 		SIZE :: 64
@@ -313,7 +299,7 @@ app_draw :: proc () {
 		SDL.RenderPoint(renderer, SIZE-1, SIZE-1)
 		SDL.RenderPoint(renderer, SIZE-1, 0)
 
-		BORDERH :: 1
+		BORDERH :: 4
 		BORDERV :: 1
 		RADIUS :: 16
 		draw_box_border2(
@@ -355,11 +341,11 @@ app_draw :: proc () {
 			uv := buffer.uvs[idx]
 			pos := vert * SCALE + {target_pos.x, target_pos.y}
 			draw_line(renderer, pos - {2, 0}, pos + {2, 0}, 5)
-			text := fmt.ctprintf("%f %f", uv.x, uv.y)
+			text := fmt.ctprintf("%f\n%f", uv.x, uv.y)
 			SDL.RenderDebugText(renderer, pos.x, pos.y, text)
 		}
+		}
 
-		*/
 
 		SDL.RenderPresent(renderer)
 	}
@@ -380,6 +366,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 		fontSize = border_policy(16),
 		textAlignment = .Center,
 	})
+	//clay.SetDebugModeEnabled(true)
 
     // An example of laying out a UI with a fixed-width sidebar and flexible-width main content
     // NOTE: To create a scope for child components, the Odin API uses `if` with components that have children
@@ -409,6 +396,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 						width = clay.SizingPercent(1),
 						height = clay.SizingPercent(1),
 					},
+					layoutDirection = .LeftToRight,
 				},
 				backgroundColor = back_color,
 				image = {
@@ -535,7 +523,7 @@ select_directory :: proc() {
 }
 
 select_directory_callback: SDL.DialogFileCallback : proc "c" (userdata: rawptr, filelist: [^]cstring, filter: c.int) {
-	context = ctx
+	context = get_global_context()
 	if filelist == nil {
 		error := SDL.GetError()
 		fmt.println("got error:", error)

@@ -10,10 +10,18 @@ import "core:log"
 
 import "base:runtime"
 
+ctx: runtime.Context
+
 ///////////////////////////////////////////////////////
 // desktop/wasm handling
 
 when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
+
+	main :: proc() {
+		context.logger = log.create_console_logger()
+		ctx = context
+		log.info("wasm main")
+	}
 
 	@export
 	main_start :: proc "c" () {
@@ -53,7 +61,7 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 	@(export)
 	SDL_main :: proc "c" (argc: c.int, argv: [^]cstring) -> c.int {
 		context = runtime.default_context()
-		app_main()
+		sdl_app_main()
 		return 0;
 	}
 
@@ -62,7 +70,7 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 	// standard entry point for desktop targets
 	main :: proc() {
 		context.logger = log.create_console_logger()
-		app_main()
+		sdl_app_main()
 	}
 
 }
@@ -77,12 +85,12 @@ sdl_log_proc :: proc(data: rawptr, level: runtime.Logger_Level, text: string, op
 	SDL.Log("%s", temporary)
 }
 
-app_main :: proc () {
+sdl_app_main :: proc () {
 	context.logger = runtime.Logger {
 		procedure = sdl_log_proc
 	}
 	ctx = context
-	log.info("app_main()")
+	log.info("sdl_app_main()")
 
 
     //args := os.args
@@ -91,4 +99,28 @@ app_main :: proc () {
 	} else {
         SDL.EnterAppMainCallbacks(0, nil, sdl_app_init, sdl_app_iterate, sdl_app_event, sdl_app_quit)
     }
+}
+
+sdl_app_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResult {
+	context = ctx
+	return app_init(appstate, argc, argv)
+}
+
+sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
+	context = ctx
+	return app_event(appstate, event)
+}
+
+sdl_app_iterate :: proc "c" (appstate: rawptr) -> SDL.AppResult {
+	context = ctx
+	return app_iterate(appstate)
+}
+
+sdl_app_quit :: proc "c" (appstate: rawptr, result: SDL.AppResult) {
+	context = ctx
+	log.info("quit")
+}
+
+get_global_context :: proc "c" () -> runtime.Context {
+	return ctx
 }

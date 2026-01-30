@@ -91,7 +91,7 @@ if [ ! -e "$INSTALL_PATH/lib/$SDL_LIBRARY" ]; then
     mkdir -p "$BUILD_SRC_PATH/sdl"
     pushd "$BUILD_SRC_PATH/sdl"
 
-	cmake_cmd "$SDL_PATH" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH" -DSDL_X11_XTEST=OFF
+	cmake_cmd "$SDL_PATH" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH" -DSDL_X11_XTEST=OFF -DSDL_TEST_LIBRARY=OFF
     cmake --build . --config "$BUILD_CONFIG" --parallel
 	cmake --install . --config "$BUILD_CONFIG"
 
@@ -112,7 +112,7 @@ fi
 if [ ! -e "$INSTALL_PATH/lib/$SDLTTF_LIBRARY" ]; then
     mkdir -p "$BUILD_SRC_PATH/sdl_ttf"
     pushd "$BUILD_SRC_PATH/sdl_ttf"
-    cmake_cmd "$SDLTTF_PATH" -DSDL3_DIR="$BUILD_SRC_PATH/sdl" -DSDLTTF_SAMPLES=false -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
+    cmake_cmd "$SDLTTF_PATH" -DSDL3_DIR="$BUILD_SRC_PATH/sdl" -DSDLTTF_SAMPLES=false -DSDLTTF_VENDORED=true -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
     cmake --build . --config "$BUILD_CONFIG" --parallel
 	cmake --install . --config "$BUILD_CONFIG"
 
