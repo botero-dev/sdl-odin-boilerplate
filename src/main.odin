@@ -80,7 +80,7 @@ assign_font :: proc (result: RequestResult) {
 	}
 	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
 
-	set_font_io(io)
+	text_font_id = load_font_io(io)
 }
 
 app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResult {
@@ -354,14 +354,15 @@ app_draw :: proc () {
 
 ui_dirty: bool = true
 
+text_font_id: u16 = 0
 
 // An example function to create your layout tree
 create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
     // Begin constructing the layout.
     clay.BeginLayout()
 
-
 	text_config = clay.TextConfig({
+		fontId = text_font_id,
 		textColor = color_text,
 		fontSize = border_policy(16),
 		textAlignment = .Center,

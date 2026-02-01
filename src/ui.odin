@@ -14,43 +14,6 @@ import clay "clay-odin"
 vec2 :: [2]f32
 
 
-// TextElementConfig :: struct {
-// 	userData:           rawptr,
-// 	textColor:          Color,
-// 	fontId:             u16,
-// 	fontSize:           u16,
-// 	letterSpacing:      u16,
-// 	lineHeight:         u16,
-// 	wrapMode:           TextWrapMode,
-// 	textAlignment:      TextAlignment,
-// }
-
-// StringSlice :: struct {
-// 	length: c.int32_t,
-// 	chars:  [^]c.char,
-// 	baseChars:  [^]c.char,
-// }
-
-
-clay_measure_text :: proc "c" (
-    text: clay.StringSlice,
-    config: ^clay.TextElementConfig,
-    userData: rawptr,
-) -> clay.Dimensions {
-	context = ctx
-	font := get_font_with_size(config.fontSize)
-	if font == nil {
-		return {}
-	}
-	size := [2]c.int{}
-	success := TTF.GetStringSize(font, cstring(text.chars), uint(text.length), &size.x, &size.y)
-    return {
-        width = f32(size.x),
-        height = f32(size.y),
-    }
-}
-
-
 
 dpi := f32(1.0)
 DPI_set :: proc(new_dpi: f32) {
@@ -146,7 +109,7 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
             text_data := render_command.renderData.text
             color := text_data.textColor
 
-			text = get_text_with_font_size(text_data.fontSize)
+			text := get_text_with_font_size(text_data.fontId, text_data.fontSize)
 
 			if text != nil {
 				TTF.SetTextColor(text, u8(color[0]*255), u8(color[1]*255), u8(color[2]*255), u8(color[3]*255))
@@ -190,44 +153,93 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 }
 
 
-font_io: ^SDL.IOStream
-fonts: map[u16]^TTF.Font
-text: ^TTF.Text
-
-set_font_io :: proc(io: ^SDL.IOStream) {
-	font_io = io
-	log.info("set font io")
+FontData :: struct {
+	font_io: ^SDL.IOStream,
+	sizes: map[u16]^TTF.Font,
 }
 
-get_font_with_size :: proc(size: u16) -> ^TTF.Font {
-	font, ok := fonts[size]
-	if !ok {
-		if font_io == nil {
-			return nil
-		}
-		font = TTF.OpenFontIO(font_io, false, f32(size))
-		fonts[size] = font
+loaded_fonts: u16 = 1 // we reserve fontid=0 for null font
+fonts: [dynamic]FontData
+
+load_font_io :: proc(io: ^SDL.IOStream) -> u16 {
+	if fonts == nil {
+		append(&fonts, FontData{})
 	}
-
-    if font == nil {
-        fmt.println("unable to load font:", SDL.GetError())
-    }
-	return font
+	new_font := FontData {
+		font_io = io
+	}
+	loaded_font_id := loaded_fonts
+	log.info("set font io:", loaded_font_id)
+	append(&fonts, new_font)
+	loaded_fonts += 1
+	return loaded_font_id
 }
 
-get_text_with_font_size :: proc(size: u16) -> ^TTF.Text {
+// TextElementConfig :: struct {
+// 	userData:           rawptr,
+// 	textColor:          Color,
+// 	fontId:             u16,
+// 	fontSize:           u16,
+// 	letterSpacing:      u16,
+// 	lineHeight:         u16,
+// 	wrapMode:           TextWrapMode,
+// 	textAlignment:      TextAlignment,
+// }
+
+// StringSlice :: struct {
+// 	length: c.int32_t,
+// 	chars:  [^]c.char,
+// 	baseChars:  [^]c.char,
+// }
+
+
+clay_measure_text :: proc "c" (
+    text: clay.StringSlice,
+    config: ^clay.TextElementConfig,
+    userData: rawptr,
+) -> clay.Dimensions {
+	context = ctx
+	font := get_font_with_size(config.fontId, config.fontSize)
+	if font == nil {
+		log.info("unable to calculate font size")
+		return {}
+	}
+	size := [2]c.int{}
+	success := TTF.GetStringSize(font, cstring(text.chars), uint(text.length), &size.x, &size.y)
+    return {
+        width = f32(size.x),
+        height = f32(size.y),
+    }
+}
+
+get_font_with_size :: proc(font_id: u16, size: u16) -> ^TTF.Font {
+	if font_id == 0 {
+		return nil
+	}
+	font := &fonts[font_id]
+	font_size, ok := font.sizes[size]
+	if !ok {
+		font_size = TTF.OpenFontIO(font.font_io, false, f32(size))
+		font.sizes[size] = font_size
+	}
+	return font_size
+}
+
+
+// single text object gets reused
+single_text: ^TTF.Text
+
+get_text_with_font_size :: proc(font_id: u16, size: u16) -> ^TTF.Text {
 	//log.info("get_text_with_size")
-	font := get_font_with_size(size)
+	font := get_font_with_size(font_id, size)
 	if font == nil {
 		return nil
 	}
-	if text == nil {
-		text = TTF.CreateText(engine, font, "My Text", 0)
+	if single_text == nil {
+		single_text = TTF.CreateText(engine, font, "My Text", 0)
 	}
-	else {
-		TTF.SetTextFont(text, font)
-	}
-	return text
+	TTF.SetTextFont(single_text, font)
+	return single_text
 }
 
 

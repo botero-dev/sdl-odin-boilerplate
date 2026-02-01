@@ -87,32 +87,43 @@ SDL_LIBRARY="${PREFIX}SDL3${SUFFIX}"
 SDLIMG_LIBRARY="${PREFIX}SDL3_image${SUFFIX}"
 SDLTTF_LIBRARY="${PREFIX}SDL3_ttf${SUFFIX}"
 
+cmake_common_args=(
+	-DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
+)
+
+
 if [ ! -e "$INSTALL_PATH/lib/$SDL_LIBRARY" ]; then
     mkdir -p "$BUILD_SRC_PATH/sdl"
     pushd "$BUILD_SRC_PATH/sdl"
 
-	cmake_cmd "$SDL_PATH" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH" -DSDL_X11_XTEST=OFF -DSDL_TEST_LIBRARY=OFF
+	cmake_cmd "$SDL_PATH" "${cmake_common_args[@]}" -DSDL_X11_XTEST=OFF -DSDL_TEST_LIBRARY=OFF
     cmake --build . --config "$BUILD_CONFIG" --parallel
 	cmake --install . --config "$BUILD_CONFIG"
 
 	popd
 fi
+
+cmake_common_args+=(
+	-DSDL3_DIR="$BUILD_SRC_PATH/sdl"
+)
+
 
 if [ ! -e "$INSTALL_PATH/lib/$SDLIMG_LIBRARY" ]; then
     mkdir -p "$BUILD_SRC_PATH/sdl_image"
     pushd "$BUILD_SRC_PATH/sdl_image"
 
-    cmake_cmd "$SDLIMG_PATH" -DSDL3_DIR="$BUILD_SRC_PATH/sdl" -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH" -DSDLIMG_AVIF=OFF
+    cmake_cmd "$SDLIMG_PATH" "${cmake_common_args[@]}" -DSDLIMG_AVIF=OFF # -DSDLIMAGE_VENDORED=true
     cmake --build . --config "$BUILD_CONFIG" --parallel
 	cmake --install . --config "$BUILD_CONFIG"
 
 	popd
 fi
+
 
 if [ ! -e "$INSTALL_PATH/lib/$SDLTTF_LIBRARY" ]; then
     mkdir -p "$BUILD_SRC_PATH/sdl_ttf"
     pushd "$BUILD_SRC_PATH/sdl_ttf"
-    cmake_cmd "$SDLTTF_PATH" -DSDL3_DIR="$BUILD_SRC_PATH/sdl" -DSDLTTF_SAMPLES=false -DSDLTTF_VENDORED=true -DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
+    cmake_cmd "$SDLTTF_PATH"  "${cmake_common_args[@]}" -DSDLTTF_VENDORED=true -DSDLTTF_SAMPLES=false
     cmake --build . --config "$BUILD_CONFIG" --parallel
 	cmake --install . --config "$BUILD_CONFIG"
 
@@ -120,13 +131,16 @@ if [ ! -e "$INSTALL_PATH/lib/$SDLTTF_LIBRARY" ]; then
 fi
 
 
-echo "Compiling"
 
 compile_cmd=("$ODIN_PATH/odin" build src)
 
 if [[ "$TARGET" = "linux" ]]; then
+
+	rpath_var='$ORIGIN/lib'
+	runtime_lib_flag="-Wl,-rpath,'$rpath_var'"
+	compile_lib_flag="-L$INSTALL_PATH/lib"
 	compile_cmd+=(
-		-extra-linker-flags:"-L$INSTALL_PATH/lib"
+		-extra-linker-flags:"$compile_lib_flag $runtime_lib_flag"
 	)
 fi
 
@@ -160,13 +174,29 @@ elif [[ "$TARGET" = "web" ]]; then
 	)
 fi
 
+echo "Compiling"
+
 echo "${compile_cmd[@]}"
 "${compile_cmd[@]}"
 
+
+echo "Packaging"
+
 if [[ "$TARGET" = "win" ]]; then
+	echo "Copying .dll files."
 	INSTALL_PATH_BASH=$(echo "$INSTALL_PATH" | sed 's|^\([A-Za-z]\):/|/\1/|')
 	PACKAGE_PATH_BASH=$(echo "$PACKAGE_PATH" | sed 's|^\([A-Za-z]\):/|/\1/|')
 	cp "$INSTALL_PATH_BASH/bin/"* "$PACKAGE_PATH_BASH"
+
+
+elif [[ "$TARGET" = "linux" ]]; then
+	echo "Copying .so files."
+	command=(
+		cp -r "$INSTALL_PATH/lib" "$PACKAGE_PATH"
+	)
+	echo "${command[@]}"
+	"${command[@]}"
+
 
 elif [[ "$TARGET" = "web" ]]; then
 	source_emsdk
@@ -193,7 +223,10 @@ elif [[ "$TARGET" = "web" ]]; then
 
 	cp "platform/web/odin.js" "$PACKAGE_PATH"
 fi
-echo "done"
+
+
+
+echo "Preparing 'content' folder"
 
 
 PACKAGE_CONTENT_PATH="$PACKAGE_PATH/content"
