@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -ex
+pushd "$(dirname "${BASH_SOURCE[0]}")"
 
 ##   Script to fetch and patch dependencies:
 # This script pulls from a repo, and applies patches directly in the folder

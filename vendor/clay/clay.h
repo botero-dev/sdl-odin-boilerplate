@@ -3145,16 +3145,20 @@ CLAY_DLL_EXPORT Clay_ElementIdArray Clay_GetPointerOverIds(void) {
     return Clay_GetCurrentContext()->pointerOverIds;
 }
 
+#define VAL_U8(R) (R/255.0)
+#define VAL_UNSCALED(R) (R*255.0)
+#define COLOR_U8(R,G,B,A) {R/255.0, G/255.0, B/255.0, A/255.0}
+
 #pragma region DebugTools
-Clay_Color CLAY__DEBUGVIEW_COLOR_1 = {58, 56, 52, 255};
-Clay_Color CLAY__DEBUGVIEW_COLOR_2 = {62, 60, 58, 255};
-Clay_Color CLAY__DEBUGVIEW_COLOR_3 = {141, 133, 135, 255};
-Clay_Color CLAY__DEBUGVIEW_COLOR_4 = {238, 226, 231, 255};
-Clay_Color CLAY__DEBUGVIEW_COLOR_SELECTED_ROW = {102, 80, 78, 255};
+Clay_Color CLAY__DEBUGVIEW_COLOR_1 = COLOR_U8(58, 56, 52, 255);
+Clay_Color CLAY__DEBUGVIEW_COLOR_2 = COLOR_U8(62, 60, 58, 255);
+Clay_Color CLAY__DEBUGVIEW_COLOR_3 = COLOR_U8(141, 133, 135, 255);
+Clay_Color CLAY__DEBUGVIEW_COLOR_4 = COLOR_U8(238, 226, 231, 255);
+Clay_Color CLAY__DEBUGVIEW_COLOR_SELECTED_ROW = COLOR_U8(102, 80, 78, 255);
 const int32_t CLAY__DEBUGVIEW_ROW_HEIGHT = 30;
 const int32_t CLAY__DEBUGVIEW_OUTER_PADDING = 10;
 const int32_t CLAY__DEBUGVIEW_INDENT_WIDTH = 16;
-Clay_TextElementConfig Clay__DebugView_TextNameConfig = {.textColor = {238, 226, 231, 255}, .fontSize = 16, .wrapMode = CLAY_TEXT_WRAP_NONE };
+Clay_TextElementConfig Clay__DebugView_TextNameConfig = {.textColor = COLOR_U8(238, 226, 231, 255), .fontSize = 16, .wrapMode = CLAY_TEXT_WRAP_NONE };
 Clay_LayoutConfig Clay__DebugView_ScrollViewItemLayoutConfig = CLAY__DEFAULT_STRUCT;
 
 typedef struct {
@@ -3164,17 +3168,17 @@ typedef struct {
 
 Clay__DebugElementConfigTypeLabelConfig Clay__DebugGetElementConfigTypeLabel(Clay__ElementConfigType type) {
     switch (type) {
-        case CLAY__ELEMENT_CONFIG_TYPE_SHARED: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Shared"), {243,134,48,255} };
-        case CLAY__ELEMENT_CONFIG_TYPE_TEXT: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Text"), {105,210,231,255} };
-        case CLAY__ELEMENT_CONFIG_TYPE_ASPECT: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Aspect"), {101,149,194,255} };
-        case CLAY__ELEMENT_CONFIG_TYPE_IMAGE: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Image"), {121,189,154,255} };
-        case CLAY__ELEMENT_CONFIG_TYPE_FLOATING: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Floating"), {250,105,0,255} };
-        case CLAY__ELEMENT_CONFIG_TYPE_CLIP: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) {CLAY_STRING("Scroll"), {242, 196, 90, 255} };
-        case CLAY__ELEMENT_CONFIG_TYPE_BORDER: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) {CLAY_STRING("Border"), {108, 91, 123, 255} };
-        case CLAY__ELEMENT_CONFIG_TYPE_CUSTOM: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Custom"), {11,72,107,255} };
+        case CLAY__ELEMENT_CONFIG_TYPE_SHARED: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Shared"), COLOR_U8(243,134,48,255) };
+        case CLAY__ELEMENT_CONFIG_TYPE_TEXT: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Text"), COLOR_U8(105,210,231,255) };
+        case CLAY__ELEMENT_CONFIG_TYPE_ASPECT: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Aspect"), COLOR_U8(101,149,194,255) };
+        case CLAY__ELEMENT_CONFIG_TYPE_IMAGE: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Image"), COLOR_U8(121,189,154,255) };
+        case CLAY__ELEMENT_CONFIG_TYPE_FLOATING: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Floating"), COLOR_U8(250,105,0,255) };
+        case CLAY__ELEMENT_CONFIG_TYPE_CLIP: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) {CLAY_STRING("Scroll"), COLOR_U8(242, 196, 90, 255) };
+        case CLAY__ELEMENT_CONFIG_TYPE_BORDER: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) {CLAY_STRING("Border"), COLOR_U8(108, 91, 123, 255) };
+        case CLAY__ELEMENT_CONFIG_TYPE_CUSTOM: return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Custom"), COLOR_U8(11,72,107,255) };
         default: break;
     }
-    return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Error"), {0,0,0,255} };
+    return CLAY__INIT(Clay__DebugElementConfigTypeLabelConfig) { CLAY_STRING("Error"), COLOR_U8(0,0,0,255) };
 }
 
 typedef struct {
@@ -3182,6 +3186,8 @@ typedef struct {
     int32_t selectedElementRowIndex;
 } Clay__RenderDebugLayoutData;
 
+
+void HandleDebugViewCollapse(Clay_ElementId elementId, Clay_PointerData pointerInfo, void *userData);
 // Returns row count
 Clay__RenderDebugLayoutData Clay__RenderDebugLayoutElementsList(int32_t initialRootsLength, int32_t highlightedRowIndex) {
     Clay_Context* context = Clay_GetCurrentContext();
@@ -3236,6 +3242,8 @@ Clay__RenderDebugLayoutData Clay__RenderDebugLayoutElementsList(int32_t initialR
                         .cornerRadius = CLAY_CORNER_RADIUS(4),
                         .border = { .color = CLAY__DEBUGVIEW_COLOR_3, .width = {1, 1, 1, 1, 0} },
                     }) {
+					  Clay_OnHover(HandleDebugViewCollapse, 0);
+
                         CLAY_TEXT((currentElementData && currentElementData->debugData->collapsed) ? CLAY_STRING("+") : CLAY_STRING("-"), CLAY_TEXT_CONFIG({ .textColor = CLAY__DEBUGVIEW_COLOR_4, .fontSize = 16 }));
                     }
                 } else { // Square dot for empty containers
@@ -3246,7 +3254,7 @@ Clay__RenderDebugLayoutData Clay__RenderDebugLayoutElementsList(int32_t initialR
                 // Collisions and offscreen info
                 if (currentElementData) {
                     if (currentElementData->debugData->collision) {
-                        CLAY_AUTO_ID({ .layout = { .padding = { 8, 8, 2, 2 }}, .border = { .color = {177, 147, 8, 255}, .width = {1, 1, 1, 1, 0} } }) {
+                        CLAY_AUTO_ID({ .layout = { .padding = { 8, 8, 2, 2 }}, .border = { .color = COLOR_U8(177, 147, 8, 255), .width = {1, 1, 1, 1, 0} } }) {
                             CLAY_TEXT(CLAY_STRING("Duplicate ID"), CLAY_TEXT_CONFIG({ .textColor = CLAY__DEBUGVIEW_COLOR_3, .fontSize = 16 }));
                         }
                     }
@@ -3263,8 +3271,7 @@ Clay__RenderDebugLayoutData Clay__RenderDebugLayoutElementsList(int32_t initialR
                 for (int32_t elementConfigIndex = 0; elementConfigIndex < currentElement->elementConfigs.length; ++elementConfigIndex) {
                     Clay_ElementConfig *elementConfig = Clay__ElementConfigArraySlice_Get(&currentElement->elementConfigs, elementConfigIndex);
                     if (elementConfig->type == CLAY__ELEMENT_CONFIG_TYPE_SHARED) {
-                        Clay_Color labelColor = {243,134,48,90};
-                        labelColor.a = 90;
+                        Clay_Color labelColor = COLOR_U8(243,134,48,90);
                         Clay_Color backgroundColor = elementConfig->config.sharedElementConfig->backgroundColor;
                         Clay_CornerRadius radius = elementConfig->config.sharedElementConfig->cornerRadius;
                         if (backgroundColor.a > 0) {
@@ -3281,7 +3288,7 @@ Clay__RenderDebugLayoutData Clay__RenderDebugLayoutElementsList(int32_t initialR
                     }
                     Clay__DebugElementConfigTypeLabelConfig config = Clay__DebugGetElementConfigTypeLabel(elementConfig->type);
                     Clay_Color backgroundColor = config.color;
-                    backgroundColor.a = 90;
+                    backgroundColor.a = VAL_U8(90);
                     CLAY_AUTO_ID({ .layout = { .padding = { 8, 8, 2, 2 } }, .backgroundColor = backgroundColor, .cornerRadius = CLAY_CORNER_RADIUS(4), .border = { .color = config.color, .width = { 1, 1, 1, 1, 0 } } }) {
                         CLAY_TEXT(config.label, CLAY_TEXT_CONFIG({ .textColor = offscreen ? CLAY__DEBUGVIEW_COLOR_3 : CLAY__DEBUGVIEW_COLOR_4, .fontSize = 16 }));
                     }
@@ -3321,18 +3328,6 @@ Clay__RenderDebugLayoutData Clay__RenderDebugLayoutElementsList(int32_t initialR
         }
     }
 
-    if (context->pointerInfo.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
-        Clay_ElementId collapseButtonId = Clay__HashString(CLAY_STRING("Clay__DebugView_CollapseElement"), 0);
-        for (int32_t i = (int)context->pointerOverIds.length - 1; i >= 0; i--) {
-            Clay_ElementId *elementId = Clay_ElementIdArray_Get(&context->pointerOverIds, i);
-            if (elementId->baseId == collapseButtonId.baseId) {
-                Clay_LayoutElementHashMapItem *highlightedItem = Clay__GetHashMapItem(elementId->offset);
-                highlightedItem->debugData->collapsed = !highlightedItem->debugData->collapsed;
-                break;
-            }
-        }
-    }
-
     if (highlightedElementId) {
         CLAY(CLAY_ID("Clay__DebugView_ElementHighlight"), { .layout = { .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)} }, .floating = { .parentId = highlightedElementId, .zIndex = 32767, .pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH, .attachTo = CLAY_ATTACH_TO_ELEMENT_WITH_ID } }) {
             CLAY(CLAY_ID("Clay__DebugView_ElementHighlightRectangle"), { .layout = { .sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)} }, .backgroundColor = Clay__debugViewHighlightColor }) {}
@@ -3340,6 +3335,14 @@ Clay__RenderDebugLayoutData Clay__RenderDebugLayoutElementsList(int32_t initialR
     }
     return layoutData;
 }
+
+void HandleDebugViewCollapse(Clay_ElementId elementId, Clay_PointerData pointerInfo, void *userData) {
+    if (pointerInfo.state == CLAY_POINTER_DATA_PRESSED_THIS_FRAME) {
+        Clay_LayoutElementHashMapItem *highlightedItem = Clay__GetHashMapItem(elementId.offset);
+		highlightedItem->debugData->collapsed = !highlightedItem->debugData->collapsed;
+	}
+}
+
 
 void Clay__RenderDebugLayoutSizing(Clay_SizingAxis sizing, Clay_TextElementConfig *infoTextConfig) {
     Clay_String sizingLabel = CLAY_STRING("GROW");
@@ -3375,7 +3378,7 @@ void Clay__RenderDebugLayoutSizing(Clay_SizingAxis sizing, Clay_TextElementConfi
 void Clay__RenderDebugViewElementConfigHeader(Clay_String elementId, Clay__ElementConfigType type) {
     Clay__DebugElementConfigTypeLabelConfig config = Clay__DebugGetElementConfigTypeLabel(type);
     Clay_Color backgroundColor = config.color;
-    backgroundColor.a = 90;
+    backgroundColor.a = VAL_U8(90);
     CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_GROW(0) }, .padding = CLAY_PADDING_ALL(CLAY__DEBUGVIEW_OUTER_PADDING), .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
         CLAY_AUTO_ID({ .layout = { .padding = { 8, 8, 2, 2 } }, .backgroundColor = backgroundColor, .cornerRadius = CLAY_CORNER_RADIUS(4), .border = { .color = config.color, .width = { 1, 1, 1, 1, 0 } } }) {
             CLAY_TEXT(config.label, CLAY_TEXT_CONFIG({ .textColor = CLAY__DEBUGVIEW_COLOR_4, .fontSize = 16 }));
@@ -3388,13 +3391,13 @@ void Clay__RenderDebugViewElementConfigHeader(Clay_String elementId, Clay__Eleme
 void Clay__RenderDebugViewColor(Clay_Color color, Clay_TextElementConfig *textConfig) {
     CLAY_AUTO_ID({ .layout = { .childAlignment = {.y = CLAY_ALIGN_Y_CENTER} } }) {
         CLAY_TEXT(CLAY_STRING("{ r: "), textConfig);
-        CLAY_TEXT(Clay__IntToString(color.r), textConfig);
+        CLAY_TEXT(Clay__IntToString(VAL_UNSCALED(color.r)), textConfig);
         CLAY_TEXT(CLAY_STRING(", g: "), textConfig);
-        CLAY_TEXT(Clay__IntToString(color.g), textConfig);
+        CLAY_TEXT(Clay__IntToString(VAL_UNSCALED(color.g)), textConfig);
         CLAY_TEXT(CLAY_STRING(", b: "), textConfig);
-        CLAY_TEXT(Clay__IntToString(color.b), textConfig);
+        CLAY_TEXT(Clay__IntToString(VAL_UNSCALED(color.b)), textConfig);
         CLAY_TEXT(CLAY_STRING(", a: "), textConfig);
-        CLAY_TEXT(Clay__IntToString(color.a), textConfig);
+        CLAY_TEXT(Clay__IntToString(VAL_UNSCALED(color.a)), textConfig);
         CLAY_TEXT(CLAY_STRING(" }"), textConfig);
         CLAY_AUTO_ID({ .layout = { .sizing = { .width = CLAY_SIZING_FIXED(10) } } }) {}
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(CLAY__DEBUGVIEW_ROW_HEIGHT - 8), CLAY_SIZING_FIXED(CLAY__DEBUGVIEW_ROW_HEIGHT - 8)} }, .backgroundColor = color, .cornerRadius = CLAY_CORNER_RADIUS(4), .border = { .color = CLAY__DEBUGVIEW_COLOR_4, .width = { 1, 1, 1, 1, 0 } } }) {}
@@ -3826,7 +3829,7 @@ void Clay__RenderDebugView(void) {
                 CLAY(CLAY_ID("Clay__DebugViewWarningItemHeader"), { .layout = { .sizing = {.height = CLAY_SIZING_FIXED(CLAY__DEBUGVIEW_ROW_HEIGHT)}, .padding = {CLAY__DEBUGVIEW_OUTER_PADDING, CLAY__DEBUGVIEW_OUTER_PADDING, 0, 0 }, .childGap = 8, .childAlignment = {.y = CLAY_ALIGN_Y_CENTER} } }) {
                     CLAY_TEXT(CLAY_STRING("Warnings"), warningConfig);
                 }
-                CLAY(CLAY_ID("Clay__DebugViewWarningsTopBorder"), { .layout = { .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_FIXED(1)} }, .backgroundColor = {200, 200, 200, 255} }) {}
+                CLAY(CLAY_ID("Clay__DebugViewWarningsTopBorder"), { .layout = { .sizing = { .width = CLAY_SIZING_GROW(0), .height = CLAY_SIZING_FIXED(1)} }, .backgroundColor = COLOR_U8(200, 200, 200, 255) }) {}
                 int32_t previousWarningsLength = context->warnings.length;
                 for (int32_t i = 0; i < previousWarningsLength; i++) {
                     Clay__Warning warning = context->warnings.internalArray[i];
@@ -3844,7 +3847,7 @@ void Clay__RenderDebugView(void) {
 #pragma endregion
 
 uint32_t Clay__debugViewWidth = 400;
-Clay_Color Clay__debugViewHighlightColor = { 168, 66, 28, 100 };
+Clay_Color Clay__debugViewHighlightColor = COLOR_U8(168, 66, 28, 100);
 
 Clay__WarningArray Clay__WarningArray_Allocate_Arena(int32_t capacity, Clay_Arena *arena) {
     size_t totalSizeBytes = capacity * sizeof(Clay_String);
@@ -4252,7 +4255,7 @@ Clay_RenderCommandArray Clay_EndLayout(void) {
         }
         Clay__AddRenderCommand(CLAY__INIT(Clay_RenderCommand ) {
             .boundingBox = { context->layoutDimensions.width / 2 - 59 * 4, context->layoutDimensions.height / 2, 0, 0 },
-            .renderData = { .text = { .stringContents = CLAY__INIT(Clay_StringSlice) { .length = message.length, .chars = message.chars, .baseChars = message.chars }, .textColor = {255, 0, 0, 255}, .fontSize = 16 } },
+            .renderData = { .text = { .stringContents = CLAY__INIT(Clay_StringSlice) { .length = message.length, .chars = message.chars, .baseChars = message.chars }, .textColor = COLOR_U8(255, 0, 0, 255), .fontSize = 16 } },
             .commandType = CLAY_RENDER_COMMAND_TYPE_TEXT
         });
     }

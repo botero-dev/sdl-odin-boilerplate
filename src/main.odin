@@ -121,6 +121,7 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
     return .CONTINUE
 }
 
+wheel_delta: [2]f32
 app_event :: proc (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
 	retval := SDL.AppResult.CONTINUE
 	//log.info("sdl event:", event.type)
@@ -135,6 +136,9 @@ app_event :: proc (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
 			if event.button.button == SDL.BUTTON_LEFT {
 				clay.SetPointerState({event.button.x, event.button.y}, false)
 			}
+	case .MOUSE_WHEEL:
+		wheel_data := event.wheel
+		wheel_delta += {wheel_data.x, wheel_data.y}
 	case .QUIT:
 		retval = .SUCCESS
 	case .WINDOW_RESIZED:
@@ -143,6 +147,7 @@ app_event :: proc (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
 
 	case .WINDOW_PIXEL_SIZE_CHANGED:
 		win_size = {event.window.data1, event.window.data2}
+		clay.SetLayoutDimensions({f32(win_size.x), f32(win_size.y)})
 		ui_dirty = true
 	case .PEN_PROXIMITY_IN, .PEN_PROXIMITY_OUT:
 		log.info(event.pproximity)
@@ -268,7 +273,6 @@ app_draw :: proc () {
 	if ui_dirty {
 		ui_dirty = false
 
-		clay.SetLayoutDimensions({f32(win_size.x), f32(win_size.y)})
 		free_all(context.temp_allocator)
 		render_commands := create_layout()
 
@@ -276,7 +280,10 @@ app_draw :: proc () {
 		SDL.SetRenderDrawColor(renderer, 0, 0, 0, 0)
 		SDL.RenderClear(renderer)
 
+		clay.UpdateScrollContainers(false, {wheel_delta.x, wheel_delta.y}, 0.01)
+		wheel_delta = {}
 		render_layout(&render_commands)
+		print_render_commands = false
 
 		if false {
 		// code I used for drawing some pixels to a buffer and then draw them huge with nearest filtering
@@ -354,7 +361,7 @@ app_draw :: proc () {
 
 ui_dirty: bool = true
 
-text_font_id: u16 = 0
+text_font_id: u16 = NIL_FONT
 
 // An example function to create your layout tree
 create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
@@ -367,7 +374,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 		fontSize = border_policy(16),
 		textAlignment = .Center,
 	})
-	//clay.SetDebugModeEnabled(true)
+	clay.SetDebugModeEnabled(true)
 
     // An example of laying out a UI with a fixed-width sidebar and flexible-width main content
     // NOTE: To create a scope for child components, the Odin API uses `if` with components that have children
@@ -377,12 +384,12 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
             padding = { 16, 16, 16, 16 },
             childGap = 16,
         },
-		backgroundColor = {0, 0, 0, 255}
+		backgroundColor = {0, 0, 0, 1}
     }) {
 
 		if len(images) > 0 {
 
-			back_color := clay.Color{255, 255, 255, 255}
+			back_color := clay.Color{1, 1, 1, 1}
 			curr_img_tex := images[current_img_idx].texture
 			if clay.UI(clay.ID("Background"))({
 				floating = {
@@ -411,9 +418,9 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 			if current_state == .Transitioning {
 				next_img_idx := get_next_img_idx(current_img_idx)
 				next_img_tex := images[next_img_idx].texture
-				front_color := clay.Color{255, 255, 255, 255}
+				front_color := clay.Color{1, 1, 1, 1}
 				progress := current_transition_time / transition_time
-				alpha := f32(progress * 255)
+				alpha := f32(progress)
 				front_color.a = alpha
 				if clay.UI(clay.ID("BlendIn"))({
 					floating = {
@@ -546,6 +553,7 @@ select_directory_callback: SDL.DialogFileCallback : proc "c" (userdata: rawptr, 
 
 playback_first :: proc() {
 	fmt.println("first")
+	print_render_commands = true
 }
 playback_previous :: proc() {
 	fmt.println("previous")
@@ -596,7 +604,7 @@ HandleButton :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, use
 	}
 }
 
-color_idle := clay.Color {0, 0, 0, 1}
+color_idle := clay.Color {0.0, 0.0, 0.0, 1}
 color_border := clay.Color {1, 1, 1, 0.3}
 color_frame := clay.Color {0.2, 0.2, 0.2, 1}
 //color_frame := clay.Color {1, 1, 1, 1}

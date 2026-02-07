@@ -5,6 +5,7 @@ import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:c"
+import "core:strings"
 
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
@@ -72,18 +73,24 @@ DPI_Padding :: proc (padding: clay.Padding) -> clay.Padding {
 	}
 }
 
+print_render_commands: bool
+
 render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 	for idx in 0..<i32(render_commands.length) {
         render_command := clay.RenderCommandArray_Get(render_commands, idx)
-        #partial switch render_command.commandType {
+        switch render_command.commandType {
         case .Rectangle:
+			if print_render_commands {
+				log.info("cmd:", idx, render_command, render_command.renderData.rectangle)
+			}
+
             rect := render_command.renderData.rectangle
 			box := render_command.boundingBox
 			corners := rect.cornerRadius
 			if corners == {0, 0, 0, 0} {
 				//fmt.println(render_command)
 				color := rect.backgroundColor
-				SDL.SetRenderDrawColor(renderer, u8(color[0] * 255), u8(color[1] * 255), u8(color[2] * 255), u8(color[3]) * 255)
+				SDL.SetRenderDrawColorFloat(renderer, color[0], color[1], color[2], color[3])
 				SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
 				rect2 := SDL.FRect{
 					w = box.width,
@@ -96,8 +103,10 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 				draw_box_filled(box, rect)
 			}
 
-
 		case .Border:
+			if print_render_commands {
+				log.info("cmd:", idx, render_command, render_command.renderData.border)
+			}
 
 			border := render_command.renderData.border
             draw_box_border(render_command.boundingBox, border)
@@ -107,26 +116,35 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
             //fmt.println(render_command)
             box := render_command.boundingBox
             text_data := render_command.renderData.text
+            string_slice := text_data.stringContents
             color := text_data.textColor
+			if print_render_commands {
+				str_to_draw := strings.string_from_ptr(string_slice.chars, int(string_slice.length))
+				log.info("cmd:", idx, render_command, render_command.renderData.text)
+				log.info("text:", str_to_draw)
+			}
+
 
 			text := get_text_with_font_size(text_data.fontId, text_data.fontSize)
 
 			if text != nil {
 				TTF.SetTextColor(text, u8(color[0]*255), u8(color[1]*255), u8(color[2]*255), u8(color[3]*255))
-                string_slice := text_data.stringContents
                 TTF.SetTextString(text, cstring(string_slice.chars), uint(string_slice.length))
                 TTF.SetTextWrapWidth(text, 0)
                 TTF.DrawRendererText(text, math.round(box.x), math.round(box.y))
             }
 
 		case .Image:
+			if print_render_commands {
+				log.info("cmd:", idx, render_command, render_command.renderData.image)
+			}
 
 			image := render_command.renderData.image
             color := image.backgroundColor
 
 			tex := (^SDL.Texture)(image.imageData)
-            SDL.SetTextureColorMod(tex, u8(color[0]), u8(color[1]), u8(color[2]))
-			SDL.SetTextureAlphaMod(tex, u8(color[3]))
+            SDL.SetTextureColorModFloat(tex, color[0], color[1], color[2])
+			SDL.SetTextureAlphaModFloat(tex, color[3])
 			SDL.SetTextureBlendMode(tex, {.BLEND})
 
             box := render_command.boundingBox
@@ -142,11 +160,23 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 			if corners != {0, 0, 0, 0} {
 				log.info("image unhandled case!")
 			}
+		case .ScissorStart:
+			if print_render_commands {
+				log.info("cmd:", idx, render_command)
+			}
+			bbox := render_command.boundingBox
+			clip_rect := SDL.Rect {i32(bbox.x), i32(bbox.y), i32(bbox.width), i32(bbox.height)}
+            SDL.SetRenderClipRect(renderer, &clip_rect);
+		case .ScissorEnd:
+			if print_render_commands {
+				log.info("cmd:", idx, render_command)
+			}
+            SDL.SetRenderClipRect(renderer, nil);
+		case .None:
+			fmt.println("unhandled render command type: None", render_command.commandType, render_command)
+		case .Custom:
+			fmt.println("unhandled render command type: Custom", render_command.commandType, render_command)
 
-
-        case:
-        	// hello
-        	fmt.println("unhandled render command type:", render_command.commandType, render_command)
         }
 
     }
@@ -158,13 +188,10 @@ FontData :: struct {
 	sizes: map[u16]^TTF.Font,
 }
 
-loaded_fonts: u16 = 1 // we reserve fontid=0 for null font
+loaded_fonts: u16 = 0 // we reserve fontid=0 for null font
 fonts: [dynamic]FontData
 
 load_font_io :: proc(io: ^SDL.IOStream) -> u16 {
-	if fonts == nil {
-		append(&fonts, FontData{})
-	}
 	new_font := FontData {
 		font_io = io
 	}
@@ -212,8 +239,14 @@ clay_measure_text :: proc "c" (
     }
 }
 
+NIL_FONT :: ~u16(0)
+
 get_font_with_size :: proc(font_id: u16, size: u16) -> ^TTF.Font {
-	if font_id == 0 {
+	if font_id == NIL_FONT {
+		return nil
+	}
+	if int(font_id) >= len(fonts) {
+		log.info("invalid font id, for null font use NIL_FONT")
 		return nil
 	}
 	font := &fonts[font_id]
@@ -468,7 +501,7 @@ draw_box_border2 :: proc (renderer: ^SDL.Renderer, rect: [4]f32, color: [4]f32, 
 	box := clay.BoundingBox{rect[0], rect[1], rect[2], rect[3]}
 	corners := clay.CornerRadius{in_corners[0], in_corners[1], in_corners[2], in_corners[3]}
 
-    SDL.SetRenderDrawColor(renderer, u8(color[0] * 255), u8(color[1] * 255), u8(color[2] * 255), u8(color[3] * 255))
+    SDL.SetRenderDrawColorFloat(renderer, color[0], color[1], color[2], color[3])
 	SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
 
     rect2: SDL.FRect
