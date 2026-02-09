@@ -116,8 +116,16 @@ TextElementConfig :: struct {
 	textAlignment:      TextAlignment,
 }
 
+AspectRatioMode :: enum EnumBackingType {
+	Fit,
+	FillX,
+	FillY,
+	Fill,
+}
+
 AspectRatioElementConfig :: struct {
 	aspectRatio:        f32,
+	scaleMode:          AspectRatioMode,
 }
 
 ImageElementConfig :: struct {

@@ -409,9 +409,19 @@ CLAY__WRAPPER_STRUCT(Clay_TextElementConfig);
 
 // Aspect Ratio --------------------------------
 
+
+typedef CLAY_PACKED_ENUM {
+    ASPECTRATIO_MODE_FIT, // will make sure all image is shown, letterboxing any side if necessary
+	ASPECTRATIO_MODE_FILL_X, // will make sure image is entirely shown horizontally, cropping or letterboxing vertically
+	ASPECTRATIO_MODE_FILL_Y, // will make sure image is entirely shown vertically, cropping or letterboxing horizontally
+	ASPECTRATIO_MODE_FILL, // will make sure image fills (extends over parent region), avoiding any letterboxing
+} Clay_AspectRatioMode;
+
+
 // Controls various settings related to aspect ratio scaling element.
 typedef struct Clay_AspectRatioElementConfig {
     float aspectRatio; // A float representing the target "Aspect ratio" for an element, which is its final width divided by its final height.
+    Clay_AspectRatioMode scaleMode;
 } Clay_AspectRatioElementConfig;
 
 CLAY__WRAPPER_STRUCT(Clay_AspectRatioElementConfig);
@@ -2261,6 +2271,7 @@ void Clay__SizeContainersAlongAxis(bool xAxis) {
             Clay_LayoutElementHashMapItem *parentItem = Clay__GetHashMapItem(floatingElementConfig->parentId);
             if (parentItem && parentItem != &Clay_LayoutElementHashMapItem_DEFAULT) {
                 Clay_LayoutElement *parentLayoutElement = parentItem->layoutElement;
+				if (rootElement->dimensions.width == 0) {
                 switch (rootElement->layoutConfig->sizing.width.type) {
                     case CLAY__SIZING_TYPE_GROW: {
                         rootElement->dimensions.width = parentLayoutElement->dimensions.width;
@@ -2272,6 +2283,8 @@ void Clay__SizeContainersAlongAxis(bool xAxis) {
                     }
                     default: break;
                 }
+				}
+				if (rootElement->dimensions.height == 0) {
                 switch (rootElement->layoutConfig->sizing.height.type) {
                     case CLAY__SIZING_TYPE_GROW: {
                         rootElement->dimensions.height = parentLayoutElement->dimensions.height;
@@ -2283,6 +2296,7 @@ void Clay__SizeContainersAlongAxis(bool xAxis) {
                     }
                     default: break;
                 }
+				}
             }
         }
 
@@ -2592,7 +2606,20 @@ void Clay__CalculateFinalLayout(void) {
     for (int32_t i = 0; i < context->aspectRatioElementIndexes.length; ++i) {
         Clay_LayoutElement* aspectElement = Clay_LayoutElementArray_Get(&context->layoutElements, Clay__int32_tArray_GetValue(&context->aspectRatioElementIndexes, i));
         Clay_AspectRatioElementConfig *config = Clay__FindElementConfigWithType(aspectElement, CLAY__ELEMENT_CONFIG_TYPE_ASPECT).aspectRatioElementConfig;
-        aspectElement->dimensions.height = (1 / config->aspectRatio) * aspectElement->dimensions.width;
+		float new_height = (1 / config->aspectRatio) * aspectElement->dimensions.width;
+		if (config->scaleMode == ASPECTRATIO_MODE_FILL_Y) {}
+		else if (config->scaleMode == ASPECTRATIO_MODE_FILL_X) {
+		  aspectElement->dimensions.height = new_height;
+		} else if (config->scaleMode == ASPECTRATIO_MODE_FIT) {
+		  if (new_height < aspectElement->dimensions.height) {
+			aspectElement->dimensions.height = new_height;
+		  }
+		} else { // fill_both
+		  if (new_height > aspectElement->dimensions.height) {
+			aspectElement->dimensions.height = new_height;
+		  }
+		}
+
         aspectElement->layoutConfig->sizing.height.size.minMax.max = aspectElement->dimensions.height;
     }
 
