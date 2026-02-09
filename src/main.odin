@@ -25,7 +25,7 @@ engine: ^TTF.TextEngine
 
 clay_memory: []byte
 
-win_size: [2]i32 = {1900, 640}
+win_size: [2]i32 = {1280, 720}
 
 
 clay_error_handler :: proc "c" (errorData: clay.ErrorData) {
@@ -89,6 +89,10 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
     fmt.println("hello2")
     _ = SDL.SetAppMetadata("Example", "1.0", "com.example")
 
+	when ODIN_OS == .Linux && !(ODIN_PLATFORM_SUBTARGET == .Android) {
+		SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
+	}
+
     if (!SDL.Init({.VIDEO, .JOYSTICK, .GAMEPAD})) {
         return .FAILURE
     }
@@ -100,9 +104,15 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
         return .FAILURE
     }
 
-    if (!SDL.CreateWindowAndRenderer("examples", win_size.x, win_size.y, {.RESIZABLE}, &window, &renderer)){
+    if (!SDL.CreateWindowAndRenderer("examples", win_size.x, win_size.y, {.RESIZABLE, .HIGH_PIXEL_DENSITY}, &window, &renderer)){
         return .FAILURE
     }
+
+	pixel_density := SDL.GetWindowDisplayScale(window)
+	if pixel_density != 0 {
+		dpi_window = pixel_density
+		DPI_set(dpi_user * dpi_window)
+	}
 
     engine = TTF.CreateRendererTextEngine(renderer)
 
@@ -124,6 +134,8 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
 wheel_delta: [2]f32
 app_event :: proc (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
 	retval := SDL.AppResult.CONTINUE
+
+	SDL.ConvertEventToRenderCoordinates(renderer, event)
 	//log.info("sdl event:", event.type)
 	#partial switch event.type {
 	case .MOUSE_MOTION :
@@ -143,11 +155,20 @@ app_event :: proc (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
 		retval = .SUCCESS
 	case .WINDOW_RESIZED:
 		win_size = {event.window.data1, event.window.data2}
-		ui_dirty = true
+		log.info("window resized logical:", win_size)
+		//ui_dirty = true
 
 	case .WINDOW_PIXEL_SIZE_CHANGED:
 		win_size = {event.window.data1, event.window.data2}
+		log.info("window resized physical:", win_size)
 		clay.SetLayoutDimensions({f32(win_size.x), f32(win_size.y)})
+		ui_dirty = true
+	case .WINDOW_DISPLAY_SCALE_CHANGED:
+		win_event := event.window
+		win := SDL.GetWindowFromID(win_event.windowID)
+		dpi_window = SDL.GetWindowDisplayScale(win)
+		DPI_set(dpi_user * dpi_window)
+
 		ui_dirty = true
 	case .PEN_PROXIMITY_IN, .PEN_PROXIMITY_OUT:
 		log.info(event.pproximity)
@@ -366,9 +387,7 @@ text_font_id: u16 = NIL_FONT
 // An example function to create your layout tree
 create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
     // Begin constructing the layout.
-	log.info("before beginlayout")
-    clay.BeginLayout()
-	log.info("after beginlayout")
+	clay.BeginLayout()
 
 	text_config = clay.TextConfig({
 		fontId = text_font_id,
@@ -376,7 +395,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 		fontSize = border_policy(16),
 		textAlignment = .Center,
 	})
-	clay.SetDebugModeEnabled(true)
+	//clay.SetDebugModeEnabled(true)
 
     // An example of laying out a UI with a fixed-width sidebar and flexible-width main content
     // NOTE: To create a scope for child components, the Odin API uses `if` with components that have children
@@ -398,8 +417,8 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 				},
 				layoutDirection = .LeftToRight,
 			}
-
-			back_color_dark := clay.Color{0.2, 0.2, 0.2, 1}
+			dark_level := f32(0.25)
+			back_color_dark := clay.Color{dark_level, dark_level, dark_level, 1}
 			back_color := clay.Color{1, 1, 1, 1}
 			curr_img_tex := images[current_img_idx].texture
 			if clay.UI(clay.ID("BackgroundDark"))({
@@ -481,7 +500,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 		}
 
 
-        if clay.UI(clay.ID("ToolBar"))({
+        if clay.UI(clay.ID("ToolBar"))(DPI({
             layout = {
                 layoutDirection = .LeftToRight,
                 sizing = { width = clay.SizingFit(), height = clay.SizingFit() },
@@ -495,7 +514,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 				},
 				offset = {0, -16},
 			},
-        }) {
+        })) {
 
 			section_style := DPI(clay.ElementDeclaration {
 				layout = {
@@ -547,9 +566,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
     }
 
     // Returns a list of render commands
-	log.info("before endlayout")
 	result := clay.EndLayout()
-	log.info("after endlayout")
 	return result
 }
 
@@ -601,7 +618,9 @@ playback_playpause :: proc() {
 playback_next :: proc() {
 	fmt.println("next")
 }
-dpi_index := 1
+dpi_index := 2
+dpi_user := f32(1)
+dpi_window := f32(1)
 dpi_levels := []f32 {
 	0.5,
 	0.8,
@@ -614,9 +633,8 @@ dpi_levels := []f32 {
 playback_last :: proc() {
 	fmt.println("last")
 	dpi_index = (dpi_index + 1) % len(dpi_levels)
-	new_dpi := dpi_levels[dpi_index]
-	DPI_set(new_dpi)
-	log.info("set dpi to:", dpi)
+	dpi_user = dpi_levels[dpi_index]
+	DPI_set(dpi_user * dpi_window)
 }
 
 

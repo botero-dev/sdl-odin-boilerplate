@@ -15,10 +15,10 @@ import clay "clay-odin"
 vec2 :: [2]f32
 
 
-
 dpi := f32(1.0)
 DPI_set :: proc(new_dpi: f32) {
 	dpi = new_dpi
+	log.info("set dpi to:", dpi)
 }
 
 border_policy :: proc (border: $T) -> u16 {
@@ -31,6 +31,9 @@ DPI_ElementDeclaration :: proc (decl: clay.ElementDeclaration) -> clay.ElementDe
 	result.border.width = DPI_BorderWidth(result.border.width)
 	result.layout.padding = DPI_Padding(result.layout.padding)
 	result.layout.childGap = border_policy(result.layout.childGap)
+	result.floating.offset.x *= dpi
+	result.floating.offset.y *= dpi
+
 	if result.layout.sizing.width.type == .Fixed {
 		result.layout.sizing.width.constraints.sizeMinMax.min *= dpi
 		result.layout.sizing.width.constraints.sizeMinMax.max *= dpi
