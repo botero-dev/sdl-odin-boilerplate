@@ -366,7 +366,9 @@ text_font_id: u16 = NIL_FONT
 // An example function to create your layout tree
 create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
     // Begin constructing the layout.
+	log.info("before beginlayout")
     clay.BeginLayout()
+	log.info("after beginlayout")
 
 	text_config = clay.TextConfig({
 		fontId = text_font_id,
@@ -378,19 +380,43 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 
     // An example of laying out a UI with a fixed-width sidebar and flexible-width main content
     // NOTE: To create a scope for child components, the Odin API uses `if` with components that have children
-    if clay.UI(clay.ID("OuterContainer"))({
+    if /*clay.UI(clay.ID("OuterContainer"))({
         layout = {
             sizing = { width = clay.SizingGrow({}), height = clay.SizingGrow({}) },
             padding = { 16, 16, 16, 16 },
             childGap = 16,
         },
 		backgroundColor = {0, 0, 0, 1}
-    }) {
+    })*/ true {
 
 		if len(images) > 0 {
 
+			img_layout := clay.LayoutConfig {
+				sizing = {
+					width = clay.SizingGrow(),//clay.SizingPercent(1),
+					height = clay.SizingGrow(),//clay.SizingPercent(1),
+				},
+				layoutDirection = .LeftToRight,
+			}
+
+			back_color_dark := clay.Color{0.2, 0.2, 0.2, 1}
 			back_color := clay.Color{1, 1, 1, 1}
 			curr_img_tex := images[current_img_idx].texture
+			if clay.UI(clay.ID("BackgroundDark"))({
+				floating = {
+					attachTo = .Parent,
+					attachment = {
+						element = .CenterCenter,
+						parent = .CenterCenter,
+					},
+				},
+				layout = img_layout,
+				backgroundColor = back_color_dark,
+				image = {
+					imageData = curr_img_tex
+				},
+				aspectRatio = {f32(curr_img_tex.w) / f32(curr_img_tex.h), .Fill},
+			}) {}
 			if clay.UI(clay.ID("Background"))({
 				floating = {
 					attachTo = .Parent,
@@ -399,29 +425,42 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 						parent = .CenterCenter,
 					},
 				},
-				layout = {
-					sizing = {
-						width = clay.SizingPercent(1),
-						height = clay.SizingPercent(1),
-					},
-					layoutDirection = .LeftToRight,
-				},
+				layout = img_layout,
 				backgroundColor = back_color,
 				image = {
 					imageData = curr_img_tex
 				},
-				aspectRatio = {f32(curr_img_tex.w) / f32(curr_img_tex.h)}
-			}) {
+				aspectRatio = {f32(curr_img_tex.w) / f32(curr_img_tex.h), .Fit},
+			}) {}
 
-			}
-
+			front_color_dark := back_color_dark
+			front_color := back_color
 			if current_state == .Transitioning {
-				next_img_idx := get_next_img_idx(current_img_idx)
-				next_img_tex := images[next_img_idx].texture
-				front_color := clay.Color{1, 1, 1, 1}
 				progress := current_transition_time / transition_time
 				alpha := f32(progress)
+				front_color_dark.a = alpha
 				front_color.a = alpha
+			} else {
+				front_color_dark.a = 0
+				front_color.a = 0
+			}
+				next_img_idx := get_next_img_idx(current_img_idx)
+				next_img_tex := images[next_img_idx].texture
+				if clay.UI(clay.ID("BlendInDark"))({
+					floating = {
+						attachTo = .Parent,
+						attachment = {
+							element = .CenterCenter,
+							parent = .CenterCenter,
+						},
+					},
+					layout = img_layout,
+					backgroundColor = front_color_dark,
+					image = {
+						imageData = next_img_tex
+					},
+					aspectRatio = {f32(next_img_tex.w) / f32(next_img_tex.h), .Fill},
+				}) { }
 				if clay.UI(clay.ID("BlendIn"))({
 					floating = {
 						attachTo = .Parent,
@@ -430,20 +469,15 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 							parent = .CenterCenter,
 						},
 					},
-					layout = {
-						sizing = {
-							width = clay.SizingPercent(1),
-							height = clay.SizingPercent(1),
-						},
-					},
+					layout = img_layout,
 					backgroundColor = front_color,
 					image = {
 						imageData = next_img_tex
 					},
-					aspectRatio = {f32(next_img_tex.w) / f32(next_img_tex.h)}
+					aspectRatio = {f32(next_img_tex.w) / f32(next_img_tex.h), .Fit},
 				}) { }
 
-			}
+
 		}
 
 
@@ -513,7 +547,10 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
     }
 
     // Returns a list of render commands
-    return clay.EndLayout()
+	log.info("before endlayout")
+	result := clay.EndLayout()
+	log.info("after endlayout")
+	return result
 }
 
 text_config: ^clay.TextElementConfig
