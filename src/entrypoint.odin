@@ -86,8 +86,10 @@ sdl_log_proc :: proc(data: rawptr, level: runtime.Logger_Level, text: string, op
 }
 
 sdl_app_main :: proc () {
-	context.logger = runtime.Logger {
-		procedure = sdl_log_proc
+	if context.logger.procedure == runtime.default_logger_proc {
+		context.logger = runtime.Logger {
+			procedure = sdl_log_proc
+		}
 	}
 	ctx = context
 	log.info("sdl_app_main()")

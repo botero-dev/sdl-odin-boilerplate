@@ -12,6 +12,8 @@ import "core:strings"
 import "core:log"
 import "core:math"
 import "core:math/linalg"
+import "core:time"
+import tz "core:time/timezone"
 
 import "base:runtime"
 
@@ -84,9 +86,7 @@ assign_font :: proc (result: RequestResult) {
 }
 
 app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResult {
-    fmt.println("hello")
-	log.info("hello_log")
-    fmt.println("hello2")
+	log.info("app_init")
     _ = SDL.SetAppMetadata("Example", "1.0", "com.example")
 
 	when ODIN_OS == .Linux && !(ODIN_PLATFORM_SUBTARGET == .Android) {
@@ -239,8 +239,13 @@ transition_time: f64 = 1.0
 
 current_img_idx := 0
 
+app_time: f64= 0
+running: bool = true
 
 app_tick :: proc (dt: f64) {
+	if running {
+		app_time += dt
+	}
 	if current_state == .Showing {
 		current_show_time += dt
 		if current_show_time >= max_show_time {
@@ -298,7 +303,7 @@ app_draw :: proc () {
 		render_commands := create_layout()
 
 		SDL.SetRenderTarget(renderer, nil)
-		SDL.SetRenderDrawColor(renderer, 0, 0, 0, 0)
+		SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
 		SDL.RenderClear(renderer)
 
 		clay.UpdateScrollContainers(false, {wheel_delta.x, wheel_delta.y}, 0.01)
@@ -307,73 +312,164 @@ app_draw :: proc () {
 		print_render_commands = false
 
 		if false {
-		// code I used for drawing some pixels to a buffer and then draw them huge with nearest filtering
+			// code I used for drawing some pixels to a buffer and then draw them huge with nearest filtering
+			// todo: refactor into a proper texture inspector
 
-		SIZE :: 64
+			vertices_buf: [1000]vec2
+			uvs_buf: [1000]vec2
+			indices_buf: [2000]u8
 
-		if render_target == nil {
-			render_target = SDL.CreateTexture(renderer, .RGBA32, .TARGET, SIZE, SIZE)
-			SDL.SetTextureScaleMode(render_target, .NEAREST)
-			SDL.SetTextureBlendMode(render_target, {.BLEND_PREMULTIPLIED})
+			buffer := DrawBuffer {
+				0, 0,
+				vertices_buf[:],
+				uvs_buf[:],
+				nil,
+				indices_buf[:],
+			}
+
+			pos := [2]f32{30, 30}
+			yy, xx := math.sincos(f32(app_time) * 0.3)
+			//pos  += {xx, yy}
+			end := [2]f32{8, 0}
+			width := f32(3)
+			//buffer_line(&buffer, pos, pos+end, width)
+			buffer_circle(&buffer, pos, 20)
+
+			SIZE :: 64
+
+			if render_target == nil {
+				render_target = SDL.CreateTexture(renderer, .RGBA32, .TARGET, SIZE, SIZE)
+			} {
+
+				SDL.SetTextureScaleMode(render_target, .NEAREST)
+				SDL.SetTextureBlendMode(render_target, {.BLEND_PREMULTIPLIED})
+				SDL.SetRenderTarget(renderer, render_target)
+				SDL.SetRenderDrawColorFloat(renderer, 0,0,0,0)
+				SDL.RenderClear(renderer)
+				//color := [4]f32{0.5, 0.5, 0.5, 0.5}
+				color := [4]f32{1, 1, 1, 1}
+				//color := [4]f32{200, 200, 200, 1}
+				draw_buffer(renderer, &buffer, color)
+				SDL.SetRenderTarget(renderer, nil)
+			}
+
+			rect := SDL.FRect{0, 0, SIZE, SIZE}
+
+			origin :: vec2{20, 20}
+			target_pos := SDL.FPoint{origin.x, origin.y}
+			SCALE :: 32
+			target_right := SDL.FPoint{target_pos.x + SIZE * SCALE,target_pos.y}
+			target_down := SDL.FPoint{target_pos.x, target_pos.y + SIZE * SCALE}
+
+			SDL.RenderTextureAffine(renderer, render_target, &rect, &target_pos, &target_right, &target_down)
+
+			line_color := [4]f32{1,0.3,0.3,0.3}
+			for idx_int in 0..=SIZE {
+				idx := f32(idx_int)
+
+				draw_line(renderer, {0, idx} * SCALE + origin, {SIZE, idx} * SCALE + origin, 1, line_color)
+				draw_line(renderer, {idx, 0} * SCALE + origin, {idx, SIZE} * SCALE + origin, 1, line_color)
+			}
+
+			tx :: proc (vert: vec2) -> vec2 { return (vert * SCALE + origin) }
+
+			for idx in 0..<buffer.num_vertices {
+				vert := buffer.vertices[idx]
+				uv := buffer.uvs[idx]
+				pos := vert * SCALE + {target_pos.x, target_pos.y}
+				pos.x = math.round(pos.x)
+				pos.y = math.round(pos.y)
+
+				draw_circle(renderer, pos, 3)
+
+				text := fmt.ctprintf("%.6f\n%.6f", uv.x, uv.y)
+				SDL.SetRenderDrawColorFloat(renderer, 1,0,0,0.5)
+				//SDL.RenderDebugText(renderer, pos.x, pos.y, text)
+
+				text2 := fmt.ctprintf("%.6f\n%.6f", vert.x, vert.y)
+				SDL.SetRenderDrawColorFloat(renderer, 0,1,0,0.5)
+				//SDL.RenderDebugText(renderer, pos.x, pos.y+10, text2)
+			}
+			for idx in 0..<buffer.num_indices {
+				if idx % 3 == 0 {
+					a := buffer.indices[idx]
+					b := buffer.indices[idx+1]
+					c := buffer.indices[idx+2]
+					draw_line(renderer, tx(buffer.vertices[a]), tx(buffer.vertices[b]), 1, line_color)
+					draw_line(renderer, tx(buffer.vertices[b]), tx(buffer.vertices[c]), 1, line_color)
+					draw_line(renderer, tx(buffer.vertices[c]), tx(buffer.vertices[a]), 1, line_color)
+				}
+			}
 		}
 
-		SDL.SetRenderTarget(renderer, render_target)
-		SDL.SetRenderDrawColor(renderer, 0,0,0,0)
-		SDL.RenderClear(renderer)
+		CLOCK_SIZE := DPI_mult(200)
+		CLOCK_OFFSET := DPI_mult(40)
 
-		SDL.SetRenderDrawColor(renderer, 255,0,0,255)
-		SDL.RenderPoint(renderer, 0, 0)
-		SDL.RenderPoint(renderer, 0, SIZE-1)
-		SDL.RenderPoint(renderer, SIZE-1, SIZE-1)
-		SDL.RenderPoint(renderer, SIZE-1, 0)
+		draw_set_draw_rect(renderer, {f32(win_size.x) - CLOCK_SIZE-CLOCK_OFFSET, CLOCK_OFFSET}, {CLOCK_SIZE, CLOCK_SIZE})
+		draw_set_view_rect({-1.2, 1.2}, {1.2, -1.2})
 
-		BORDERH :: 4
-		BORDERV :: 1
-		RADIUS :: 16
-		draw_box_border2(
-			renderer,
-			{2, 2, 60, 60}, // size
-			{1, 1, 1, 1}, // color
-			{BORDERV, BORDERV, BORDERH, BORDERH}, // borders
-			{RADIUS, RADIUS, RADIUS, RADIUS}
-		)
+		LINE_SCALE :: 0.02
+		draw_set_line_scale(0.02)
 
-		SDL.SetRenderTarget(renderer, nil)
+		draw_circle(renderer, {0, 0}, 1.1, {0, 0, 0, 0.8})
 
-		rect := SDL.FRect{0, 0, 64, 64}
 
-		target_pos := SDL.FPoint{20, 20}
-		SCALE :: 24
-		target_right := SDL.FPoint{target_pos.x + SIZE * SCALE,target_pos.y}
-		target_down := SDL.FPoint{target_pos.x, target_pos.y + SIZE * SCALE}
+		vert_pos := vec2{1, 0}
 
-		SDL.RenderTextureAffine(renderer, render_target, &rect, &target_pos, &target_right, &target_down)
+		segments := 12
+		delta_angle := (math.TAU) / f32(segments)
+		mat_cos := math.cos(delta_angle)
+		mat_sin := math.sin(delta_angle)
 
-		vertices_buf: [1000]vec2
-		uvs_buf: [1000]vec2
-		indices_buf: [2000]u8
+		draw_line(renderer, vert_pos * 0.8, vert_pos, 2)
+		draw_line(renderer, vert_pos * (0.8 + LINE_SCALE * 0.5), vert_pos*(1-LINE_SCALE*0.5), 1, {0,0,0,1})
+		for idx in 0..<segments {
+			vert_pos = {
+				vert_pos.x * mat_cos - vert_pos.y * mat_sin,
+				vert_pos.x * mat_sin + vert_pos.y * mat_cos,
+			}
+			draw_line(renderer, vert_pos * 0.8, vert_pos, 2)
+			//draw_line(renderer, vert_pos * (0.8 + LINE_SCALE * 0.5), vert_pos*(1-LINE_SCALE*0.5), 1, {0,0,0,1})
 
-		buffer := DrawBuffer {
-			0, 0,
-			vertices_buf[:],
-			uvs_buf[:],
-			nil,
-			indices_buf[:],
 		}
 
-		draw_rounded_border(&buffer, BORDERH, BORDERV, RADIUS, 0, {2, 2})
-		draw_rounded_border(&buffer, BORDERH, BORDERV, RADIUS, 1, {62, 2})
 
-		for idx in 0..<buffer.num_vertices {
-			vert := buffer.vertices[idx]
-			uv := buffer.uvs[idx]
-			pos := vert * SCALE + {target_pos.x, target_pos.y}
-			draw_line(renderer, pos - {2, 0}, pos + {2, 0}, 5)
-			text := fmt.ctprintf("%f\n%f", uv.x, uv.y)
-			SDL.RenderDebugText(renderer, pos.x, pos.y, text)
-		}
-		}
+		local_tz, local_load_ok := tz.region_load("local")
 
+		dt_utc, _ := time.time_to_datetime(time.now())
+		dt, _ := tz.datetime_to_tz(dt_utc, local_tz)
+
+		h := dt.time.hour
+		m := dt.time.minute
+		s := dt.time.second
+
+		frac := f32(dt.time.nano) / 1e9
+
+		frac = math.min(1, frac * 15)
+
+		t_1 := frac-1
+		t_1_2 := t_1 * t_1
+		t_1_3 := t_1_2 * t_1
+		k := f32(2.5)
+		sec_offset := 1 + (k+1)*(t_1_3) + k*(t_1_2)
+
+		ss := f32(s) + sec_offset// + (f32(ns) / 1e9)
+		mm := f32(m) + ss/60
+		hh := f32(h) + mm/60
+
+		hour_sin, hour_cos := math.sincos((0.25 - hh/12) * math.TAU)
+		min_sin, min_cos := math.sincos((0.25 - mm/60) * math.TAU)
+		sec_sin, sec_cos := math.sincos((0.25 - ss/60) * math.TAU)
+
+		draw_line(renderer, {0, 0}, {hour_cos, hour_sin} * 0.5, 2)
+		draw_line(renderer, {0, 0}, {min_cos, min_sin} * 0.8, 2)
+		draw_line(renderer, {0, 0}, {sec_cos, sec_sin} * 0.7, 2, {1, 0, 0, 1})
+
+
+
+		draw_clear_view_rect()
+		draw_clear_draw_rect(renderer)
+		draw_set_line_scale(0)
 
 		SDL.RenderPresent(renderer)
 	}
@@ -614,6 +710,7 @@ playback_previous :: proc() {
 }
 playback_playpause :: proc() {
 	fmt.println("playpause")
+	running = !running
 }
 playback_next :: proc() {
 	fmt.println("next")

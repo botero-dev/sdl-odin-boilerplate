@@ -21,6 +21,10 @@ DPI_set :: proc(new_dpi: f32) {
 	log.info("set dpi to:", dpi)
 }
 
+DPI_mult :: proc(value: f32) -> f32 {
+	return value * dpi
+}
+
 border_policy :: proc (border: $T) -> u16 {
 	return u16(math.round(f32(border) * dpi)) // could also be ceil or floor
 }
