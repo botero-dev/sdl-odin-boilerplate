@@ -58,7 +58,7 @@ event_handler_stack: [dynamic]EventHandler
 
 
 
-create_keyboard_mapping :: proc (scancode: SDL.Scancode) -> u32 {
+create_keyboard_mapping :: proc (scancode: SDL.Scancode) -> MappingIndex {
 	new_mapping := EventMapping {
 		type = .Keyboard,
 		data = {scancode}
@@ -69,7 +69,11 @@ create_keyboard_mapping :: proc (scancode: SDL.Scancode) -> u32 {
 }
 
 
-match_mapping_button :: proc (event: Event, mapping_idx: u32) -> (state: bool, matches: bool) {
+match_mapping_button_ptr :: proc (event: ^Event, mapping_idx: u32) -> (state: bool, matches: bool) {
+	return match_mapping_button_val(event^, mapping_idx)
+}
+
+match_mapping_button_val :: proc (event: Event, mapping_idx: u32) -> (state: bool, matches: bool) {
 	mapping := action_map[mapping_idx]
 	if event.type != mapping.type {
 		return false, false
@@ -84,8 +88,14 @@ match_mapping_button :: proc (event: Event, mapping_idx: u32) -> (state: bool, m
 	return false, false
 }
 
+match_mapping_button :: proc {
+	match_mapping_button_val,
+	match_mapping_button_ptr,
+}
+
 app_event_init :: proc() {
 	//add_handler(global_handler)
+	ui_init()
 }
 
 app_add_event_handler :: proc(in_handler: EventHandler) {

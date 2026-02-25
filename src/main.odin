@@ -142,7 +142,7 @@ input_quit: MappingIndex
 wheel_delta: [2]f32
 app_event :: proc (evt: ^Event) {
 
-	if pressed, matches := match_mapping_button(evt^, input_fullscreen); matches {
+	if pressed, matches := match_mapping_button(evt, input_fullscreen); matches {
 		if pressed {
 			evt.handled = true
 			current_fullscreen := (SDL.GetWindowFlags(window) & SDL.WINDOW_FULLSCREEN) != {}
@@ -150,13 +150,14 @@ app_event :: proc (evt: ^Event) {
 		}
 	}
 
-	if pressed, matches := match_mapping_button(evt^, input_quit); matches {
+	if pressed, matches := match_mapping_button(evt, input_quit); matches {
 		if pressed {
 			evt.handled = true
 			app_quit()
 		}
 	}
 
+	nav_handle_input(evt)
 
 	event := evt.sdl_event
 	#partial switch event.type {
@@ -189,11 +190,8 @@ app_event :: proc (evt: ^Event) {
 		log.info(event.jaxis)
 	case .JOYSTICK_UPDATE_COMPLETE:
 		log.info(event.jdevice)
-		case .KEY_DOWN, .KEY_UP:
-		log.info(event.key)
-
-	case:
-		fmt.println("event.type:", event.type)
+	//case:
+	//	fmt.println("event.type:", event.type)
 
 	}
 }
@@ -437,7 +435,7 @@ draw_clock :: proc() {
 
 
 	draw_set_draw_rect(renderer, {win_size.x - CLOCK_SIZE-CLOCK_OFFSET, CLOCK_OFFSET}, {CLOCK_SIZE, CLOCK_SIZE})
-	draw_set_view_rect({-2.2, 1.2}, {2.2, -1.2})
+	draw_set_view_rect({-1.2, 1.2}, {1.2, -1.2})
 
 	LINE_SCALE :: 0.02
 	draw_set_line_scale(0.02)
@@ -505,6 +503,11 @@ text_font_id: u16 = NIL_FONT
 create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
     // Begin constructing the layout.
 	clay.BeginLayout()
+
+	clear(&navigation_scope.contents)
+
+	//navigation_scope = {}
+	navigation_scope.wrap = true
 
 	text_config = clay.TextConfig({
 		fontId = text_font_id,
@@ -794,21 +797,25 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 		childAlignment = {.Center, .Center}
     }
 
+	info: ^HandlerInfo
+	if callback != nil {
+		info = new(HandlerInfo, context.temp_allocator)
+		info.handler = callback
+		info.ctx = context
+		info.data = user_data
+	}
+	has_focus := nav_add_item(label, info)
+
 	if clay.UI(clay.ID(label))(DPI({
         layout = sidebar_item_layout,
 		cornerRadius = {16, 16, 16, 16},
-        backgroundColor = clay.Hovered() ? color_hover : color_idle,
+        backgroundColor = has_focus || clay.Hovered() ? color_hover : color_idle,
 		border = {
 			width = {1, 1, 1, 1, 0},
 		 	color = color_border,
 		},
     })) {
-
-		if callback != nil {
-			info := new(HandlerInfo, context.temp_allocator)
-			info.handler = callback
-			info.ctx = context
-			info.data = user_data
+		if info != nil {
 			clay.OnHover(HandleButton, info)
 		}
 		clay.Text(
