@@ -128,15 +128,37 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
 
 	gfx_init()
 
+	input_fullscreen = create_keyboard_mapping(.F11)
+	input_quit = create_keyboard_mapping(.ESCAPE)
+
+	app_add_event_handler(app_event)
+
     return .CONTINUE
 }
 
-wheel_delta: [2]f32
-app_event :: proc (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
-	retval := SDL.AppResult.CONTINUE
+input_fullscreen: MappingIndex
+input_quit: MappingIndex
 
-	SDL.ConvertEventToRenderCoordinates(renderer, event)
-	//log.info("sdl event:", event.type)
+wheel_delta: [2]f32
+app_event :: proc (evt: ^Event) {
+
+	if pressed, matches := match_mapping_button(evt^, input_fullscreen); matches {
+		if pressed {
+			evt.handled = true
+			current_fullscreen := (SDL.GetWindowFlags(window) & SDL.WINDOW_FULLSCREEN) != {}
+			SDL.SetWindowFullscreen(window, !current_fullscreen)
+		}
+	}
+
+	if pressed, matches := match_mapping_button(evt^, input_quit); matches {
+		if pressed {
+			evt.handled = true
+			app_quit()
+		}
+	}
+
+
+	event := evt.sdl_event
 	#partial switch event.type {
 	case .MOUSE_MOTION :
 			clay.SetPointerState({event.motion.x, event.motion.y}, (event.motion.state & SDL.BUTTON_LMASK) != {} )
@@ -151,25 +173,7 @@ app_event :: proc (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
 	case .MOUSE_WHEEL:
 		wheel_data := event.wheel
 		wheel_delta += {wheel_data.x, wheel_data.y}
-	case .QUIT:
-		retval = .SUCCESS
-	case .WINDOW_RESIZED:
-		win_size = {event.window.data1, event.window.data2}
-		log.info("window resized logical:", win_size)
-		//ui_dirty = true
 
-	case .WINDOW_PIXEL_SIZE_CHANGED:
-		win_size = {event.window.data1, event.window.data2}
-		log.info("window resized physical:", win_size)
-		clay.SetLayoutDimensions({f32(win_size.x), f32(win_size.y)})
-		ui_dirty = true
-	case .WINDOW_DISPLAY_SCALE_CHANGED:
-		win_event := event.window
-		win := SDL.GetWindowFromID(win_event.windowID)
-		dpi_window = SDL.GetWindowDisplayScale(win)
-		DPI_set(dpi_user * dpi_window)
-
-		ui_dirty = true
 	case .PEN_PROXIMITY_IN, .PEN_PROXIMITY_OUT:
 		log.info(event.pproximity)
 	case .PEN_DOWN, .PEN_UP:
@@ -185,12 +189,13 @@ app_event :: proc (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
 		log.info(event.jaxis)
 	case .JOYSTICK_UPDATE_COMPLETE:
 		log.info(event.jdevice)
+		case .KEY_DOWN, .KEY_UP:
+		log.info(event.key)
 
-//	case:
-//		fmt.println("event.type:", event.type)
+	case:
+		fmt.println("event.type:", event.type)
 
 	}
-    return retval
 }
 
 
@@ -309,170 +314,186 @@ app_draw :: proc () {
 		clay.UpdateScrollContainers(false, {wheel_delta.x, wheel_delta.y}, 0.01)
 		wheel_delta = {}
 		render_layout(&render_commands)
-		print_render_commands = false
 
-		if false {
-			// code I used for drawing some pixels to a buffer and then draw them huge with nearest filtering
-			// todo: refactor into a proper texture inspector
+		draw_debug_texture()
+		draw_clock()
 
-			vertices_buf: [1000]vec2
-			uvs_buf: [1000]vec2
-			indices_buf: [2000]u8
-
-			buffer := DrawBuffer {
-				0, 0,
-				vertices_buf[:],
-				uvs_buf[:],
-				nil,
-				indices_buf[:],
-			}
-
-			pos := [2]f32{30, 30}
-			yy, xx := math.sincos(f32(app_time) * 0.3)
-			//pos  += {xx, yy}
-			end := [2]f32{8, 0}
-			width := f32(3)
-			//buffer_line(&buffer, pos, pos+end, width)
-			buffer_circle(&buffer, pos, 20)
-
-			SIZE :: 64
-
-			if render_target == nil {
-				render_target = SDL.CreateTexture(renderer, .RGBA32, .TARGET, SIZE, SIZE)
-			} {
-
-				SDL.SetTextureScaleMode(render_target, .NEAREST)
-				SDL.SetTextureBlendMode(render_target, {.BLEND_PREMULTIPLIED})
-				SDL.SetRenderTarget(renderer, render_target)
-				SDL.SetRenderDrawColorFloat(renderer, 0,0,0,0)
-				SDL.RenderClear(renderer)
-				//color := [4]f32{0.5, 0.5, 0.5, 0.5}
-				color := [4]f32{1, 1, 1, 1}
-				//color := [4]f32{200, 200, 200, 1}
-				draw_buffer(renderer, &buffer, color)
-				SDL.SetRenderTarget(renderer, nil)
-			}
-
-			rect := SDL.FRect{0, 0, SIZE, SIZE}
-
-			origin :: vec2{20, 20}
-			target_pos := SDL.FPoint{origin.x, origin.y}
-			SCALE :: 32
-			target_right := SDL.FPoint{target_pos.x + SIZE * SCALE,target_pos.y}
-			target_down := SDL.FPoint{target_pos.x, target_pos.y + SIZE * SCALE}
-
-			SDL.RenderTextureAffine(renderer, render_target, &rect, &target_pos, &target_right, &target_down)
-
-			line_color := [4]f32{1,0.3,0.3,0.3}
-			for idx_int in 0..=SIZE {
-				idx := f32(idx_int)
-
-				draw_line(renderer, {0, idx} * SCALE + origin, {SIZE, idx} * SCALE + origin, 1, line_color)
-				draw_line(renderer, {idx, 0} * SCALE + origin, {idx, SIZE} * SCALE + origin, 1, line_color)
-			}
-
-			tx :: proc (vert: vec2) -> vec2 { return (vert * SCALE + origin) }
-
-			for idx in 0..<buffer.num_vertices {
-				vert := buffer.vertices[idx]
-				uv := buffer.uvs[idx]
-				pos := vert * SCALE + {target_pos.x, target_pos.y}
-				pos.x = math.round(pos.x)
-				pos.y = math.round(pos.y)
-
-				draw_circle(renderer, pos, 3)
-
-				text := fmt.ctprintf("%.6f\n%.6f", uv.x, uv.y)
-				SDL.SetRenderDrawColorFloat(renderer, 1,0,0,0.5)
-				//SDL.RenderDebugText(renderer, pos.x, pos.y, text)
-
-				text2 := fmt.ctprintf("%.6f\n%.6f", vert.x, vert.y)
-				SDL.SetRenderDrawColorFloat(renderer, 0,1,0,0.5)
-				//SDL.RenderDebugText(renderer, pos.x, pos.y+10, text2)
-			}
-			for idx in 0..<buffer.num_indices {
-				if idx % 3 == 0 {
-					a := buffer.indices[idx]
-					b := buffer.indices[idx+1]
-					c := buffer.indices[idx+2]
-					draw_line(renderer, tx(buffer.vertices[a]), tx(buffer.vertices[b]), 1, line_color)
-					draw_line(renderer, tx(buffer.vertices[b]), tx(buffer.vertices[c]), 1, line_color)
-					draw_line(renderer, tx(buffer.vertices[c]), tx(buffer.vertices[a]), 1, line_color)
-				}
-			}
-		}
-
-		CLOCK_SIZE := DPI_mult(200)
-		CLOCK_OFFSET := DPI_mult(40)
-
-		draw_set_draw_rect(renderer, {f32(win_size.x) - CLOCK_SIZE-CLOCK_OFFSET, CLOCK_OFFSET}, {CLOCK_SIZE, CLOCK_SIZE})
-		draw_set_view_rect({-1.2, 1.2}, {1.2, -1.2})
-
-		LINE_SCALE :: 0.02
-		draw_set_line_scale(0.02)
-
-		draw_circle(renderer, {0, 0}, 1.1, {0, 0, 0, 0.8})
-
-
-		vert_pos := vec2{1, 0}
-
-		segments := 12
-		delta_angle := (math.TAU) / f32(segments)
-		mat_cos := math.cos(delta_angle)
-		mat_sin := math.sin(delta_angle)
-
-		draw_line(renderer, vert_pos * 0.8, vert_pos, 2)
-		draw_line(renderer, vert_pos * (0.8 + LINE_SCALE * 0.5), vert_pos*(1-LINE_SCALE*0.5), 1, {0,0,0,1})
-		for idx in 0..<segments {
-			vert_pos = {
-				vert_pos.x * mat_cos - vert_pos.y * mat_sin,
-				vert_pos.x * mat_sin + vert_pos.y * mat_cos,
-			}
-			draw_line(renderer, vert_pos * 0.8, vert_pos, 2)
-			//draw_line(renderer, vert_pos * (0.8 + LINE_SCALE * 0.5), vert_pos*(1-LINE_SCALE*0.5), 1, {0,0,0,1})
-
-		}
-
-
-		local_tz, local_load_ok := tz.region_load("local")
-
-		dt_utc, _ := time.time_to_datetime(time.now())
-		dt, _ := tz.datetime_to_tz(dt_utc, local_tz)
-
-		h := dt.time.hour
-		m := dt.time.minute
-		s := dt.time.second
-
-		frac := f32(dt.time.nano) / 1e9
-
-		frac = math.min(1, frac * 15)
-
-		t_1 := frac-1
-		t_1_2 := t_1 * t_1
-		t_1_3 := t_1_2 * t_1
-		k := f32(2.5)
-		sec_offset := 1 + (k+1)*(t_1_3) + k*(t_1_2)
-
-		ss := f32(s) + sec_offset// + (f32(ns) / 1e9)
-		mm := f32(m) + ss/60
-		hh := f32(h) + mm/60
-
-		hour_sin, hour_cos := math.sincos((0.25 - hh/12) * math.TAU)
-		min_sin, min_cos := math.sincos((0.25 - mm/60) * math.TAU)
-		sec_sin, sec_cos := math.sincos((0.25 - ss/60) * math.TAU)
-
-		draw_line(renderer, {0, 0}, {hour_cos, hour_sin} * 0.5, 2)
-		draw_line(renderer, {0, 0}, {min_cos, min_sin} * 0.8, 2)
-		draw_line(renderer, {0, 0}, {sec_cos, sec_sin} * 0.7, 2, {1, 0, 0, 1})
-
-
-
-		draw_clear_view_rect()
-		draw_clear_draw_rect(renderer)
-		draw_set_line_scale(0)
-
-		SDL.RenderPresent(renderer)
+		draw_present()
 	}
+}
+
+// code I used for drawing some pixels to a buffer and then draw them huge with nearest filtering
+// todo: refactor into a proper texture inspector
+draw_debug_texture :: proc() {
+
+
+	if true { return }
+	vertices_buf: [1000]vec2
+	uvs_buf: [1000]vec2
+	indices_buf: [2000]u8
+
+	buffer := DrawBuffer {
+		0, 0,
+		vertices_buf[:],
+		uvs_buf[:],
+		nil,
+		indices_buf[:],
+	}
+
+	pos := [2]f32{30, 30}
+	yy, xx := math.sincos(f32(app_time) * 0.3)
+	//pos  += {xx, yy}
+	end := [2]f32{8, 0}
+	width := f32(3)
+	//buffer_line(&buffer, pos, pos+end, width)
+	buffer_circle(&buffer, pos, 20)
+
+	SIZE :: 64
+
+	if render_target == nil {
+		render_target = SDL.CreateTexture(renderer, .RGBA32, .TARGET, SIZE, SIZE)
+	} {
+
+		SDL.SetTextureScaleMode(render_target, .NEAREST)
+		SDL.SetTextureBlendMode(render_target, {.BLEND_PREMULTIPLIED})
+		SDL.SetRenderTarget(renderer, render_target)
+		SDL.SetRenderDrawColorFloat(renderer, 0,0,0,0)
+		SDL.RenderClear(renderer)
+		//color := [4]f32{0.5, 0.5, 0.5, 0.5}
+		color := [4]f32{1, 1, 1, 1}
+		//color := [4]f32{200, 200, 200, 1}
+		draw_buffer(renderer, &buffer, color)
+		SDL.SetRenderTarget(renderer, nil)
+	}
+
+	rect := SDL.FRect{0, 0, SIZE, SIZE}
+
+	origin :: vec2{20, 20}
+	target_pos := SDL.FPoint{origin.x, origin.y}
+	SCALE :: 32
+	target_right := SDL.FPoint{target_pos.x + SIZE * SCALE,target_pos.y}
+	target_down := SDL.FPoint{target_pos.x, target_pos.y + SIZE * SCALE}
+
+	SDL.RenderTextureAffine(renderer, render_target, &rect, &target_pos, &target_right, &target_down)
+
+	line_color := [4]f32{1,0.3,0.3,0.3}
+	for idx_int in 0..=SIZE {
+		idx := f32(idx_int)
+
+		draw_line(renderer, {0, idx} * SCALE + origin, {SIZE, idx} * SCALE + origin, 1, line_color)
+		draw_line(renderer, {idx, 0} * SCALE + origin, {idx, SIZE} * SCALE + origin, 1, line_color)
+	}
+
+	tx :: proc (vert: vec2) -> vec2 { return (vert * SCALE + origin) }
+
+	for idx in 0..<buffer.num_vertices {
+		vert := buffer.vertices[idx]
+		uv := buffer.uvs[idx]
+		pos := vert * SCALE + {target_pos.x, target_pos.y}
+		pos.x = math.round(pos.x)
+		pos.y = math.round(pos.y)
+
+		draw_circle(renderer, pos, 3)
+
+		text := fmt.ctprintf("%.6f\n%.6f", uv.x, uv.y)
+		SDL.SetRenderDrawColorFloat(renderer, 1,0,0,0.5)
+		//SDL.RenderDebugText(renderer, pos.x, pos.y, text)
+
+		text2 := fmt.ctprintf("%.6f\n%.6f", vert.x, vert.y)
+		SDL.SetRenderDrawColorFloat(renderer, 0,1,0,0.5)
+		//SDL.RenderDebugText(renderer, pos.x, pos.y+10, text2)
+	}
+	for idx in 0..<buffer.num_indices {
+		if idx % 3 == 0 {
+			a := buffer.indices[idx]
+			b := buffer.indices[idx+1]
+			c := buffer.indices[idx+2]
+			draw_line(renderer, tx(buffer.vertices[a]), tx(buffer.vertices[b]), 1, line_color)
+			draw_line(renderer, tx(buffer.vertices[b]), tx(buffer.vertices[c]), 1, line_color)
+			draw_line(renderer, tx(buffer.vertices[c]), tx(buffer.vertices[a]), 1, line_color)
+		}
+	}
+}
+
+draw_clock :: proc() {
+	CLOCK_SIZE := i32(DPI_mult(400))
+	CLOCK_OFFSET := i32(DPI_mult(40))
+
+	draw_push_state()
+
+	angle := f32(1)//f32(app_time * 0.2)
+	axis := [3]f32{0, 0, 1}
+	axis = linalg.normalize(axis)
+	mat: matrix[3,3]f32 = 1
+	mat *= linalg.matrix3_rotate(angle, axis)
+	mat *= {1.2, 0, 0, 0, 1, 0, 0, 0, 1}
+	mat *= linalg.matrix3_rotate(-angle, axis)
+
+	mata := matrix[3,3]f32{
+		1, 0, 0,
+		0, 1, 0,
+		0, 0, 1,
+	}
+
+
+	draw_set_draw_rect(renderer, {win_size.x - CLOCK_SIZE-CLOCK_OFFSET, CLOCK_OFFSET}, {CLOCK_SIZE, CLOCK_SIZE})
+	draw_set_view_rect({-2.2, 1.2}, {2.2, -1.2})
+
+	LINE_SCALE :: 0.02
+	draw_set_line_scale(0.02)
+
+	draw_circle(renderer, {0, 0}, 1.1, {0, 0, 0, 0.8})
+
+	vert_pos := vec2{1, 0}
+
+	segments := 12
+	delta_angle := (math.TAU) / f32(segments)
+	mat_cos := math.cos(delta_angle)
+	mat_sin := math.sin(delta_angle)
+
+	draw_set_matrix(mat)
+
+	for idx in 0..<segments {
+		vert_pos = {
+			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
+			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
+		}
+		draw_line(renderer, vert_pos * 0.8, vert_pos, 2)
+	}
+
+	local_tz, local_load_ok := tz.region_load("local")
+
+	dt_utc, _ := time.time_to_datetime(time.now())
+	dt, _ := tz.datetime_to_tz(dt_utc, local_tz)
+
+	h := dt.time.hour
+	m := dt.time.minute
+	s := dt.time.second
+
+	frac := f32(dt.time.nano) / 1e9
+
+	frac = math.min(1, frac * 15)
+
+	t_1 := frac-1
+	t_1_2 := t_1 * t_1
+	t_1_3 := t_1_2 * t_1
+	k := f32(2.5)
+	sec_offset := 1 + (k+1)*(t_1_3) + k*(t_1_2)
+
+	ss := f32(s) + sec_offset// + (f32(ns) / 1e9)
+	mm := f32(m) + ss/60
+	hh := f32(h) + mm/60
+
+	hour_sin, hour_cos := math.sincos((0.25 - hh/12) * math.TAU)
+	min_sin, min_cos := math.sincos((0.25 - mm/60) * math.TAU)
+	sec_sin, sec_cos := math.sincos((0.25 - ss/60) * math.TAU)
+
+	draw_line(renderer, {0, 0}, {hour_cos, hour_sin} * 0.5, 2)
+	draw_line(renderer, {0, 0}, {min_cos, min_sin} * 0.75, 2)
+	draw_line(renderer, {0, 0}, {sec_cos, sec_sin} * 0.7, 2, {1, 0, 0, 1})
+	draw_clear_matrix()
+
+	draw_pop_state()
 }
 
 

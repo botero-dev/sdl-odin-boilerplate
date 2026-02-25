@@ -105,12 +105,14 @@ sdl_app_main :: proc () {
 
 sdl_app_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResult {
 	context = ctx
+	app_event_init()
 	return app_init(appstate, argc, argv)
 }
 
 sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
 	context = ctx
-	return app_event(appstate, event)
+
+	return app_handle_event(event)
 }
 
 sdl_app_iterate :: proc "c" (appstate: rawptr) -> SDL.AppResult {

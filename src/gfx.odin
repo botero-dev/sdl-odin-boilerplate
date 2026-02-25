@@ -42,51 +42,138 @@ gfx_init :: proc () {
 
 helper_uv :: proc (input: vec2) -> vec2 { return (input + 0.5) * 0.5  } // coord + half pixel / tex_size
 
-draw_line_scale: f32 = 0
+
+DrawState :: struct {
+	line_scale: f32,
+	mat_scale: [2]f32,
+	mat_offset: [2]f32,
+	draw_rect: [2][2]i32, // encoded as x,y  w,h
+	view_rect: [2]vec2,   // encoded as topleft, botright
+	user_matrix: matrix[3,3]f32,
+}
+
+draw_state_stack: [dynamic]DrawState
+
+draw_state_initial := DrawState {
+	line_scale = 0,
+	mat_scale = {1, 1},
+	mat_offset = {0, 0},
+	draw_rect = {},
+	view_rect = {},
+	user_matrix = 1,
+}
+
+draw_state := draw_state_initial
+draw_matrix: matrix[3,3]f32 = 1
+
+draw_push_state :: proc() {
+	append(&draw_state_stack, draw_state)
+}
+
+draw_pop_state :: proc() {
+	reverting_draw_state := pop(&draw_state_stack)
+
+	if reverting_draw_state.draw_rect != draw_state.draw_rect {
+		rect_size := reverting_draw_state.draw_rect[1]
+		if rect_size == {} {
+			SDL.SetRenderClipRect(renderer, nil)
+		} else {
+			rect_pos := reverting_draw_state.draw_rect[0]
+			clip_rect := SDL.Rect {
+				x = rect_pos.x,
+				y = rect_pos.y,
+				w = rect_size.x,
+				h = rect_size.y,
+			}
+			SDL.SetRenderClipRect(renderer, &clip_rect)
+		}
+	}
+
+	draw_state = reverting_draw_state
+}
+
+draw_present :: proc() {
+	if len(draw_state_stack) != 0 {
+		log.warn("Draw State Stack should be empty when presenting.")
+	}
+	SDL.RenderPresent(renderer)
+}
+
+draw_set_matrix :: proc(in_user_matrix: matrix[3,3]f32) {
+	draw_state.user_matrix = in_user_matrix
+	draw_state.user_matrix[0][2] = 0
+	draw_state.user_matrix[1][2] = 0
+	draw_state.user_matrix[2][2] = 1
+	update_matrix()
+}
+
+draw_clear_matrix :: proc() {
+	draw_state.user_matrix = 1
+	update_matrix()
+}
 
 // if set to zero, line width means physical pixels, otherwise it means a unit relative to the view rect
 draw_set_line_scale :: proc(scale: f32) {
-	draw_line_scale = scale
+	draw_state.line_scale = scale
 }
 
-draw_pos: vec2
-draw_size: vec2
+draw_set_draw_rect :: proc(renderer: ^SDL.Renderer, position: [2]i32, size: [2]i32) {
 
-draw_set_draw_rect :: proc(renderer: ^SDL.Renderer, position: vec2, size: vec2) {
-	draw_pos = position
-	draw_size = size
+	draw_state.draw_rect = {position, size}
 	clip_rect := SDL.Rect {
-		x = i32(draw_pos.x),
-		y = i32(draw_pos.y),
-		w = i32(draw_size.x),
-		h = i32(draw_size.y),
+		x = (position.x),
+		y = (position.y),
+		w = (size.x),
+		h = (size.y),
 	}
 	SDL.SetRenderClipRect(renderer, &clip_rect)
+	update_matrix()
 }
 
 draw_clear_draw_rect :: proc(renderer: ^SDL.Renderer) {
-	draw_pos = {0, 0}
-	draw_size = {f32(win_size.x), f32(win_size.y)}
+	draw_state.draw_rect = {}
 	SDL.SetRenderClipRect(renderer, nil)
+	update_matrix()
 }
 
 draw_clear_view_rect :: proc() {
-	mat_scale = {1,1}
-	mat_offset = {0,0}
+	draw_state.view_rect = {}
+	draw_state.mat_scale = {1,1}
+	draw_state.mat_offset = {0,0}
 }
 
-mat_scale: vec2 = {1,1}
-mat_offset: vec2 = {0,0}
+draw_set_view_rect :: proc(view_topleft: vec2, view_botright: vec2) {
+	draw_state.view_rect = {view_topleft, view_botright}
+	update_matrix()
+}
 
-draw_set_view_rect :: proc(vp_topleft: vec2, vp_botright: vec2) {
-
-	if draw_size == {0, 0} {
-		draw_size = {f32(win_size.x), f32(win_size.y)}
+update_matrix :: proc() {
+	view_topleft := draw_state.view_rect[0]
+	view_botright := draw_state.view_rect[1]
+	if view_topleft == {} && view_botright == {} {
+		draw_state.mat_scale = {1,1}
+		draw_state.mat_offset = {0,0}
+		return
 	}
 
-	range := vp_botright - vp_topleft
-	mat_scale = draw_size / range
-	mat_offset = draw_pos -(vp_topleft*mat_scale)
+	draw_rect := draw_state.draw_rect
+	draw_size := draw_rect[1]
+	if draw_size == {0, 0} {
+		draw_size = {win_size.x, win_size.y}
+	}
+	view_range := view_botright - view_topleft
+
+	draw_pos := vec2{f32(draw_rect[0].x), f32(draw_rect[0].y)}
+	draw_state.mat_scale = vec2{f32(draw_size.x), f32(draw_size.y)} / view_range
+	draw_state.mat_offset = draw_pos - (view_topleft * draw_state.mat_scale)
+
+	draw_matrix = (matrix[3,3]f32{
+		draw_state.mat_scale.x, 0, draw_state.mat_offset.x,
+		0, draw_state.mat_scale.y, draw_state.mat_offset.y,
+		0, 0, 1,
+	})
+
+	draw_matrix = draw_matrix * draw_state.user_matrix
 }
 
 
@@ -104,9 +191,7 @@ draw_circle :: proc(renderer: ^SDL.Renderer, in_center: vec2, in_radius: f32, in
 		indices_buf[:],
 	}
 
-	center := in_center * mat_scale + mat_offset
-	radius := in_radius * mat_scale.x
-	buffer_circle(&buffer, center, radius, int_coords)
+	buffer_circle(&buffer, in_center, in_radius, int_coords)
 
 	buffer.vertices = buffer.vertices[:buffer.num_vertices]
 	buffer.indices = buffer.indices[:buffer.num_indices]
@@ -118,8 +203,14 @@ draw_circle :: proc(renderer: ^SDL.Renderer, in_center: vec2, in_radius: f32, in
 // corner_idx indices: (top_left, top_right, bottom_left, bottom_right)
 buffer_circle :: proc (buffer: ^DrawBuffer, in_center: vec2, in_radius: f32, int_coords: bool = false) {
 
-	center := in_center
-	radius := in_radius
+	center := (draw_matrix * [3]f32{in_center.x, in_center.y, 1}).xy
+
+	scale_mat := matrix[2,2]f32 {
+		draw_matrix[0][0], draw_matrix[0][1],
+		draw_matrix[1][0], draw_matrix[1][1],
+	}
+	radius := in_radius * linalg.length(scale_mat * [2]f32{1, 0})
+
 	if int_coords {
 		center += {0.5, 0.5}
 		radius -= 0.5
@@ -146,9 +237,11 @@ buffer_circle :: proc (buffer: ^DrawBuffer, in_center: vec2, in_radius: f32, int
 	increment := math.TAU / f32(segments)
 	mat_sin, mat_cos := math.sincos(increment)
 
-	vert_pos := vec2{radius+PAD, 0}
+	radius_pad := radius+PAD
+	vert_pos := vec2{1, 0}
+
 	vertices_buf[0] = center
-	vertices_buf[1] = center + vert_pos
+	vertices_buf[1] = center + (vert_pos * scale_mat) // TODO: account for pad
 	uvs_buf[0] = helper_uv({1,1})
 	uvs_buf[1] = helper_uv({1, 0.5 - (0.5*PAD/radius)})
 
@@ -157,7 +250,7 @@ buffer_circle :: proc (buffer: ^DrawBuffer, in_center: vec2, in_radius: f32, int
 			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
 			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
 		}
-		vertices_buf[idx] = center + vert_pos
+		vertices_buf[idx] = center + (vert_pos * scale_mat) // TODO: account for pad
 		uvs_buf[idx] = uvs_buf[1]
 	}
 
@@ -217,12 +310,18 @@ buffer_line :: proc(buffer: ^DrawBuffer, in_start: vec2, in_end: vec2, in_width:
 	end := in_end
 	width := in_width
 
-	if draw_line_scale != 0 {
-		width *= draw_line_scale * mat_scale.x
+	if draw_state.line_scale != 0 {
+		width *= draw_state.line_scale * draw_state.mat_scale.x
 	}
 
-	start = start * mat_scale + mat_offset
-	end = end * mat_scale + mat_offset
+	starta := [3]f32{start.x, start.y, 1}
+	enda := [3]f32{end.x, end.y, 1}
+
+	starta = draw_matrix * starta
+	enda = draw_matrix * enda
+
+	start = starta.xy
+	end = enda.xy
 
 	delta := end-start
 	length := linalg.length(delta)
