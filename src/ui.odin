@@ -21,15 +21,15 @@ DPI_set :: proc(new_dpi: f32) {
 	log.info("set dpi to:", dpi)
 }
 
-DPI_mult :: proc(value: f32) -> f32 {
+DPI_mult :: proc "contextless" (value: f32) -> f32 {
 	return value * dpi
 }
 
-border_policy :: proc (border: $T) -> u16 {
+border_policy :: proc "contextless" (border: $T) -> u16 {
 	return u16(math.round(f32(border) * dpi)) // could also be ceil or floor
 }
 
-DPI_ElementDeclaration :: proc (decl: clay.ElementDeclaration) -> clay.ElementDeclaration {
+DPI_ElementDeclaration :: proc "contextless" (decl: clay.ElementDeclaration) -> clay.ElementDeclaration {
 	result := decl
 	result.cornerRadius = DPI_CornerRadius(decl.cornerRadius)
 	result.border.width = DPI_BorderWidth(result.border.width)
@@ -52,7 +52,7 @@ DPI_ElementDeclaration :: proc (decl: clay.ElementDeclaration) -> clay.ElementDe
 
 DPI :: DPI_ElementDeclaration
 
-DPI_BorderWidth :: proc (input: clay.BorderWidth) -> clay.BorderWidth {
+DPI_BorderWidth :: proc "contextless" (input: clay.BorderWidth) -> clay.BorderWidth {
 	return clay.BorderWidth {
 		border_policy(input.left),
 		border_policy(input.right),
@@ -62,7 +62,7 @@ DPI_BorderWidth :: proc (input: clay.BorderWidth) -> clay.BorderWidth {
 	}
 }
 
-DPI_CornerRadius :: proc (radii: clay.CornerRadius) -> clay.CornerRadius {
+DPI_CornerRadius :: proc "contextless" (radii: clay.CornerRadius) -> clay.CornerRadius {
 	return clay.CornerRadius {
 		dpi * (radii.topLeft),
 		dpi * (radii.topRight),
@@ -71,7 +71,7 @@ DPI_CornerRadius :: proc (radii: clay.CornerRadius) -> clay.CornerRadius {
 	}
 }
 
-DPI_Padding :: proc (padding: clay.Padding) -> clay.Padding {
+DPI_Padding :: proc "contextless" (padding: clay.Padding) -> clay.Padding {
 	return clay.Padding {
 		border_policy(padding.left),
 		border_policy(padding.right),
@@ -321,11 +321,14 @@ NavigationDirection :: enum {
 	User, // L1/R1 or some user bindings
 }
 
+
+
 NavigationItem :: struct {
 	id: i32,
 	label: string,
 	handler: ^HandlerInfo,
-}
+	scope: ^NavigationScope,
+ }
 
 NavigationScope :: struct {
 	direction: NavigationDirection,
@@ -335,14 +338,18 @@ NavigationScope :: struct {
 	current: i32
 }
 
-navigation_scope_stack: [dynamic]NavigationScope
 
-navigation_scope: NavigationScope
+navigation_scope_stack: [dynamic]^NavigationScope
+
+navigation_scope: ^NavigationScope
+
+root_item: NavigationItem
+
 
 nav_add_item :: proc(label: string, handler: ^HandlerInfo) -> bool {
 	id := i32(len(navigation_scope.contents))
 	nav_item := NavigationItem {
-		id, label, handler,
+		id, label, handler, nil
 	}
 	append(&navigation_scope.contents, nav_item)
 	focused := navigation_scope.current == id
@@ -350,41 +357,148 @@ nav_add_item :: proc(label: string, handler: ^HandlerInfo) -> bool {
 	return focused
 }
 
-nav_handle_input :: proc(event: ^Event) {
-	num_items := i32(len(navigation_scope.contents))
-	if num_items == 0 {
-		return
-	}
-	if pressed, matches := match_mapping_button(event, nav_left); matches {
-		if pressed {
-			event.handled = true
-			navigation_scope.current -= 1
+nav_push_scope :: proc(in_scope: ^NavigationScope) {
+
+	prev_scope := navigation_scope
+	if prev_scope != nil {
+
+		item := NavigationItem {
+			id = i32(len(prev_scope.contents)),
+			scope = in_scope,
 		}
-	}
-	if pressed, matches := match_mapping_button(event, nav_right); matches {
-		if pressed {
-			event.handled = true
-			navigation_scope.current += 1
-		}
-	}
-	if navigation_scope.current < 0 {
-		if navigation_scope.wrap {
-			navigation_scope.current = num_items - 1
-		} else {
-			navigation_scope.current = 0
-		}
-	} else if navigation_scope.current >= num_items {
-		if navigation_scope.wrap {
-			navigation_scope.current = 0
-		} else {
-			navigation_scope.current = num_items - 1
+		append(&prev_scope.contents, item)
+	} else {
+		root_item = {
+			id = 0,
+			scope = in_scope,
 		}
 	}
 
-	if pressed, matches := match_mapping_button(event, nav_confirm); matches {
-		if pressed {
-			nav_item := navigation_scope.contents[navigation_scope.current]
-			nav_item.handler.handler(nav_item.handler.data)
+	navigation_scope = in_scope
+	append(&navigation_scope_stack, navigation_scope)
+
+}
+
+nav_pop_scope :: proc() {
+	pop(&navigation_scope_stack)
+	new_stack_size := len(navigation_scope_stack)
+	if new_stack_size > 0 {
+		navigation_scope = navigation_scope_stack[new_stack_size-1]
+	} else {
+		navigation_scope = nil
+	}
+}
+
+nav_finish :: proc() {
+	assert(len(navigation_scope_stack) == 0)
+}
+
+@(deferred_none = nav_pop_scope)
+nav_scope :: proc(in_scope: ^NavigationScope) {
+	nav_push_scope(in_scope)
+}
+
+nav_scope_has_focus :: proc() -> bool {
+	num_items := len(navigation_scope_stack)
+	if num_items <= 1 {
+		return true
+	}
+
+	parent_scope := navigation_scope_stack[num_items-2]
+
+	if parent_scope.contents[parent_scope.current].scope == navigation_scope {
+		return true
+	}
+
+	return false
+}
+
+
+focus_stack: [dynamic]^NavigationItem
+
+nav_handle_input :: proc(event: ^Event) {
+
+	clear(&focus_stack)
+	nav_target := &root_item
+
+	append(&focus_stack, nav_target)
+
+	for nav_target.scope != nil {
+		target_scope := nav_target.scope
+		num_items := len(target_scope.contents)
+		if num_items == 0 {
+			break
+		}
+		if target_scope.current < 0 || target_scope.current >= i32(num_items) {
+			break
+		}
+		nav_target = &target_scope.contents[target_scope.current]
+		append(&focus_stack, nav_target)
+	}
+
+	#reverse for item in focus_stack {
+		if item.handler != nil {
+			pressed, matches := match_mapping_button(event, nav_confirm)
+			if matches && pressed {
+				event.handled = true
+				item.handler.handler(item.handler.data)
+				break
+			}
+		}
+
+		if item.scope != nil {
+			positive_binding: MappingIndex = 0
+			negative_binding: MappingIndex = 0
+
+			switch item.scope.direction {
+			case .Horizontal:
+				positive_binding = nav_right
+				negative_binding = nav_left
+			case .Vertical:
+				positive_binding = nav_down
+				negative_binding = nav_up
+			case .Logical:
+				positive_binding = nav_next
+				negative_binding = nav_previous
+			case .User:
+				log.warn("unhandled navigation direction")
+			}
+
+			delta: i32 = 0
+			{
+				pressed, matches := match_mapping_button(event, negative_binding)
+				if matches && pressed {
+					event.handled = true
+					delta -= 1
+				}
+			}
+			{
+				pressed, matches := match_mapping_button(event, positive_binding)
+				if matches && pressed {
+					event.handled = true
+					delta += 1
+				}
+			}
+			if event.handled {
+				item.scope.current += delta
+				num_items := i32(len(item.scope.contents))
+				if item.scope.current < 0 {
+					if item.scope.wrap {
+						item.scope.current = num_items - 1
+					} else {
+						item.scope.current = 0
+					}
+				} else if item.scope.current >= num_items {
+					if item.scope.wrap {
+						item.scope.current = 0
+					} else {
+						item.scope.current = num_items - 1
+					}
+				}
+				break
+			}
 		}
 	}
+
+
 }

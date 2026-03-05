@@ -59,6 +59,10 @@ event_handler_stack: [dynamic]EventHandler
 
 
 create_keyboard_mapping :: proc (scancode: SDL.Scancode) -> MappingIndex {
+	if action_map == nil {
+		// create empty mapping at index 0
+		append(&action_map, EventMapping{})
+	}
 	new_mapping := EventMapping {
 		type = .Keyboard,
 		data = {scancode}

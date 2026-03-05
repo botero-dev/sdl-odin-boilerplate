@@ -499,195 +499,189 @@ ui_dirty: bool = true
 
 text_font_id: u16 = NIL_FONT
 
+main_nav: NavigationScope
+
 // An example function to create your layout tree
 create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
-    // Begin constructing the layout.
-	clay.BeginLayout()
 
-	clear(&navigation_scope.contents)
-
-	//navigation_scope = {}
-	navigation_scope.wrap = true
-
+	// Begin constructing the layout.
 	text_config = clay.TextConfig({
 		fontId = text_font_id,
 		textColor = color_text,
 		fontSize = border_policy(16),
 		textAlignment = .Center,
 	})
-	//clay.SetDebugModeEnabled(true)
 
-    // An example of laying out a UI with a fixed-width sidebar and flexible-width main content
-    // NOTE: To create a scope for child components, the Odin API uses `if` with components that have children
-    if /*clay.UI(clay.ID("OuterContainer"))({
-        layout = {
-            sizing = { width = clay.SizingGrow({}), height = clay.SizingGrow({}) },
-            padding = { 16, 16, 16, 16 },
-            childGap = 16,
-        },
-		backgroundColor = {0, 0, 0, 1}
-    })*/ true {
-
-		if len(images) > 0 {
-
-			img_layout := clay.LayoutConfig {
-				sizing = {
-					width = clay.SizingGrow(),//clay.SizingPercent(1),
-					height = clay.SizingGrow(),//clay.SizingPercent(1),
-				},
-				layoutDirection = .LeftToRight,
-			}
-			dark_level := f32(0.25)
-			back_color_dark := clay.Color{dark_level, dark_level, dark_level, 1}
-			back_color := clay.Color{1, 1, 1, 1}
-			curr_img_tex := images[current_img_idx].texture
-			if clay.UI(clay.ID("BackgroundDark"))({
-				floating = {
-					attachTo = .Parent,
-					attachment = {
-						element = .CenterCenter,
-						parent = .CenterCenter,
-					},
-				},
-				layout = img_layout,
-				backgroundColor = back_color_dark,
-				image = {
-					imageData = curr_img_tex
-				},
-				aspectRatio = {f32(curr_img_tex.w) / f32(curr_img_tex.h), .Fill},
-			}) {}
-			if clay.UI(clay.ID("Background"))({
-				floating = {
-					attachTo = .Parent,
-					attachment = {
-						element = .CenterCenter,
-						parent = .CenterCenter,
-					},
-				},
-				layout = img_layout,
-				backgroundColor = back_color,
-				image = {
-					imageData = curr_img_tex
-				},
-				aspectRatio = {f32(curr_img_tex.w) / f32(curr_img_tex.h), .Fit},
-			}) {}
-
-			front_color_dark := back_color_dark
-			front_color := back_color
-			if current_state == .Transitioning {
-				progress := current_transition_time / transition_time
-				alpha := f32(progress)
-				front_color_dark.a = alpha
-				front_color.a = alpha
-			} else {
-				front_color_dark.a = 0
-				front_color.a = 0
-			}
-				next_img_idx := get_next_img_idx(current_img_idx)
-				next_img_tex := images[next_img_idx].texture
-				if clay.UI(clay.ID("BlendInDark"))({
-					floating = {
-						attachTo = .Parent,
-						attachment = {
-							element = .CenterCenter,
-							parent = .CenterCenter,
-						},
-					},
-					layout = img_layout,
-					backgroundColor = front_color_dark,
-					image = {
-						imageData = next_img_tex
-					},
-					aspectRatio = {f32(next_img_tex.w) / f32(next_img_tex.h), .Fill},
-				}) { }
-				if clay.UI(clay.ID("BlendIn"))({
-					floating = {
-						attachTo = .Parent,
-						attachment = {
-							element = .CenterCenter,
-							parent = .CenterCenter,
-						},
-					},
-					layout = img_layout,
-					backgroundColor = front_color,
-					image = {
-						imageData = next_img_tex
-					},
-					aspectRatio = {f32(next_img_tex.w) / f32(next_img_tex.h), .Fit},
-				}) { }
+	clay.SetDebugModeEnabled(false)
+	clay.BeginLayout()
 
 
-		}
+	clear(&main_nav.contents)
+	//navigation_scope.wrap = true
+	main_nav.direction = .Vertical
 
+	nav_push_scope(&main_nav)
 
-        if clay.UI(clay.ID("ToolBar"))(DPI({
-            layout = {
-                layoutDirection = .LeftToRight,
-                sizing = { width = clay.SizingFit(), height = clay.SizingFit() },
-                childGap = 16,
-            },
-			floating = {
-				attachTo = .Parent,
-				attachment = {
-					element = .CenterBottom,
-					parent = .CenterBottom,
-				},
-				offset = {0, -16},
-			},
-        })) {
+	nav_add_item("center", nil)
 
-			section_style := DPI(clay.ElementDeclaration {
-				layout = {
-					layoutDirection = .TopToBottom,
-					padding = {4, 4, 4, 4},
-					childAlignment = {.Center, .Top}
-				},
-				cornerRadius = {20, 20, 20, 20},
-				backgroundColor = color_frame,
-			})
+	layout_background()
+	layout_toolbar()
 
-			subsection_style := DPI({
-				layout = {
-					layoutDirection = .LeftToRight,
-					childGap = 4,
-				},
-			})
+	nav_pop_scope()
+	nav_finish()
 
-
-			if clay.UI(clay.ID("ToolBarSection"))(section_style) {
-				clay.Text(
-                    "Gallery Config",
-                    text_config,
-                )
-
-				if clay.UI()(subsection_style){
-					sidebar_item_component("Select Folder", proc(c: rawptr) {
-						select_directory()
-					})
-					sidebar_item_component("Config Online Src")
-				}
-			}
-
-			if clay.UI(clay.ID("ToolBarSection2"))(section_style) {
-				clay.Text(
-                    "Slideshow",
-                    text_config,
-                )
-				if clay.UI()(subsection_style){
-					sidebar_item_component("First", proc(c: rawptr) { playback_first()})
-					sidebar_item_component("Previous", proc(c: rawptr) { playback_previous()})
-					sidebar_item_component("Play\nPause", proc(c: rawptr) { playback_playpause()})
-					sidebar_item_component("Next", proc(c: rawptr) { playback_next()})
-					sidebar_item_component("Last", proc(c: rawptr) { playback_last()})
-				}
-			}
-
-        }
-    }
-
-    // Returns a list of render commands
+	// Returns a list of render commands
 	result := clay.EndLayout()
 	return result
+
+}
+
+layout_background :: proc () {
+
+	if len(images) <= 0 {
+		return
+	}
+
+	dark_level := f32(0.25)
+	back_color_dark := clay.Color{dark_level, dark_level, dark_level, 1}
+	back_color := clay.Color{1, 1, 1, 1}
+	curr_img_tex := images[current_img_idx].texture
+
+	decl := clay.ElementDeclaration {
+		floating = {
+			attachTo = .Parent,
+			attachment = {
+				element = .CenterCenter,
+				parent = .CenterCenter,
+			},
+		},
+		layout = {
+			sizing = {
+				width = clay.SizingGrow(),//clay.SizingPercent(1),
+				height = clay.SizingGrow(),//clay.SizingPercent(1),
+			},
+			layoutDirection = .LeftToRight,
+		},
+	}
+
+	decl.image.imageData = curr_img_tex
+	decl.aspectRatio.aspectRatio = f32(curr_img_tex.w) / f32(curr_img_tex.h)
+	{
+		config_func := clay.UI(clay.ID("BackgroundDark"))
+		decl.backgroundColor = back_color_dark
+		decl.aspectRatio.scaleMode = .Fill
+		config_func(decl)
+	}
+	{
+		config_func := clay.UI(clay.ID("Background"))
+		decl.backgroundColor = back_color
+		decl.aspectRatio.scaleMode = .Fit
+		config_func(decl)
+	}
+
+	front_color_dark := back_color_dark
+	front_color := back_color
+	if current_state == .Transitioning {
+		progress := current_transition_time / transition_time
+		alpha := f32(progress)
+		front_color_dark.a = alpha
+		front_color.a = alpha
+	} else {
+		front_color_dark.a = 0
+		front_color.a = 0
+	}
+	next_img_idx := get_next_img_idx(current_img_idx)
+	next_img_tex := images[next_img_idx].texture
+
+	decl.image.imageData = next_img_tex
+	decl.aspectRatio.aspectRatio = f32(next_img_tex.w) / f32(next_img_tex.h)
+	{
+		config_func := clay.UI(clay.ID("BlendInDark"))
+		decl.backgroundColor = front_color_dark
+		decl.aspectRatio.scaleMode = .Fill
+		config_func(decl)
+	}
+
+	{
+		config_func := clay.UI(clay.ID("BlendIn"))
+		decl.backgroundColor = front_color
+		decl.aspectRatio.scaleMode = .Fit
+		config_func(decl)
+
+	}
+}
+
+toolbar_decl := clay.ElementDeclaration {
+    layout = {
+        layoutDirection = .LeftToRight,
+        sizing = { width = clay.SizingFit(), height = clay.SizingFit() },
+        childGap = 16,
+    },
+	floating = {
+		attachTo = .Parent,
+		attachment = {
+			element = .CenterBottom,
+			parent = .CenterBottom,
+		},
+		offset = {0, -16},
+	},
+}
+
+section_decl := clay.ElementDeclaration {
+	layout = {
+		layoutDirection = .TopToBottom,
+		padding = {4, 4, 4, 4},
+		childAlignment = {.Center, .Top}
+	},
+	cornerRadius = {20, 20, 20, 20},
+	backgroundColor = color_frame,
+}
+
+subsection_decl := clay.ElementDeclaration {
+	layout = {
+		layoutDirection = .LeftToRight,
+		childGap = 4,
+	},
+}
+
+
+toolbar_nav: NavigationScope
+
+layout_toolbar :: proc() {
+
+	clear(&toolbar_nav.contents)
+	toolbar_nav.direction = .Horizontal
+
+	nav_scope(&toolbar_nav)
+
+	if ! nav_scope_has_focus() {
+		return
+	}
+
+	toolbar_style := DPI(toolbar_decl)
+	section_style := DPI(section_decl)
+	subsection_style := DPI(subsection_decl)
+
+    clay.UI(clay.ID("ToolBar"))(toolbar_style)
+
+	{
+		clay.UI(clay.ID("ToolBarSection"))(section_style)
+		clay.Text("Gallery Config", text_config)
+		clay.UI()(subsection_style)
+		sidebar_item_component("Select Folder", proc(c: rawptr) { select_directory() })
+		sidebar_item_component("Config Online Src")
+	}
+
+	{
+		clay.UI(clay.ID("ToolBarSection2"))(section_style)
+		clay.Text("Slideshow", text_config)
+		clay.UI()(subsection_style)
+		sidebar_item_component("First", proc(c: rawptr) { playback_first()})
+		sidebar_item_component("Previous", proc(c: rawptr) { playback_previous()})
+		sidebar_item_component("Play\nPause", proc(c: rawptr) { playback_playpause()})
+		sidebar_item_component("Next", proc(c: rawptr) { playback_next()})
+		sidebar_item_component("Last", proc(c: rawptr) { playback_last()})
+    }
 }
 
 text_config: ^clay.TextElementConfig
@@ -729,6 +723,7 @@ playback_first :: proc() {
 	fmt.println("first")
 	print_render_commands = true
 }
+
 playback_previous :: proc() {
 	fmt.println("previous")
 }
@@ -736,6 +731,10 @@ playback_playpause :: proc() {
 	fmt.println("playpause")
 	running = !running
 }
+
+
+
+
 playback_next :: proc() {
 	fmt.println("next")
 }
@@ -787,15 +786,25 @@ color_frame := clay.Color {0.2, 0.2, 0.2, 1}
 color_hover := clay.Color {0.4, 0.4, 0.4, 1}
 color_text := clay.Color {0.8, 0.8, 0.8, 1}
 
+
+item_style := clay.ElementDeclaration {
+    layout = {
+		sizing = {
+			width = clay.SizingFixed(64),
+			height = clay.SizingFixed(64),
+		},
+		childAlignment = {.Center, .Center}
+	},
+	cornerRadius = {16, 16, 16, 16},
+	border = {
+		width = {1, 1, 1, 1, 0},
+		color = color_border,
+	},
+}
+
+
 // Re-useable components are just normal procs.
 sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil, user_data: rawptr = nil) {
-    sidebar_item_layout := clay.LayoutConfig {
-        sizing = {
-            width = clay.SizingFixed(64),
-            height = clay.SizingFixed(64),
-        },
-		childAlignment = {.Center, .Center}
-    }
 
 	info: ^HandlerInfo
 	if callback != nil {
@@ -804,25 +813,17 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 		info.ctx = context
 		info.data = user_data
 	}
+
 	has_focus := nav_add_item(label, info)
+	config_proc := clay.UI(clay.ID(label))
+	item_style.backgroundColor = has_focus || clay.Hovered() ? color_hover : color_idle
+	config_proc(DPI(item_style))
 
-	if clay.UI(clay.ID(label))(DPI({
-        layout = sidebar_item_layout,
-		cornerRadius = {16, 16, 16, 16},
-        backgroundColor = has_focus || clay.Hovered() ? color_hover : color_idle,
-		border = {
-			width = {1, 1, 1, 1, 0},
-		 	color = color_border,
-		},
-    })) {
-		if info != nil {
-			clay.OnHover(HandleButton, info)
-		}
-		clay.Text(
-            label,
-            text_config,
-        )
+	if info != nil {
+		clay.OnHover(HandleButton, info)
 	}
+	clay.Text(
+        label,
+        text_config,
+    )
 }
-
-
