@@ -480,7 +480,7 @@ CornerRadiusAll :: proc(radius: f32) -> CornerRadius {
 	return CornerRadius{radius, radius, radius, radius}
 }
 
-SizingFit :: proc(sizeMinMax: SizingConstraintsMinMax = {}) -> SizingAxis {
+SizingFit :: proc "contextless" (sizeMinMax: SizingConstraintsMinMax = {}) -> SizingAxis {
 	return SizingAxis{type = SizingType.Fit, constraints = {sizeMinMax = sizeMinMax}}
 }
 

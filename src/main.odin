@@ -320,7 +320,7 @@ app_draw :: proc () {
 		wheel_delta = {}
 		render_layout(&render_commands)
 
-		draw_debug_texture()
+		// draw_debug_texture()
 
 		draw_present()
 	}
@@ -330,8 +330,6 @@ app_draw :: proc () {
 // todo: refactor into a proper texture inspector
 draw_debug_texture :: proc() {
 
-
-	if true { return }
 	vertices_buf: [1000]vec2
 	uvs_buf: [1000]vec2
 	indices_buf: [2000]u8
@@ -543,7 +541,7 @@ main_nav: NavigationScope
 
 layout_handle_mouse_input :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, userData: rawptr) {
 	context = ctx
-	log.info(id, pointerData, userData)
+	//log.info(id, pointerData, userData)
 }
 
 // An example function to create your layout tree
@@ -560,6 +558,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 	clay.BeginLayout()
 
 	{
+		clay.OnHover(layout_handle_mouse_input, nil)
 
 		clear(&main_nav.contents)
 		//navigation_scope.wrap = true
@@ -569,30 +568,8 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 
 		nav_add_item("center", nil)
 
-		layout_background()
+		layout_gallery()
 		layout_toolbar()
-
-		{
-			clay.UI(clay.ID("TopLevel"))( {
-				floating = {
-					attachTo = .Parent,
-					attachment = {
-						element = .CenterCenter,
-						parent = .CenterCenter,
-					},
-				},
-				layout = {
-					sizing = {
-						width = clay.SizingGrow(),//clay.SizingPercent(1),
-						height = clay.SizingGrow(),//clay.SizingPercent(1),
-					},
-					layoutDirection = .LeftToRight,
-				},
-			})
-
-			clay.OnHover(layout_handle_mouse_input, nil)
-
-		}
 
 		layout_clock()
 	}
@@ -604,7 +581,67 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 
 }
 
-layout_background :: proc () {
+gallery_render_data := CustomRenderData {
+	render_gallery
+}
+
+layout_gallery :: proc () {
+	clay.UI(clay.ID("gallery"))({
+		layout = {
+			sizing = {
+				width = clay.SizingPercent(1),
+				height = clay.SizingPercent(1),
+			},
+		},
+		custom = {&gallery_render_data},
+	})
+}
+
+AspectRatioFitMode :: enum {
+	Fit,
+	FillX,
+	FillY,
+	Fill,
+}
+
+// returns a smaller rect that would fit while keeping aspect ratio
+rect_aspect_fit :: proc(rect: SDL.FRect, aspect: f32) -> SDL.FRect {
+	current := rect.w / rect.h
+	out := rect
+	if current > aspect {
+		// current is wider, trim horizontal
+		out.x += out.w  * 0.5
+		out.w = out.h * aspect
+		out.x -= out.w * 0.5
+	} else {
+		// current is taller, trim vertical
+		out.y += out.h  * 0.5
+		out.h = out.w / aspect
+		out.y -= out.h * 0.5
+	}
+	return out
+}
+
+draw_tex_rect_aspect :: proc(rect: SDL.FRect, tex: ^SDL.Texture, fill: bool, color: [4]f32) {
+
+	img_aspect :=  f32(tex.w) / f32(tex.h)
+	box_aspect := rect.w / rect.h
+
+	dstrect := rect
+	srcrect := SDL.FRect{0, 0, f32(tex.w), f32(tex.h)}
+	if fill {
+		srcrect = rect_aspect_fit(srcrect, box_aspect)
+	} else {
+		dstrect = rect_aspect_fit(dstrect, img_aspect)
+	}
+
+	SDL.SetTextureBlendMode(tex, {.BLEND})
+	SDL.SetTextureColorModFloat(tex, color[0], color[1], color[2])
+	SDL.SetTextureAlphaModFloat(tex, color[3])
+	SDL.RenderTexture(renderer, tex, &srcrect, &dstrect)
+}
+
+render_gallery :: proc (in_rect: Rect, color: [4]f32) {
 
 	if len(images) <= 0 {
 		return
@@ -615,69 +652,25 @@ layout_background :: proc () {
 	back_color := clay.Color{1, 1, 1, 1}
 	curr_img_tex := images[current_img_idx].texture
 
-	decl := clay.ElementDeclaration {
-		floating = {
-			attachTo = .Parent,
-			attachment = {
-				element = .CenterCenter,
-				parent = .CenterCenter,
-			},
-		},
-		layout = {
-			sizing = {
-				width = clay.SizingGrow(),//clay.SizingPercent(1),
-				height = clay.SizingGrow(),//clay.SizingPercent(1),
-			},
-			layoutDirection = .LeftToRight,
-		},
-	}
+	rect := SDL.FRect{in_rect.x, in_rect.y, in_rect.width, in_rect.height}
+	draw_tex_rect_aspect(rect, curr_img_tex, true, back_color_dark)
+	draw_tex_rect_aspect(rect, curr_img_tex, false, back_color)
 
-	decl.image.imageData = curr_img_tex
-	decl.aspectRatio.aspectRatio = f32(curr_img_tex.w) / f32(curr_img_tex.h)
-	{
-		config_func := clay.UI(clay.ID("BackgroundDark"))
-		decl.backgroundColor = back_color_dark
-		decl.aspectRatio.scaleMode = .Fill
-		config_func(decl)
-	}
-	{
-		config_func := clay.UI(clay.ID("Background"))
-		decl.backgroundColor = back_color
-		decl.aspectRatio.scaleMode = .Fit
-		config_func(decl)
-	}
-
-	front_color_dark := back_color_dark
-	front_color := back_color
 	if current_state == .Transitioning {
+		front_color_dark := back_color_dark
+		front_color := back_color
 		progress := current_transition_time / transition_time
 		alpha := f32(progress)
 		front_color_dark.a = alpha
 		front_color.a = alpha
-	} else {
-		front_color_dark.a = 0
-		front_color.a = 0
-	}
-	next_img_idx := get_next_img_idx(current_img_idx)
-	next_img_tex := images[next_img_idx].texture
-
-	decl.image.imageData = next_img_tex
-	decl.aspectRatio.aspectRatio = f32(next_img_tex.w) / f32(next_img_tex.h)
-	{
-		config_func := clay.UI(clay.ID("BlendInDark"))
-		decl.backgroundColor = front_color_dark
-		decl.aspectRatio.scaleMode = .Fill
-		config_func(decl)
-	}
-
-	{
-		config_func := clay.UI(clay.ID("BlendIn"))
-		decl.backgroundColor = front_color
-		decl.aspectRatio.scaleMode = .Fit
-		config_func(decl)
-
+		next_img_idx := get_next_img_idx(current_img_idx)
+		next_img_tex := images[next_img_idx].texture
+		draw_tex_rect_aspect(rect, next_img_tex, true, front_color_dark)
+		draw_tex_rect_aspect(rect, next_img_tex, false, front_color)
 	}
 }
+
+
 
 toolbar_decl := clay.ElementDeclaration {
     layout = {
