@@ -61,6 +61,10 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 	@(export)
 	SDL_main :: proc "c" (argc: c.int, argv: [^]cstring) -> c.int {
 		context = runtime.default_context()
+		context.logger = runtime.Logger {
+			procedure = sdl_log_proc
+		}
+		log.info("android SDL_main")
 		sdl_app_main()
 		return 0;
 	}

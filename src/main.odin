@@ -485,10 +485,21 @@ draw_clock :: proc(box: Rect, color:[4]f32) {
 		draw_line(renderer, vert_pos * 0.8, vert_pos, 2)
 	}
 
-	local_tz, local_load_ok := tz.region_load("local")
 
-	dt_utc, _ := time.time_to_datetime(time.now())
-	dt, _ := tz.datetime_to_tz(dt_utc, local_tz)
+	time_now := time.now()
+	dt_utc, _ := time.time_to_datetime(time_now)
+	dt := dt_utc
+
+	local_tz, local_load_ok := tz.region_load("local")
+	if local_load_ok {
+		dt, _ = tz.datetime_to_tz(dt_utc, local_tz)
+	} else {
+		// in android the tz doesn't work at the moment
+		secs := time.time_to_unix(time_now)
+		secs -= (5 * 60 * 60) // colombia time
+		adj_time := time.unix(secs, i64(dt.nano))
+		dt, _ = time.time_to_datetime(adj_time)
+	}
 
 	h := dt.time.hour
 	m := dt.time.minute

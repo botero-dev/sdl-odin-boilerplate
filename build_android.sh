@@ -10,6 +10,7 @@ set -x
 PROJECT_ROOT=$(pwd)
 
 if [ ! -d "build/android" ]; then
+	mkdir -p "build"
 	cp -r "platform/android" "build/android"
 	ln -s "$PROJECT_ROOT/../SDL" "build/android/app/jni/SDL"
 	ln -s "$PROJECT_ROOT/../SDL_ttf" "build/android/app/jni/SDL_ttf"
