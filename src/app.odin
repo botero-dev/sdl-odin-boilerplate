@@ -33,6 +33,13 @@ EventType :: enum {
 	Gamepad,
 }
 
+// Inspired on HTML
+EventPhase :: enum {
+	Capturing,
+	Bubbling,
+	// no Target event as events get always triggered.
+}
+
 EventMapping :: struct {
 	type: EventType,
 	data: EventMappingKeyboard,
@@ -44,6 +51,7 @@ EventMappingKeyboard :: struct {
 
 Event :: struct {
 	type: EventType,
+	phase: EventPhase,
 	handled: bool,
 	sdl_event: ^SDL.Event,
 }

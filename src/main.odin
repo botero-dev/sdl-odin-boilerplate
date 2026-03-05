@@ -166,18 +166,10 @@ app_event :: proc (evt: ^Event) {
 
 	nav_handle_input(evt)
 
+	ui_push_pointer_event(evt)
+
 	event := evt.sdl_event
 	#partial switch event.type {
-	case .MOUSE_MOTION :
-			clay.SetPointerState({event.motion.x, event.motion.y}, (event.motion.state & SDL.BUTTON_LMASK) != {} )
-	case .MOUSE_BUTTON_DOWN:
-			if event.button.button == SDL.BUTTON_LEFT {
-				clay.SetPointerState({event.button.x, event.button.y}, true)
-			}
-	case .MOUSE_BUTTON_UP:
-			if event.button.button == SDL.BUTTON_LEFT {
-				clay.SetPointerState({event.button.x, event.button.y}, false)
-			}
 	case .MOUSE_WHEEL:
 		wheel_data := event.wheel
 		wheel_delta += {wheel_data.x, wheel_data.y}
@@ -428,7 +420,7 @@ layout_clock :: proc() {
 	CLK_SIZE :: 240
 	CLK_OFFSET :: 20
 
-	config_proc := clay.UI(clay.ID("clock")) (DPI({
+	clay.UI(clay.ID("clock"))(DPI({
 		layout = {
 			layoutDirection = .LeftToRight,
 			sizing = { width = clay.SizingFixed(CLK_SIZE), height = clay.SizingFixed(CLK_SIZE) },
@@ -443,9 +435,10 @@ layout_clock :: proc() {
 			offset = {-CLK_OFFSET, CLK_OFFSET},
 		},
 		backgroundColor = {1,1,1,1},
-		custom = { &clock_render_data }
+		custom = { &clock_render_data },
 	}))
 
+	ui_pointer_handler()
 }
 
 draw_clock :: proc(box: Rect, color:[4]f32) {
@@ -539,9 +532,14 @@ text_font_id: u16 = NIL_FONT
 main_nav: NavigationScope
 
 
-layout_handle_mouse_input :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, userData: rawptr) {
-	context = ctx
-	//log.info(id, pointerData, userData)
+hide_ui_timeout := f32(5)
+hide_ui_time: f64
+
+
+main_handler :: proc(event: ^Event, user_data: rawptr) {
+	if event.phase == .Capturing {
+		hide_ui_time = app_time + f64(hide_ui_timeout)
+	}
 }
 
 // An example function to create your layout tree
@@ -558,7 +556,8 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 	clay.BeginLayout()
 
 	{
-		clay.OnHover(layout_handle_mouse_input, nil)
+		ui_reset_handler_buffer()
+		ui_push_pointer_handler(main_handler)
 
 		clear(&main_nav.contents)
 		//navigation_scope.wrap = true
@@ -572,6 +571,8 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 		layout_toolbar()
 
 		layout_clock()
+
+		ui_pop_pointer_handler()
 	}
 	nav_finish()
 
@@ -714,8 +715,10 @@ layout_toolbar :: proc() {
 	toolbar_nav.direction = .Horizontal
 
 	nav_scope(&toolbar_nav)
+	visible := hide_ui_time > app_time
+	visible = visible || nav_scope_has_focus()
 
-	if ! nav_scope_has_focus() {
+	if ! visible {
 		return
 	}
 
@@ -724,6 +727,7 @@ layout_toolbar :: proc() {
 	subsection_style := DPI(subsection_decl)
 
     clay.UI(clay.ID("ToolBar"))(toolbar_style)
+	ui_pointer_handler()
 
 	{
 		clay.UI(clay.ID("ToolBarSection"))(section_style)
@@ -866,10 +870,11 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 	config_proc := clay.UI(clay.ID(label))
 	item_style.backgroundColor = has_focus || clay.Hovered() ? color_hover : color_idle
 	if info != nil {
-		clay.OnHover(OnHoverButtonHandler, info)
+		//clay.OnHover(OnHoverButtonHandler, info)
 	}
 
 	config_proc(DPI(item_style))
+	ui_pointer_handler(button_handler, info)
 
 	clay.Text(
         label,
@@ -878,13 +883,15 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 }
 
 
-OnHoverButtonHandler :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, userData: rawptr) {
-	if (pointerData.state == .PressedThisFrame) {
-
-		handler_data := (^HandlerInfo)(userData)
-		context = handler_data.ctx
-		if handler_data.handler != nil {
-			handler_data.handler(handler_data.data)
+button_handler :: proc (event: ^Event, handler_info: rawptr) {
+	// in the remote case of buttons inside buttons, let inner button handle first
+	if event.phase == .Bubbling {
+		if event.sdl_event.type == .MOUSE_BUTTON_DOWN {
+			if handler_info != nil {
+				handler_data := (^HandlerInfo)(handler_info)
+				handler_data.handler(handler_data.data)
+			}
+			event.handled = true
 		}
 	}
 }
