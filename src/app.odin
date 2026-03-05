@@ -117,12 +117,12 @@ system_handler :: proc(evt: ^Event) {
 		app_quit()
 	case .WINDOW_RESIZED:
 		logical_win_size := []i32{event.window.data1, event.window.data2}
-		log.info("window resized logical:", logical_win_size)
+		//log.info("window resized logical:", logical_win_size)
 		//ui_dirty = true
 
 	case .WINDOW_PIXEL_SIZE_CHANGED:
 		win_size = {event.window.data1, event.window.data2}
-		log.info("window resized physical:", win_size)
+		//log.info("window resized physical:", win_size)
 		clay.SetLayoutDimensions({f32(win_size.x), f32(win_size.y)})
 		ui_dirty = true
 	case .WINDOW_DISPLAY_SCALE_CHANGED:
@@ -137,7 +137,7 @@ system_handler :: proc(evt: ^Event) {
 		win := SDL.GetWindowFromID(win_event.windowID)
 		rect: SDL.Rect
 		success := SDL.GetWindowSafeArea(win, &rect)
-		log.info("safe area:", rect)
+		//log.info("safe area:", rect)
 	case:
 		ignored = true
 	}

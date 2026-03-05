@@ -130,6 +130,7 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
 
 	input_fullscreen = create_keyboard_mapping(.F11)
 	input_quit = create_keyboard_mapping(.ESCAPE)
+	input_inspector = create_keyboard_mapping(.F8)
 
 	app_add_event_handler(app_event)
 
@@ -138,6 +139,7 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
 
 input_fullscreen: MappingIndex
 input_quit: MappingIndex
+input_inspector: MappingIndex
 
 wheel_delta: [2]f32
 app_event :: proc (evt: ^Event) {
@@ -155,6 +157,11 @@ app_event :: proc (evt: ^Event) {
 			evt.handled = true
 			app_quit()
 		}
+	}
+
+	if pressed, matches := match_mapping_button(evt, input_inspector); matches && pressed {
+		clay.SetDebugModeEnabled(true)
+		evt.handled = true
 	}
 
 	nav_handle_input(evt)
@@ -314,7 +321,6 @@ app_draw :: proc () {
 		render_layout(&render_commands)
 
 		draw_debug_texture()
-		draw_clock()
 
 		draw_present()
 	}
@@ -413,9 +419,38 @@ draw_debug_texture :: proc() {
 	}
 }
 
-draw_clock :: proc() {
-	CLOCK_SIZE := i32(DPI_mult(400))
-	CLOCK_OFFSET := i32(DPI_mult(40))
+
+clock_render_data := CustomRenderData {
+	callback = draw_clock,
+//	User_data = nil
+}
+
+layout_clock :: proc() {
+
+	CLK_SIZE :: 240
+	CLK_OFFSET :: 20
+
+	config_proc := clay.UI(clay.ID("clock")) (DPI({
+		layout = {
+			layoutDirection = .LeftToRight,
+			sizing = { width = clay.SizingFixed(CLK_SIZE), height = clay.SizingFixed(CLK_SIZE) },
+			childGap = 16,
+		},
+		floating = {
+			attachTo = .Parent,
+			attachment = {
+				element = .RightTop,
+				parent = .RightTop,
+			},
+			offset = {-CLK_OFFSET, CLK_OFFSET},
+		},
+		backgroundColor = {1,1,1,1},
+		custom = { &clock_render_data }
+	}))
+
+}
+
+draw_clock :: proc(box: Rect, color:[4]f32) {
 
 	draw_push_state()
 
@@ -434,7 +469,7 @@ draw_clock :: proc() {
 	}
 
 
-	draw_set_draw_rect(renderer, {win_size.x - CLOCK_SIZE-CLOCK_OFFSET, CLOCK_OFFSET}, {CLOCK_SIZE, CLOCK_SIZE})
+	draw_set_draw_rect(renderer, {i32(box.x), i32(box.y)}, {i32(box.width), i32(box.height)})
 	draw_set_view_rect({-1.2, 1.2}, {1.2, -1.2})
 
 	LINE_SCALE :: 0.02
@@ -486,9 +521,13 @@ draw_clock :: proc() {
 	min_sin, min_cos := math.sincos((0.25 - mm/60) * math.TAU)
 	sec_sin, sec_cos := math.sincos((0.25 - ss/60) * math.TAU)
 
-	draw_line(renderer, {0, 0}, {hour_cos, hour_sin} * 0.5, 2)
-	draw_line(renderer, {0, 0}, {min_cos, min_sin} * 0.75, 2)
-	draw_line(renderer, {0, 0}, {sec_cos, sec_sin} * 0.7, 2, {1, 0, 0, 1})
+	hour_dir := vec2 {hour_cos, hour_sin}
+	min_dir := vec2 {min_cos, min_sin}
+	sec_dir := vec2 {sec_cos, sec_sin}
+
+	draw_line(renderer, -0.1 * hour_dir, 0.5 * hour_dir, 2)
+	draw_line(renderer, -0.15 * min_dir, 0.75 * min_dir, 2)
+	draw_line(renderer, -0.15 * sec_dir, 0.7 * sec_dir, 2, {1, 0, 0, 1})
 	draw_clear_matrix()
 
 	draw_pop_state()
@@ -501,6 +540,12 @@ text_font_id: u16 = NIL_FONT
 
 main_nav: NavigationScope
 
+
+layout_handle_mouse_input :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, userData: rawptr) {
+	context = ctx
+	log.info(id, pointerData, userData)
+}
+
 // An example function to create your layout tree
 create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 
@@ -512,22 +557,45 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 		textAlignment = .Center,
 	})
 
-	clay.SetDebugModeEnabled(false)
 	clay.BeginLayout()
 
+	{
 
-	clear(&main_nav.contents)
-	//navigation_scope.wrap = true
-	main_nav.direction = .Vertical
+		clear(&main_nav.contents)
+		//navigation_scope.wrap = true
+		main_nav.direction = .Vertical
 
-	nav_push_scope(&main_nav)
+		nav_scope(&main_nav)
 
-	nav_add_item("center", nil)
+		nav_add_item("center", nil)
 
-	layout_background()
-	layout_toolbar()
+		layout_background()
+		layout_toolbar()
 
-	nav_pop_scope()
+		{
+			clay.UI(clay.ID("TopLevel"))( {
+				floating = {
+					attachTo = .Parent,
+					attachment = {
+						element = .CenterCenter,
+						parent = .CenterCenter,
+					},
+				},
+				layout = {
+					sizing = {
+						width = clay.SizingGrow(),//clay.SizingPercent(1),
+						height = clay.SizingGrow(),//clay.SizingPercent(1),
+					},
+					layoutDirection = .LeftToRight,
+				},
+			})
+
+			clay.OnHover(layout_handle_mouse_input, nil)
+
+		}
+
+		layout_clock()
+	}
 	nav_finish()
 
 	// Returns a list of render commands
@@ -686,8 +754,6 @@ layout_toolbar :: proc() {
 
 text_config: ^clay.TextElementConfig
 
-
-
 select_directory :: proc() {
 	fmt.println("select_directory")
 	//ShowOpenFolderDialog         :: proc(callback: DialogFileCallback, userdata: rawptr, window: ^Window, default_location: cstring, allow_many: bool) ---
@@ -732,12 +798,11 @@ playback_playpause :: proc() {
 	running = !running
 }
 
-
-
-
 playback_next :: proc() {
 	fmt.println("next")
 }
+
+
 dpi_index := 2
 dpi_user := f32(1)
 dpi_window := f32(1)
@@ -768,17 +833,6 @@ HandlerInfo :: struct {
 	data: rawptr,
 }
 
-HandleButton :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, userData: rawptr) {
-	if (pointerData.state == .PressedThisFrame) {
-
-		handler_data := (^HandlerInfo)(userData)
-		context = handler_data.ctx
-		if handler_data.handler != nil {
-			handler_data.handler(handler_data.data)
-		}
-	}
-}
-
 color_idle := clay.Color {0.0, 0.0, 0.0, 1}
 color_border := clay.Color {1, 1, 1, 0.3}
 color_frame := clay.Color {0.2, 0.2, 0.2, 1}
@@ -787,24 +841,25 @@ color_hover := clay.Color {0.4, 0.4, 0.4, 1}
 color_text := clay.Color {0.8, 0.8, 0.8, 1}
 
 
-item_style := clay.ElementDeclaration {
-    layout = {
-		sizing = {
-			width = clay.SizingFixed(64),
-			height = clay.SizingFixed(64),
-		},
-		childAlignment = {.Center, .Center}
-	},
-	cornerRadius = {16, 16, 16, 16},
-	border = {
-		width = {1, 1, 1, 1, 0},
-		color = color_border,
-	},
-}
 
 
 // Re-useable components are just normal procs.
 sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil, user_data: rawptr = nil) {
+
+	item_style := clay.ElementDeclaration {
+		layout = {
+			sizing = {
+				width = clay.SizingFixed(64),
+				height = clay.SizingFixed(64),
+			},
+			childAlignment = {.Center, .Center}
+		},
+		cornerRadius = {16, 16, 16, 16},
+		border = {
+			width = {1, 1, 1, 1, 0},
+			color = color_border,
+		},
+	}
 
 	info: ^HandlerInfo
 	if callback != nil {
@@ -817,13 +872,26 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 	has_focus := nav_add_item(label, info)
 	config_proc := clay.UI(clay.ID(label))
 	item_style.backgroundColor = has_focus || clay.Hovered() ? color_hover : color_idle
+	if info != nil {
+		clay.OnHover(OnHoverButtonHandler, info)
+	}
+
 	config_proc(DPI(item_style))
 
-	if info != nil {
-		clay.OnHover(HandleButton, info)
-	}
 	clay.Text(
         label,
         text_config,
     )
+}
+
+
+OnHoverButtonHandler :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, userData: rawptr) {
+	if (pointerData.state == .PressedThisFrame) {
+
+		handler_data := (^HandlerInfo)(userData)
+		context = handler_data.ctx
+		if handler_data.handler != nil {
+			handler_data.handler(handler_data.data)
+		}
+	}
 }

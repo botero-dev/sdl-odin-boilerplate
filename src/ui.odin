@@ -182,12 +182,32 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 		case .None:
 			fmt.println("unhandled render command type: None", render_command.commandType, render_command)
 		case .Custom:
-			fmt.println("unhandled render command type: Custom", render_command.commandType, render_command)
+			bounding_box := render_command.boundingBox
 
+			custom_render_data: clay.CustomRenderData = render_command.renderData.custom
+			background_color := custom_render_data.backgroundColor
+			corner_radius := custom_render_data.cornerRadius
+
+			custom_data := (^CustomRenderData)(custom_render_data.customData)
+			custom_data.callback(bounding_box, background_color)
         }
-
     }
 }
+
+/*
+Rect :: struct {
+	x: f32,
+	y: f32,
+	w: f32,
+	h: f32,
+}*/
+
+CustomRenderCallback :: #type proc (bounding_box: Rect, color: [4]f32)
+
+CustomRenderData :: struct {
+	callback: CustomRenderCallback,
+}
+
 
 
 FontData :: struct {
@@ -499,6 +519,4 @@ nav_handle_input :: proc(event: ^Event) {
 			}
 		}
 	}
-
-
 }
