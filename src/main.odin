@@ -93,7 +93,7 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
 		SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
 	}
 
-    if (!SDL.Init({.VIDEO, .JOYSTICK, .GAMEPAD})) {
+    if (!SDL.Init({.VIDEO})) {
         return .FAILURE
     }
 	SDL.SetJoystickEventsEnabled(true)
@@ -141,7 +141,6 @@ input_fullscreen: MappingIndex
 input_quit: MappingIndex
 input_inspector: MappingIndex
 
-wheel_delta: [2]f32
 app_event :: proc (evt: ^Event) {
 
 	if pressed, matches := match_mapping_button(evt, input_fullscreen); matches {
@@ -170,9 +169,7 @@ app_event :: proc (evt: ^Event) {
 
 	event := evt.sdl_event
 	#partial switch event.type {
-	case .MOUSE_WHEEL:
-		wheel_data := event.wheel
-		wheel_delta += {wheel_data.x, wheel_data.y}
+
 
 	case .PEN_PROXIMITY_IN, .PEN_PROXIMITY_OUT:
 		log.info(event.pproximity)
@@ -242,9 +239,11 @@ transition_time: f64 = 1.0
 current_img_idx := 0
 
 app_time: f64= 0
+app_dt: f64= 0
 running: bool = true
 
 app_tick :: proc (dt: f64) {
+	app_dt = dt
 	if running {
 		app_time += dt
 	}
@@ -302,14 +301,14 @@ app_draw :: proc () {
 		ui_dirty = false
 
 		free_all(context.temp_allocator)
+
+		ui_idle(app_dt)
 		render_commands := create_layout()
 
 		SDL.SetRenderTarget(renderer, nil)
 		SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
 		SDL.RenderClear(renderer)
 
-		clay.UpdateScrollContainers(false, {wheel_delta.x, wheel_delta.y}, 0.01)
-		wheel_delta = {}
 		render_layout(&render_commands)
 
 		// draw_debug_texture()
@@ -441,11 +440,12 @@ layout_clock :: proc() {
 	ui_pointer_handler()
 }
 
-draw_clock :: proc(box: Rect, color:[4]f32) {
+draw_clock :: proc (render_data: ^CustomRenderData, render_command: ^clay.RenderCommand) {
+	box := render_command.boundingBox
 
 	draw_push_state()
 
-	angle := f32(1)//f32(app_time * 0.2)
+	angle := f32(1) + f32(app_time * 0.2)
 	axis := [3]f32{0, 0, 1}
 	axis = linalg.normalize(axis)
 	mat: matrix[3,3]f32 = 1
@@ -458,7 +458,6 @@ draw_clock :: proc(box: Rect, color:[4]f32) {
 		0, 1, 0,
 		0, 0, 1,
 	}
-
 
 	draw_set_draw_rect(renderer, {i32(box.x), i32(box.y)}, {i32(box.width), i32(box.height)})
 	draw_set_view_rect({-1.2, 1.2}, {1.2, -1.2})
@@ -484,7 +483,6 @@ draw_clock :: proc(box: Rect, color:[4]f32) {
 		}
 		draw_line(renderer, vert_pos * 0.8, vert_pos, 2)
 	}
-
 
 	time_now := time.now()
 	dt_utc, _ := time.time_to_datetime(time_now)
@@ -546,12 +544,24 @@ main_nav: NavigationScope
 hide_ui_timeout := f32(5)
 hide_ui_time: f64
 
+toolbar_last_interaction_is_mouse := false
 
 main_handler :: proc(event: ^Event, user_data: rawptr) {
-	if event.phase == .Capturing {
-		hide_ui_time = app_time + f64(hide_ui_timeout)
+	if event.type == .Keyboard {
+		//log.info(event)
+
+	}
+
+	if event.type == .Mouse || event.type == .Keyboard {
+		if event.phase == .Capturing {
+			hide_ui_time = app_time + f64(hide_ui_timeout)
+		}
+		toolbar_last_interaction_is_mouse = event.type == .Mouse
 	}
 }
+
+
+text_config: ^clay.TextElementConfig
 
 // An example function to create your layout tree
 create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
@@ -568,22 +578,22 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 
 	{
 		ui_reset_handler_buffer()
-		ui_push_pointer_handler(main_handler)
+		ui_pointer_handler(main_handler)
 
 		clear(&main_nav.contents)
 		//navigation_scope.wrap = true
 		main_nav.direction = .Vertical
 
-		nav_scope(&main_nav)
+		nav_scope(&main_nav, main_handler)
 
-		nav_add_item("center", nil)
+		{
+			nav_add_item("center")
+		}
 
 		layout_gallery()
 		layout_toolbar()
 
 		layout_clock()
-
-		ui_pop_pointer_handler()
 	}
 	nav_finish()
 
@@ -653,7 +663,8 @@ draw_tex_rect_aspect :: proc(rect: SDL.FRect, tex: ^SDL.Texture, fill: bool, col
 	SDL.RenderTexture(renderer, tex, &srcrect, &dstrect)
 }
 
-render_gallery :: proc (in_rect: Rect, color: [4]f32) {
+render_gallery :: proc (render_data: ^CustomRenderData, render_command: ^clay.RenderCommand) {
+	in_rect := render_command.boundingBox
 
 	if len(images) <= 0 {
 		return
@@ -718,27 +729,62 @@ subsection_decl := clay.ElementDeclaration {
 }
 
 
+toolbar_opacity: f32
 toolbar_nav: NavigationScope
 
+idle_toolbar :: proc(dt: f64) {
+
+	mouse_activity_visible := hide_ui_time > app_time
+	navigation_focused := false
+	toolbar_visible := mouse_activity_visible || navigation_focused
+
+	if toolbar_visible {
+		if toolbar_opacity != 1.0 {
+			fadein_time :: 0.1 // seconds
+			toolbar_opacity += f32(dt / fadein_time)
+			toolbar_opacity = math.min(1.0, toolbar_opacity)
+		}
+	} else {
+		if toolbar_opacity != 0.0 {
+			fadeout_time :: 0.2
+			toolbar_opacity -= f32(dt / fadeout_time)
+			toolbar_opacity = math.max(0.0, toolbar_opacity)
+		}
+	}
+}
+
+
+opacity_modifier: UIModifierModulate
+
 layout_toolbar :: proc() {
+
+	idle_toolbar(app_dt)
+
 
 	clear(&toolbar_nav.contents)
 	toolbar_nav.direction = .Horizontal
 
 	nav_scope(&toolbar_nav)
-	visible := hide_ui_time > app_time
-	visible = visible || nav_scope_has_focus()
 
-	if ! visible {
+	if toolbar_opacity == 0 {
 		return
 	}
+
+	opacity_modifier = ui_modifier_modulate({1,1,1,toolbar_opacity})
 
 	toolbar_style := DPI(toolbar_decl)
 	section_style := DPI(section_decl)
 	subsection_style := DPI(subsection_decl)
 
+
+
+
+
     clay.UI(clay.ID("ToolBar"))(toolbar_style)
 	ui_pointer_handler()
+
+	ui_modifier(&opacity_modifier)
+
 
 	{
 		clay.UI(clay.ID("ToolBarSection"))(section_style)
@@ -760,7 +806,6 @@ layout_toolbar :: proc() {
     }
 }
 
-text_config: ^clay.TextElementConfig
 
 select_directory :: proc() {
 	fmt.println("select_directory")
@@ -837,7 +882,6 @@ ButtonHandlerType :: #type proc(userdata: rawptr)
 
 HandlerInfo :: struct {
 	handler: ButtonHandlerType,
-	ctx: runtime.Context,
 	data: rawptr,
 }
 
@@ -873,19 +917,23 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 	if callback != nil {
 		info = new(HandlerInfo, context.temp_allocator)
 		info.handler = callback
-		info.ctx = context
 		info.data = user_data
 	}
 
-	has_focus := nav_add_item(label, info)
 	config_proc := clay.UI(clay.ID(label))
-	item_style.backgroundColor = has_focus || clay.Hovered() ? color_hover : color_idle
-	if info != nil {
-		//clay.OnHover(OnHoverButtonHandler, info)
+	item_handle := nav_add_item(label, ui_button_handler, info)
+
+	is_focused := false
+	if toolbar_last_interaction_is_mouse {
+		is_focused = clay.Hovered()
+	} else {
+		is_focused = nav_get_focused(item_handle)
 	}
 
+	item_style.backgroundColor = is_focused ? color_hover : color_idle
+
 	config_proc(DPI(item_style))
-	ui_pointer_handler(button_handler, info)
+	ui_pointer_handler(ui_button_handler, info)
 
 	clay.Text(
         label,
@@ -894,15 +942,26 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 }
 
 
-button_handler :: proc (event: ^Event, handler_info: rawptr) {
-	// in the remote case of buttons inside buttons, let inner button handle first
-	if event.phase == .Bubbling {
-		if event.sdl_event.type == .MOUSE_BUTTON_DOWN {
-			if handler_info != nil {
-				handler_data := (^HandlerInfo)(handler_info)
-				handler_data.handler(handler_data.data)
-			}
-			event.handled = true
+ui_button_handler :: proc (event: ^Event, handler_info: rawptr) {
+	if event.phase == .Capturing { return }
+	commit := false
+	if event.sdl_event.type == .MOUSE_BUTTON_DOWN {
+		button_event := event.sdl_event.button
+		if button_event.button == SDL.BUTTON_LEFT {
+			commit = true
 		}
+	}
+
+	pressed, matches := match_mapping_button(event, nav_confirm)
+	if matches && pressed {
+		commit = true
+	}
+
+	if commit {
+		if handler_info != nil {
+			handler_data := (^HandlerInfo)(handler_info)
+			handler_data.handler(handler_data.data)
+		}
+		event.handled = true
 	}
 }

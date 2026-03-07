@@ -26,7 +26,7 @@ gfx_init :: proc () {
 	SDL.SetRenderDrawColorFloat(renderer, 1,1,1,1)
 	SDL.RenderPoint(renderer, 1, 1)
 	SDL.SetTextureScaleMode(helper, .PIXELART)
-	SDL.SetTextureBlendMode(helper, {.BLEND_PREMULTIPLIED})
+	SDL.SetTextureBlendMode(helper, {.BLEND})
 
 	/*
 	helper_dot = SDL.CreateTexture(renderer, .RGBA32, .TARGET, 3, 3)
@@ -52,6 +52,7 @@ DrawState :: struct {
 	draw_rect: [2][2]i32, // encoded as x,y  w,h
 	view_rect: [2]vec2,   // encoded as topleft, botright
 	user_matrix: matrix[3,3]f32,
+	modulate: [4]f32,
 }
 
 draw_state_stack: [dynamic]DrawState
@@ -63,6 +64,7 @@ draw_state_initial := DrawState {
 	draw_rect = {},
 	view_rect = {},
 	user_matrix = 1,
+	modulate = {1,1,1,1},
 }
 
 draw_state := draw_state_initial
@@ -516,8 +518,16 @@ draw_box_filled :: proc (box: Rect, rect: clay.RectangleRenderData) {
 	//num_indices = start_idx + 12
 
 	// submit
-	fcolor := SDL.FColor(rect.backgroundColor)
+	rect_color := transmute([4]f32) rect.backgroundColor
+	rect_color *= draw_state.modulate
+	fcolor := transmute(SDL.FColor)rect_color
+
+	// if draw_state.modulate != {1,1,1,1} {
+	// 	log.info("fcolor:", fcolor)
+	// }
+
 	SDL.SetRenderTextureAddressMode(renderer, .CLAMP, .CLAMP)
+	SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
 
 	SDL.RenderGeometryRaw(
 		renderer,
@@ -624,9 +634,11 @@ draw_box_border :: proc (box: clay.BoundingBox, border: clay.BorderRenderData) {
 	draw_box_border2(renderer, ab_box, border.color, ab_border, ab_corners)
 }
 
-draw_box_border2 :: proc (renderer: ^SDL.Renderer, rect: [4]f32, color: [4]f32, borders: [4]f32, in_corners: [4]f32) {
+draw_box_border2 :: proc (renderer: ^SDL.Renderer, rect: [4]f32, in_color: [4]f32, borders: [4]f32, in_corners: [4]f32) {
 	box := clay.BoundingBox{rect[0], rect[1], rect[2], rect[3]}
 	corners := clay.CornerRadius{in_corners[0], in_corners[1], in_corners[2], in_corners[3]}
+
+	color := in_color * draw_state.modulate
 
     SDL.SetRenderDrawColorFloat(renderer, color[0], color[1], color[2], color[3])
 	SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
@@ -669,11 +681,7 @@ draw_box_border2 :: proc (renderer: ^SDL.Renderer, rect: [4]f32, color: [4]f32, 
 	segments :: 4 // maybe calculate based on perimeter and pixel precision?
 	angle: f32 = math.TAU / 2
 
-	fcolor := SDL.FColor(color)
-	// antialias stencil is drawn as premultiplied
-	fcolor.r *= fcolor.a
-	fcolor.g *= fcolor.a
-	fcolor.b *= fcolor.a
+	fcolor := transmute(SDL.FColor)color
 
 	vertices_buf: [1000]vec2
 	uvs_buf: [1000]vec2

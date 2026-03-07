@@ -82,6 +82,9 @@ DPI_Padding :: proc "contextless" (padding: clay.Padding) -> clay.Padding {
 
 print_render_commands: bool
 
+
+
+
 render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 	for idx in 0..<i32(render_commands.length) {
         render_command := clay.RenderCommandArray_Get(render_commands, idx)
@@ -124,7 +127,7 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
             box := render_command.boundingBox
             text_data := render_command.renderData.text
             string_slice := text_data.stringContents
-            color := text_data.textColor
+            color := transmute([4]f32) text_data.textColor
 			if print_render_commands {
 				str_to_draw := strings.string_from_ptr(string_slice.chars, int(string_slice.length))
 				log.info("cmd:", idx, render_command, render_command.renderData.text)
@@ -135,6 +138,7 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 			text := get_text_with_font_size(text_data.fontId, text_data.fontSize)
 
 			if text != nil {
+				color *= draw_state.modulate
 				TTF.SetTextColor(text, u8(color[0]*255), u8(color[1]*255), u8(color[2]*255), u8(color[3]*255))
                 TTF.SetTextString(text, cstring(string_slice.chars), uint(string_slice.length))
                 TTF.SetTextWrapWidth(text, 0)
@@ -189,7 +193,7 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 			corner_radius := custom_render_data.cornerRadius
 
 			custom_data := (^CustomRenderData)(custom_render_data.customData)
-			custom_data.callback(bounding_box, background_color)
+			custom_data.callback(custom_data, render_command)
         }
     }
 }
@@ -202,7 +206,7 @@ Rect :: struct {
 	h: f32,
 }*/
 
-CustomRenderCallback :: #type proc (bounding_box: Rect, color: [4]f32)
+CustomRenderCallback :: #type proc (render_data: ^CustomRenderData, render_command: ^clay.RenderCommand)
 
 CustomRenderData :: struct {
 	callback: CustomRenderCallback,
@@ -342,135 +346,176 @@ NavigationDirection :: enum {
 }
 
 
-
 NavigationItem :: struct {
-	id: i32,
 	label: string,
-	handler: ^HandlerInfo,
+	handler: PointerHandler,
+	user_data: rawptr,
 	scope: ^NavigationScope,
- }
+	owner: NavItemHandle
+}
 
 NavigationScope :: struct {
 	direction: NavigationDirection,
 	reverse: bool, // why would you?
 	wrap: bool,
-	contents: [dynamic]NavigationItem,
-	current: i32
+	contents: [dynamic]NavItemHandle,
+	current: u32, // index of contents array
 }
 
 
 navigation_scope_stack: [dynamic]^NavigationScope
 
 navigation_scope: ^NavigationScope
+nav_scope_handle: NavItemHandle
 
-root_item: NavigationItem
+root_item: NavItemHandle
+nav_item_buffer: [dynamic]NavigationItem
 
+NavItemHandle :: u32
 
-nav_add_item :: proc(label: string, handler: ^HandlerInfo) -> bool {
-	id := i32(len(navigation_scope.contents))
+nav_add_item :: proc(label: string, handler: PointerHandler = nil, user_data: rawptr = nil) -> NavItemHandle {
+	id := NavItemHandle(len(nav_item_buffer))
 	nav_item := NavigationItem {
-		id, label, handler, nil
+		label, handler, user_data, nil, nav_scope_handle,
 	}
-	append(&navigation_scope.contents, nav_item)
-	focused := navigation_scope.current == id
+	append(&nav_item_buffer, nav_item)
+	if navigation_scope != nil {
+		append(&navigation_scope.contents, id)
+		//log.info("appending", id)
+	}
 
-	return focused
+	return id
 }
 
-nav_push_scope :: proc(in_scope: ^NavigationScope) {
+// two ways of doing it:
+//   - look from the root and follow focus until we reach this child
+//   - start from the child and look upwards until we find the parent that isn't focusing us
+// we do it with approach 2
+nav_get_focused :: proc(in_item_handle: NavItemHandle) -> bool {
+	item_handle := in_item_handle
+	focused_item := true
+	for item_handle != root_item {
+		item := nav_item_buffer[item_handle]
+		owner := nav_item_buffer[item.owner]
+		owner_scope := owner.scope
+		if owner_scope.current >= u32(len(owner_scope.contents)) {
+			focused_item = false
+			break
+		}
+		if owner_scope.contents[owner_scope.current] != item_handle {
+			focused_item = false
+			break
+		}
+		item_handle = item.owner
+	}
+	return focused_item
+}
 
+nav_push_scope :: proc(in_scope: ^NavigationScope, handler: PointerHandler = nil, user_data: rawptr = nil) {
 	prev_scope := navigation_scope
-	if prev_scope != nil {
-
-		item := NavigationItem {
-			id = i32(len(prev_scope.contents)),
-			scope = in_scope,
-		}
-		append(&prev_scope.contents, item)
-	} else {
-		root_item = {
-			id = 0,
-			scope = in_scope,
-		}
+	if prev_scope == nil {
+		clear(&nav_item_buffer)
 	}
 
-	navigation_scope = in_scope
-	append(&navigation_scope_stack, navigation_scope)
+	item_handle := nav_add_item("scope", handler, user_data)
+	nav_scope_handle = item_handle
 
+	item := &nav_item_buffer[item_handle]
+	item.scope = in_scope
+
+	if prev_scope == nil {
+		root_item = item_handle
+	}
+
+	append(&navigation_scope_stack, navigation_scope)
+	navigation_scope = in_scope
 }
 
 nav_pop_scope :: proc() {
-	pop(&navigation_scope_stack)
-	new_stack_size := len(navigation_scope_stack)
-	if new_stack_size > 0 {
-		navigation_scope = navigation_scope_stack[new_stack_size-1]
-	} else {
-		navigation_scope = nil
-	}
+	navigation_scope = pop(&navigation_scope_stack)
 }
 
 nav_finish :: proc() {
 	assert(len(navigation_scope_stack) == 0)
+	assert(navigation_scope == nil)
 }
 
 @(deferred_none = nav_pop_scope)
-nav_scope :: proc(in_scope: ^NavigationScope) {
-	nav_push_scope(in_scope)
-}
-
-nav_scope_has_focus :: proc() -> bool {
-	num_items := len(navigation_scope_stack)
-	if num_items <= 1 {
-		return true
-	}
-
-	parent_scope := navigation_scope_stack[num_items-2]
-
-	if parent_scope.contents[parent_scope.current].scope == navigation_scope {
-		return true
-	}
-
-	return false
+nav_scope :: proc(in_scope: ^NavigationScope, handler: PointerHandler = nil, user_data: rawptr = nil) {
+	nav_push_scope(in_scope, handler, user_data)
 }
 
 
-focus_stack: [dynamic]^NavigationItem
+focus_stack: [dynamic]NavItemHandle
 
-nav_handle_input :: proc(event: ^Event) {
-
+_calc_focus_stack :: proc() {
+	nav_target_id := root_item
 	clear(&focus_stack)
-	nav_target := &root_item
+	append(&focus_stack, nav_target_id)
 
-	append(&focus_stack, nav_target)
-
+	nav_target := nav_item_buffer[nav_target_id]
 	for nav_target.scope != nil {
 		target_scope := nav_target.scope
 		num_items := len(target_scope.contents)
 		if num_items == 0 {
 			break
 		}
-		if target_scope.current < 0 || target_scope.current >= i32(num_items) {
+		if target_scope.current >= u32(num_items) {
+			// should we "fix" the index?
 			break
 		}
-		nav_target = &target_scope.contents[target_scope.current]
-		append(&focus_stack, nav_target)
+		nav_target_id = target_scope.contents[target_scope.current]
+		nav_target = nav_item_buffer[nav_target_id]
+		append(&focus_stack, nav_target_id)
+	}
+}
+
+nav_handle_input :: proc(event: ^Event) {
+
+	if event.type == .Unknown {
+		return
+	}
+	if event.type == .Mouse {
+		return // maybe not entirely correct? if we use mouse buttons for navigation
 	}
 
-	#reverse for item in focus_stack {
+	nav_target_id := root_item
+	if nav_target_id >= u32(len(nav_item_buffer)) {
+		log.info("invalid target for input handling")
+		return
+	}
+
+	_calc_focus_stack()
+
+	event.phase = .Capturing
+	for item_idx in focus_stack {
+		item := nav_item_buffer[item_idx]
 		if item.handler != nil {
-			pressed, matches := match_mapping_button(event, nav_confirm)
-			if matches && pressed {
-				event.handled = true
-				item.handler.handler(item.handler.data)
+			item.handler(event, item.user_data)
+			if event.handled {
+				break
+			}
+		}
+	}
+	if event.handled {
+		return
+	}
+	event.phase = .Bubbling
+	#reverse for item_idx in focus_stack {
+		item := &nav_item_buffer[item_idx]
+		if item.handler != nil {
+			item.handler(event, item.user_data)
+			if event.handled {
 				break
 			}
 		}
 
-		if item.scope != nil {
+		scope := item.scope
+		if scope != nil {
 			positive_binding: MappingIndex = 0
 			negative_binding: MappingIndex = 0
 
-			switch item.scope.direction {
+			switch scope.direction {
 			case .Horizontal:
 				positive_binding = nav_right
 				negative_binding = nav_left
@@ -485,39 +530,43 @@ nav_handle_input :: proc(event: ^Event) {
 			}
 
 			delta: i32 = 0
-			{
-				pressed, matches := match_mapping_button(event, negative_binding)
-				if matches && pressed {
-					event.handled = true
-					delta -= 1
-				}
+			pressed, matches: bool
+			pressed, matches = match_mapping_button(event, negative_binding)
+			if matches && pressed {
+				delta -= 1
 			}
-			{
-				pressed, matches := match_mapping_button(event, positive_binding)
-				if matches && pressed {
-					event.handled = true
-					delta += 1
-				}
+			pressed, matches = match_mapping_button(event, positive_binding)
+			if matches && pressed {
+				delta += 1
 			}
-			if event.handled {
-				item.scope.current += delta
-				num_items := i32(len(item.scope.contents))
-				if item.scope.current < 0 {
-					if item.scope.wrap {
-						item.scope.current = num_items - 1
+
+			if delta != 0 {
+				num_items := i32(len(scope.contents))
+				new_focused := i32(scope.current) + delta
+				if new_focused < 0 {
+					if scope.wrap {
+						new_focused = num_items - 1
 					} else {
-						item.scope.current = 0
+						new_focused = 0
 					}
-				} else if item.scope.current >= num_items {
-					if item.scope.wrap {
-						item.scope.current = 0
+				} else if new_focused >= num_items {
+					if scope.wrap {
+						new_focused = 0
 					} else {
-						item.scope.current = num_items - 1
+						new_focused = num_items - 1
 					}
 				}
-				break
+				will_navigate := (scope.current != u32(new_focused))
+				if will_navigate {
+					scope.current = u32(new_focused)
+					event.handled = true
+				}
 			}
 		}
+		if event.handled {
+			break
+		}
+
 	}
 }
 
@@ -630,26 +679,102 @@ finish_handling_mouse_input :: proc(event: ^Event) {
 	}
 }
 
+wheel_delta: [2]f32
+
 ui_push_pointer_event :: proc(event: ^Event)  {
+
 	sdl_event := event.sdl_event
 
+	if event.type != .Mouse {
+		return
+	}
+	coords := vec2 {}
 	receiver = 0
 	#partial switch sdl_event.type {
 	case .MOUSE_MOTION:
 		motion := sdl_event.motion
-		clay.SetPointerState({motion.x, motion.y}, (motion.state & SDL.BUTTON_LMASK) != {} )
+		coords = {motion.x, motion.y}
 	case .MOUSE_BUTTON_DOWN:
 		button_event := sdl_event.button
-		if button_event.button == SDL.BUTTON_LEFT {
-			clay.SetPointerState({button_event.x, button_event.y}, true)
-		}
+		coords = {button_event.x, button_event.y}
 	case .MOUSE_BUTTON_UP:
 		button_event := sdl_event.button
-		if button_event.button == SDL.BUTTON_LEFT {
-			clay.SetPointerState({button_event.x, button_event.y}, false)
-		}
+		coords = {button_event.x, button_event.y}
+	case .MOUSE_WHEEL:
+		wheel_data := sdl_event.wheel
+		wheel_delta += {wheel_data.x, wheel_data.y}
+		coords = {wheel_data.mouse_x, wheel_data.mouse_y}
 	}
+	clay.SetPointerState({coords.x, coords.y}, false)
 
 	finish_handling_mouse_input(event)
 
+}
+
+
+ui_idle :: proc(dt: f64) {
+	update_scroll(f32(dt))
+}
+
+update_scroll :: proc(dt: f32) {
+	clay.UpdateScrollContainers(false, {wheel_delta.x, wheel_delta.y}, dt)
+	wheel_delta = {}
+}
+
+UIModifier :: struct {
+	using custom_render_data: CustomRenderData,
+	pushed: bool
+}
+
+UIModifierModulate :: struct {
+	using base: UIModifier,
+	color: [4]f32,
+}
+
+ui_modifier_modulate :: proc(color: [4]f32) -> UIModifierModulate {
+	return {
+		callback = ui_modifier_modulate_callback,
+		color = color,
+	}
+}
+
+ui_modifier_modulate_callback :: proc (render_data: ^CustomRenderData, render_command: ^clay.RenderCommand) {
+	modulate := (^UIModifierModulate)(render_data)
+	if !modulate.pushed {
+		draw_push_state()
+		draw_state.modulate *= modulate.color
+		modulate.pushed = true
+	} else {
+		draw_pop_state()
+		modulate.pushed = false
+	}
+}
+
+// maybe wraps draw calls that happen inside push/pop into a custom RT and then
+// draws the RT to the screen
+UIModifierFlatten :: struct {}
+
+
+UIModifierTransform :: struct {
+	mat: matrix[3,3]f32,
+	pivot: vec2
+}
+
+current_modifier: ^UIModifier
+
+ui_modifier_push :: proc(modifier: ^UIModifier) {
+	clay.UI()({
+		custom = { modifier }
+	})
+}
+
+ui_modifier_pop :: proc(modifier: ^UIModifier) {
+	clay.UI()({
+		custom = { modifier }
+	})
+}
+
+@(deferred_in=ui_modifier_pop)
+ui_modifier :: proc(modifier: ^UIModifier) {
+	ui_modifier_push(modifier)
 }

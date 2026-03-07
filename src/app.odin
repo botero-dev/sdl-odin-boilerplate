@@ -28,6 +28,7 @@ MappingIndex :: u32
 
 
 EventType :: enum {
+	Unknown,
 	Keyboard,
 	Mouse,
 	Gamepad,
@@ -160,9 +161,10 @@ app_handle_event :: proc (sdl_event: ^SDL.Event) -> SDL.AppResult {
 
 	event := Event{sdl_event = sdl_event}
 	#partial switch sdl_event.type {
-		case .KEY_DOWN:
-		case .KEY_UP:
+	case .KEY_DOWN, .KEY_UP:
 		event.type = .Keyboard
+	case .MOUSE_MOTION, .MOUSE_BUTTON_DOWN, .MOUSE_BUTTON_UP, .MOUSE_WHEEL:
+		event.type = .Mouse
 	}
 
 	system_handler(&event)

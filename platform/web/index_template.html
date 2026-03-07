@@ -64,10 +64,12 @@
 
 				function send_resize() {
 					var canvas = document.getElementById('canvas');
-					canvas.width = window.innerWidth * devicePixelRatio;
-					canvas.height = window.innerHeight * devicePixelRatio;
-					canvas.style.setProperty("width", window.innerWidth + "px")
-					canvas.style.setProperty("height", window.innerHeight + "px")
+					canvas.width = window.innerWidth;// * devicePixelRatio;
+					canvas.height = window.innerHeight;// * devicePixelRatio;
+					//canvas.style.setProperty("width", window.innerWidth + "px")
+					//canvas.style.setProperty("height", window.innerHeight + "px")
+					canvas.style.setProperty("width",  "100%")
+					canvas.style.setProperty("height", "100%")
 					e.web_window_size_changed(canvas.width, canvas.height);
 				}
 
