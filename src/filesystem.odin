@@ -17,14 +17,14 @@ RequestResult :: struct {
 }
 
 RequestHandler :: struct {
-	ctx: runtime.Context,
-	user_handler: proc(result: RequestResult),
+	callback: RequestCallback,
 	user_data: rawptr,
 }
 
+RequestCallback :: #type proc(result: RequestResult)
 
 // async on web, synchronous on desktop
-request_data :: proc (url: cstring, user_data: rawptr, callback: proc(result: RequestResult)) {
+request_data :: proc (url: cstring, user_data: rawptr, callback: RequestCallback) {
 
 	log.info("request_data", url)
 	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
@@ -52,48 +52,65 @@ request_data :: proc (url: cstring, user_data: rawptr, callback: proc(result: Re
 			target_url = fmt.ctprintf("content/%s", url)
 		}
 
-		log.info("loading", target_url)
 
-		io := SDL.IOFromFile(target_url, "r")
+		io := SDL.AsyncIOFromFile(target_url, "r")
 
-		file_size: uint = ---
-		file_data :=  ([^]byte) (SDL.LoadFile_IO(io, &file_size, true))
+		file_size := u64(SDL.GetAsyncIOSize(io))
 
-		log.info("loaded", target_url, "with size", file_size)
+		data := make([]byte, file_size)
+
+		handler := new(RequestHandler)
+		handler.callback = callback
+		handler.user_data = user_data
 
 
-		result := RequestResult {
-			success = true,
-			bytes = file_data[0:file_size],
-			user_data = user_data,
+		success := SDL.ReadAsyncIO(io, &data[0], 0, file_size, load_queue, handler)
+		append(&pending_tasks, io)
+	}
+}
+
+pending_tasks: [dynamic]^SDL.AsyncIO
+
+idle_process_async :: proc() {
+	outcome: SDL.AsyncIOOutcome
+	completed := SDL.GetAsyncIOResult(load_queue, &outcome)
+	if completed {
+		log.info("outcome:", outcome)
+		if outcome.type == .READ {
+			handler := (^RequestHandler)(outcome.userdata)
+			buf := ([^]u8) (outcome.buffer)
+			handler.callback({
+				true,
+				buf[:outcome.bytes_transferred],
+				handler.user_data,
+			})
+			r := SDL.CloseAsyncIO(outcome.asyncio, true, load_queue, nil)
 		}
-
-		callback(result)
 	}
 }
 
 
 fetch_error :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
 	request_handler := (^RequestHandler)(fetch_result.userData)
-	context = request_handler.ctx
+	context = ctx
 	result := RequestResult {
 		success = false,
 		user_data = request_handler.user_data,
 	}
-    request_handler.user_handler(result)
+    request_handler.callback(result)
 	free(request_handler)
 }
 
 
 fetch_success :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
 	request_handler := (^RequestHandler)(fetch_result.userData)
-	context = request_handler.ctx
+	context = ctx
 	result := RequestResult {
 		success = true,
 		user_data = request_handler.user_data,
 		bytes = (([^]byte)(fetch_result.data))[0:fetch_result.numBytes],
 	}
 
-    request_handler.user_handler(result)
+    request_handler.callback(result)
 	free(request_handler)
 }

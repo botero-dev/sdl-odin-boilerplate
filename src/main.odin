@@ -115,6 +115,7 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
 	}
 
     engine = TTF.CreateRendererTextEngine(renderer)
+	load_queue = SDL.CreateAsyncIOQueue()
 
     request_data("Play-Regular.ttf", nil, assign_font)
     request_data("gallery/files.txt", nil, parse_files)
@@ -134,8 +135,11 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
 
 	app_add_event_handler(app_event)
 
+
     return .CONTINUE
 }
+
+load_queue: ^SDL.AsyncIOQueue
 
 input_fullscreen: MappingIndex
 input_quit: MappingIndex
@@ -204,6 +208,9 @@ next_iterate_ticks: u64 = 0
 
 
 app_iterate :: proc (appstate: rawptr) -> SDL.AppResult {
+
+	idle_process_async()
+
 	current_ticks := SDL.GetTicksNS()
 	missing_ticks: i64 = i64(next_iterate_ticks) - i64(current_ticks)
 
@@ -635,6 +642,10 @@ rect_aspect_fit :: proc(rect: SDL.FRect, aspect: f32) -> SDL.FRect {
 }
 
 draw_tex_rect_aspect :: proc(rect: SDL.FRect, tex: ^SDL.Texture, fill: bool, color: [4]f32) {
+
+	if tex == nil {
+		return
+	}
 
 	img_aspect :=  f32(tex.w) / f32(tex.h)
 	box_aspect := rect.w / rect.h
