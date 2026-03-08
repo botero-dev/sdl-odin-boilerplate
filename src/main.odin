@@ -776,10 +776,6 @@ layout_toolbar :: proc() {
 	section_style := DPI(section_decl)
 	subsection_style := DPI(subsection_decl)
 
-
-
-
-
     clay.UI(clay.ID("ToolBar"))(toolbar_style)
 	ui_pointer_handler()
 

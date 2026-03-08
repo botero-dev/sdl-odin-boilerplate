@@ -88,6 +88,9 @@ print_render_commands: bool
 render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 	for idx in 0..<i32(render_commands.length) {
         render_command := clay.RenderCommandArray_Get(render_commands, idx)
+
+		box := transmute(Rect)render_command.boundingBox
+
         switch render_command.commandType {
         case .Rectangle:
 			if print_render_commands {
@@ -95,22 +98,18 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 			}
 
             rect := render_command.renderData.rectangle
-			box := render_command.boundingBox
 			corners := rect.cornerRadius
 			if corners == {0, 0, 0, 0} {
 				//fmt.println(render_command)
 				color := rect.backgroundColor
 				SDL.SetRenderDrawColorFloat(renderer, color[0], color[1], color[2], color[3])
 				SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
-				rect2 := SDL.FRect{
-					w = box.width,
-					h = box.height,
-					x = box.x,
-					y = box.y,
-				}
+				rect2 := transmute(SDL.FRect)box
 				SDL.RenderFillRect(renderer, &rect2)
 			} else {
-				draw_box_filled(box, rect)
+				corners := transmute(CornerRadii) rect.cornerRadius
+				color := transmute(Color) rect.backgroundColor
+				draw_box_filled(box, corners, color)
 			}
 
 		case .Border:
@@ -119,12 +118,18 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 			}
 
 			border := render_command.renderData.border
-            draw_box_border(render_command.boundingBox, border)
-
+			radii := transmute(CornerRadii) border.cornerRadius
+			borders := BorderWidths {
+				f32(border.width.left),
+				f32(border.width.right),
+				f32(border.width.top),
+				f32(border.width.bottom),
+			}
+			color := transmute(Color)border.color
+			draw_box_border(box, radii, borders, color)
 
 		case .Text:
             //fmt.println(render_command)
-            box := render_command.boundingBox
             text_data := render_command.renderData.text
             string_slice := text_data.stringContents
             color := transmute([4]f32) text_data.textColor
@@ -158,13 +163,7 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 			SDL.SetTextureAlphaModFloat(tex, color[3])
 			SDL.SetTextureBlendMode(tex, {.BLEND})
 
-            box := render_command.boundingBox
-            rect2 := SDL.FRect{
-                w = box.width,
-                h = box.height,
-                x = box.x,
-                y = box.y,
-            }
+            rect2 := transmute(SDL.FRect) box
             SDL.RenderTexture(renderer, tex, nil, &rect2)
 
 			corners := image.cornerRadius
@@ -172,16 +171,9 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 				log.info("image unhandled case!")
 			}
 		case .ScissorStart:
-			if print_render_commands {
-				log.info("cmd:", idx, render_command)
-			}
-			bbox := render_command.boundingBox
-			clip_rect := SDL.Rect {i32(bbox.x), i32(bbox.y), i32(bbox.width), i32(bbox.height)}
+			clip_rect := SDL.Rect {i32(box.x), i32(box.y), i32(box.w), i32(box.h)}
             SDL.SetRenderClipRect(renderer, &clip_rect);
 		case .ScissorEnd:
-			if print_render_commands {
-				log.info("cmd:", idx, render_command)
-			}
             SDL.SetRenderClipRect(renderer, nil);
 		case .None:
 			fmt.println("unhandled render command type: None", render_command.commandType, render_command)
@@ -197,14 +189,6 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
         }
     }
 }
-
-/*
-Rect :: struct {
-	x: f32,
-	y: f32,
-	w: f32,
-	h: f32,
-}*/
 
 CustomRenderCallback :: #type proc (render_data: ^CustomRenderData, render_command: ^clay.RenderCommand)
 

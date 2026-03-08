@@ -10,7 +10,6 @@ import "core:math/linalg"
 import clay "clay-odin"
 
 helper: ^SDL.Texture
-helper_dot: ^SDL.Texture
 
 TEX_SIZE :: 2
 ZERO_PIX_CLAMP := vec2{0.5, 1.5} / TEX_SIZE
@@ -27,19 +26,6 @@ gfx_init :: proc () {
 	SDL.RenderPoint(renderer, 1, 1)
 	SDL.SetTextureScaleMode(helper, .PIXELART)
 	SDL.SetTextureBlendMode(helper, {.BLEND})
-
-	/*
-	helper_dot = SDL.CreateTexture(renderer, .RGBA32, .TARGET, 3, 3)
-	SDL.SetRenderTarget(renderer, helper)
-	SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
-	SDL.RenderClear(renderer)
-	SDL.SetRenderDrawColorFloat(renderer, 1,1,1,1)
-	SDL.RenderPoint(renderer, 1, 1)
-	SDL.SetTextureScaleMode(helper, .PIXELART)
-	SDL.SetTextureBlendMode(helper, {.BLEND_PREMULTIPLIED})
-
-	SDL.SetRenderTarget(renderer, nil)
- */
 }
 
 helper_uv :: proc (input: vec2) -> vec2 { return (input + 0.5) * 0.5  } // coord + half pixel / tex_size
@@ -181,26 +167,54 @@ update_matrix :: proc() {
 }
 
 
+draw_buffer :: proc(renderer: ^SDL.Renderer, buffer: ^DrawBuffer, in_color: [4]f32) {
+
+	fcolor := SDL.FColor{in_color[0], in_color[1], in_color[2], in_color[3]}
+
+	//SDL.SetRenderTextureAddressMode(renderer, .CLAMP, .CLAMP)
+	SDL.SetRenderTextureAddressMode(renderer, .WRAP, .WRAP)
+
+	indices: rawptr = nil
+	if buffer.indices != nil && len(buffer.indices) > 0 {
+		indices = &buffer.indices[0]
+	}
+	SDL.RenderGeometryRaw(
+		renderer,
+		helper, // texture
+		&buffer.vertices[0][0], 8, // verts + stride
+		&fcolor, 0, // color + stride
+		&buffer.uvs[0][0], 8, // uvs
+		buffer.num_vertices,
+		indices, buffer.num_indices,
+		1,
+	)
+}
+
+DrawBuffer :: struct {
+	num_vertices: i32,
+	num_indices: i32,
+	vertices: []vec2,
+	uvs: []vec2,
+	colors: [][4]f32,
+	indices: []u8,
+}
+
+vertices_buf: [1000]vec2
+uvs_buf: [1000]vec2
+indices_buf: [2000]u8
+buffer := DrawBuffer {
+	0, 0,
+	vertices_buf[:],
+	uvs_buf[:],
+	nil,
+	indices_buf[:],
+}
+
 
 draw_circle :: proc(renderer: ^SDL.Renderer, in_center: vec2, in_radius: f32, in_color:[4]f32 = {1,1,1,1}, int_coords: bool = false) {
-	vertices_buf: [1000]vec2
-	uvs_buf: [1000]vec2
-	indices_buf: [2000]u8
-
-	buffer := DrawBuffer {
-		0, 0,
-		vertices_buf[:],
-		uvs_buf[:],
-		nil,
-		indices_buf[:],
-	}
-
+	buffer.num_vertices = 0
+	buffer.num_indices = 0
 	buffer_circle(&buffer, in_center, in_radius, int_coords)
-
-	buffer.vertices = buffer.vertices[:buffer.num_vertices]
-	buffer.indices = buffer.indices[:buffer.num_indices]
-	buffer.uvs = buffer.uvs[:buffer.num_vertices]
-
 	draw_buffer(renderer, &buffer, in_color)
 }
 
@@ -270,43 +284,12 @@ buffer_circle :: proc (buffer: ^DrawBuffer, in_center: vec2, in_radius: f32, int
 
 
 draw_line :: proc(renderer: ^SDL.Renderer, in_start: vec2, in_end: vec2, in_width: f32, in_color:[4]f32 = {1,1,1,1}) {
-	vertices_buf: [1000]vec2
-	uvs_buf: [1000]vec2
-	indices_buf: [1000]u8
-
-	buffer := DrawBuffer {
-		0, 0,
-		vertices_buf[:],
-		uvs_buf[:],
-		nil,
-		indices_buf[:],
-	}
+	buffer.num_vertices = 0
+	buffer.num_indices = 0
 	buffer_line(&buffer, in_start, in_end, in_width)
 	draw_buffer(renderer, &buffer, in_color)
 }
 
-draw_buffer :: proc(renderer: ^SDL.Renderer, buffer: ^DrawBuffer, in_color: [4]f32) {
-
-	fcolor := SDL.FColor{in_color[0], in_color[1], in_color[2], in_color[3]}
-
-	//SDL.SetRenderTextureAddressMode(renderer, .CLAMP, .CLAMP)
-	SDL.SetRenderTextureAddressMode(renderer, .WRAP, .WRAP)
-
-	indices: rawptr = nil
-	if buffer.indices != nil && len(buffer.indices) > 0 {
-		indices = &buffer.indices[0]
-	}
-	SDL.RenderGeometryRaw(
-		renderer,
-		helper, // texture
-		&buffer.vertices[0][0], 8, // verts + stride
-		&fcolor, 0, // color + stride
-		&buffer.uvs[0][0], 8, // uvs
-		buffer.num_vertices,
-		indices, buffer.num_indices,
-		1,
-	)
-}
 
 buffer_line :: proc(buffer: ^DrawBuffer, in_start: vec2, in_end: vec2, in_width: f32) {
 
@@ -404,9 +387,30 @@ buffer_line :: proc(buffer: ^DrawBuffer, in_start: vec2, in_end: vec2, in_width:
 	buffer.num_indices += i32(len(indices))
 }
 
-Rect :: clay.BoundingBox
+Rect :: struct {
+	x: f32,
+	y: f32,
+	w: f32,
+	h: f32,
+}
 
-draw_box_filled :: proc (box: Rect, rect: clay.RectangleRenderData) {
+CornerRadii :: struct {
+	nw: f32,
+	ne: f32,
+	sw: f32,
+	se: f32,
+}
+
+BorderWidths :: struct {
+	w: f32,
+	e: f32,
+	n: f32,
+	s: f32,
+}
+
+Color :: [4]f32
+
+draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
 
 	vertices_buf: [1000]vec2
 	uvs_buf: [1000]vec2
@@ -415,19 +419,19 @@ draw_box_filled :: proc (box: Rect, rect: clay.RectangleRenderData) {
 	num_vertices: i32 = 0
 	num_indices: i32 = 0
 
-	corners := rect.cornerRadius
+	//corners := rect.cornerRadius
 
 	// center full rect
 	PAD :: 1 // expand for antialiasing
 
 	//HALF_PIXEL :: vec2{0.5, 0.5}
-	boxmin := vec2{box.x,             box.y}
-	boxmax := vec2{box.x + box.width, box.y + box.height}
+	boxmin := vec2{box.x,         box.y}
+	boxmax := vec2{box.x + box.w, box.y + box.h}
 
-	topleft  := vec2{boxmin.x + corners.topLeft, boxmin.y + corners.topLeft}
-	topright := vec2{boxmax.x - corners.topRight, boxmin.y + corners.topRight}
-	botleft  := vec2{boxmin.x + corners.bottomLeft, boxmax.y - corners.bottomLeft}
-	botright := vec2{boxmax.x - corners.bottomRight, boxmax.y - corners.bottomRight}
+	topleft  := vec2{boxmin.x + corners.nw, boxmin.y + corners.nw}
+	topright := vec2{boxmax.x - corners.ne, boxmin.y + corners.ne}
+	botleft  := vec2{boxmin.x + corners.sw, boxmax.y - corners.sw}
+	botright := vec2{boxmax.x - corners.se, boxmax.y - corners.se}
 
 	vertices_buf[0] = topleft
 	vertices_buf[1] = topright
@@ -438,10 +442,10 @@ draw_box_filled :: proc (box: Rect, rect: clay.RectangleRenderData) {
 	uv_outer :=  ZERO_PIX_CLAMP + (PIXEL_Y * (0.5 - PAD))
 //	log.info(uv_outer)
 
-	uvs_buf[0] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.topLeft + 0.5))
-	uvs_buf[1] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.topRight + 0.5))
-	uvs_buf[2] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.bottomLeft + 0.5))
-	uvs_buf[3] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.bottomRight + 0.5))
+	uvs_buf[0] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.nw + 0.5))
+	uvs_buf[1] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.ne + 0.5))
+	uvs_buf[2] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.sw + 0.5))
+	uvs_buf[3] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.se + 0.5))
 
 
 	indices_buf[0] = 0
@@ -518,7 +522,7 @@ draw_box_filled :: proc (box: Rect, rect: clay.RectangleRenderData) {
 	//num_indices = start_idx + 12
 
 	// submit
-	rect_color := transmute([4]f32) rect.backgroundColor
+	rect_color := color
 	rect_color *= draw_state.modulate
 	fcolor := transmute(SDL.FColor)rect_color
 
@@ -613,30 +617,7 @@ draw_rounded_corner :: proc (
 }
 
 
-draw_box_border :: proc (box: clay.BoundingBox, border: clay.BorderRenderData) {
-
-	ab_box := [4]f32 {
-		box.x, box.y, box.width, box.height,
-	}
-
-	borderwidth := border.width
-	ab_border := [4]f32 {
-		f32(borderwidth.left),
-		f32(borderwidth.right),
-		f32(borderwidth.top),
-		f32(borderwidth.bottom),
-	}
-
-	corners := border.cornerRadius
-	ab_corners := [4]f32 {
-		corners.topLeft, corners.topRight, corners.bottomLeft, corners.bottomRight
-	}
-	draw_box_border2(renderer, ab_box, border.color, ab_border, ab_corners)
-}
-
-draw_box_border2 :: proc (renderer: ^SDL.Renderer, rect: [4]f32, in_color: [4]f32, borders: [4]f32, in_corners: [4]f32) {
-	box := clay.BoundingBox{rect[0], rect[1], rect[2], rect[3]}
-	corners := clay.CornerRadius{in_corners[0], in_corners[1], in_corners[2], in_corners[3]}
+draw_box_border :: proc (box: Rect, corners: CornerRadii, borders: BorderWidths, in_color: Color) {
 
 	color := in_color * draw_state.modulate
 
@@ -645,37 +626,32 @@ draw_box_border2 :: proc (renderer: ^SDL.Renderer, rect: [4]f32, in_color: [4]f3
 
     rect2: SDL.FRect
 
-	BORDER_LEFT :: 0
-	BORDER_RIGHT :: 1
-	BORDER_TOP :: 2
-	BORDER_BOTTOM :: 3
-
 	// top border
 	rect2.y = box.y
-	rect2.h = borders[BORDER_TOP]
-	rect2.x = box.x + corners.topLeft
-	rect2.w = box.width - corners.topLeft - corners.topRight
+	rect2.h = borders.n
+	rect2.x = box.x + corners.nw
+	rect2.w = box.w - corners.nw - corners.ne
 	SDL.RenderFillRect(renderer, &rect2)
 
 	// bottom border
-	rect2.y = box.y + box.height - borders[BORDER_BOTTOM]
-	rect2.h = borders[BORDER_BOTTOM]
-	rect2.x = box.x + corners.bottomLeft
-	rect2.w = box.width - corners.bottomLeft - corners.bottomRight
+	rect2.y = box.y + box.h - borders.s
+	rect2.h = borders.s
+	rect2.x = box.x + corners.sw
+	rect2.w = box.w - corners.sw - corners.se
 	SDL.RenderFillRect(renderer, &rect2)
 
 	// left border
-	rect2.y = box.y + corners.topLeft
-	rect2.h = box.height - corners.topLeft - corners.bottomLeft
-	rect2.w = borders[BORDER_LEFT]
+	rect2.y = box.y + corners.nw
+	rect2.h = box.h - corners.nw - corners.sw
+	rect2.w = borders.w
 	rect2.x = box.x
 	SDL.RenderFillRect(renderer, &rect2)
 
 	// right border
-	rect2.y = box.y + corners.topRight
-	rect2.h = box.height - corners.topRight - corners.bottomRight
-	rect2.x = box.x + box.width - borders[BORDER_RIGHT]
-	rect2.w = borders[BORDER_RIGHT]
+	rect2.y = box.y + corners.ne
+	rect2.h = box.h - corners.ne - corners.se
+	rect2.x = box.x + box.w - borders.e
+	rect2.w = borders.e
     SDL.RenderFillRect(renderer, &rect2)
 
 	segments :: 4 // maybe calculate based on perimeter and pixel precision?
@@ -696,17 +672,17 @@ draw_box_border2 :: proc (renderer: ^SDL.Renderer, rect: [4]f32, in_color: [4]f3
 	}
 
 
-	if corners.topLeft != 0 {
-		draw_rounded_border(&buffer, borders[BORDER_TOP], borders[BORDER_LEFT], corners.topLeft, 0, {box.x, box.y})
+	if corners.nw != 0 {
+		draw_rounded_border(&buffer, borders.n, borders.w, corners.nw, 0, {box.x, box.y})
 	}
-	if corners.topRight != 0 {
-		draw_rounded_border(&buffer, borders[BORDER_TOP], borders[BORDER_RIGHT], corners.topRight, 1, {box.x+box.width, box.y})
+	if corners.ne != 0 {
+		draw_rounded_border(&buffer, borders.n, borders.e, corners.ne, 1, {box.x+box.w, box.y})
 	}
-	if corners.bottomLeft != 0 {
-		draw_rounded_border(&buffer, borders[BORDER_BOTTOM], borders[BORDER_LEFT], corners.bottomLeft, 2, {box.x, box.y+box.height})
+	if corners.sw != 0 {
+		draw_rounded_border(&buffer, borders.s, borders.w, corners.sw, 2, {box.x, box.y+box.h})
 	}
-	if corners.bottomRight != 0 {
-		draw_rounded_border(&buffer, borders[BORDER_BOTTOM], borders[BORDER_RIGHT], corners.bottomRight, 3, {box.x+box.width, box.y+box.height})
+	if corners.se != 0 {
+		draw_rounded_border(&buffer, borders.s, borders.e, corners.se, 3, {box.x+box.w, box.y+box.h})
 	}
 
 	SDL.RenderGeometryRaw(
@@ -719,30 +695,6 @@ draw_box_border2 :: proc (renderer: ^SDL.Renderer, rect: [4]f32, in_color: [4]f3
 		&buffer.indices[0], buffer.num_indices,
 		1,
 	)
-
-	/*
-	Sdl.SetRenderDrawColor(renderer, 255, 0, 0, 80)
-	full := SDL.FRect{box.x, box.y, box.width, box.height}
-    SDL.RenderRect(renderer, &full)
-
-	SDL.SetRenderDrawColor(renderer, 0, 255, 0, 80)
-	safe := SDL.FRect{
-		box.x + borders[left),
-		box.y + borders[top),
-		box.width - borders[left) - borders[right),
-		box.height - borders[bottom) - borders[top),
-	}
-    SDL.RenderRect(renderer, &safe)
-*/
-}
-
-DrawBuffer :: struct {
-	num_vertices: i32,
-	num_indices: i32,
-	vertices: []vec2,
-	uvs: []vec2,
-	colors: [][4]f32,
-	indices: []u8,
 }
 
 
