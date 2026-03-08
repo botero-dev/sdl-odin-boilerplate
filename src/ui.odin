@@ -707,7 +707,10 @@ update_scroll :: proc(dt: f32) {
 
 UIModifier :: struct {
 	using custom_render_data: CustomRenderData,
-	pushed: bool
+	pushed: bool,
+	wrap: bool,
+	// wrap modifiers are added as parents of modified elements
+	// while nowrap are added as siblings
 }
 
 UIModifierModulate :: struct {
@@ -718,6 +721,7 @@ UIModifierModulate :: struct {
 ui_modifier_modulate :: proc(color: [4]f32) -> UIModifierModulate {
 	return {
 		callback = ui_modifier_modulate_callback,
+		wrap = false,
 		color = color,
 	}
 }
@@ -734,25 +738,89 @@ ui_modifier_modulate_callback :: proc (render_data: ^CustomRenderData, render_co
 	}
 }
 
+UIModifierTransform :: struct {
+	using base: UIModifier,
+	mat: matrix[3,3]f32,
+	pivot: vec2
+}
+ui_modifier_transform :: proc "contextless" (in_mat: matrix[3,3]f32, in_pivot: vec2) -> UIModifierTransform {
+	return {
+		callback = ui_modifier_transform_callback,
+		wrap = true,
+		mat = in_mat,
+		pivot = in_pivot,
+	}
+}
+ui_modifier_transform_callback :: proc (render_data: ^CustomRenderData, render_command: ^clay.RenderCommand) {
+	modifier := (^UIModifierTransform)(render_data)
+	if !modifier.pushed {
+		draw_push_state()
+
+		box := transmute(Rect)render_command.boundingBox
+
+		mat: matrix[3,3]f32 = 1
+		log.info(box, modifier.pivot)
+		pivot_abs := [3]f32 {
+			box.x + (box.w * modifier.pivot.x),
+			box.y + (box.h * modifier.pivot.y),
+			0,
+		}
+
+		pivot_mat: matrix[3,3]f32 = 1
+		pivot_mat[2] = -pivot_abs
+		pivot_mat[2][2] = 1
+
+		mat *= pivot_mat
+		//log.info("a", mat)
+		mat = modifier.mat * mat
+		//log.info("b", mat)
+		//log.info("m", modifier.mat)
+
+		pivot_mat[2] = pivot_abs
+		pivot_mat[2][2] = 1
+
+		//log.info(mat)
+
+		mat = pivot_mat * mat
+		//mat[2] += pivot_abs
+		//log.info(mat)
+
+		draw_set_matrix( mat)
+
+		modifier.pushed = true
+	} else {
+		draw_pop_state()
+		modifier.pushed = false
+	}
+}
+
 // maybe wraps draw calls that happen inside push/pop into a custom RT and then
 // draws the RT to the screen
 UIModifierFlatten :: struct {}
 
 
-UIModifierTransform :: struct {
-	mat: matrix[3,3]f32,
-	pivot: vec2
-}
-
 current_modifier: ^UIModifier
 
 ui_modifier_push :: proc(modifier: ^UIModifier) {
-	clay.UI()({
-		custom = { modifier }
-	})
+	if modifier.wrap {
+		// only open
+		clay._OpenElement()
+		clay.ConfigureOpenElement({
+			custom = { modifier }
+		})
+
+	} else {
+		// open and close
+		clay.UI()({
+			custom = { modifier }
+		})
+	}
 }
 
 ui_modifier_pop :: proc(modifier: ^UIModifier) {
+	if modifier.wrap {
+		clay._CloseElement()
+	}
 	clay.UI()({
 		custom = { modifier }
 	})

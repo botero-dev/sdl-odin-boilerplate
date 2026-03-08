@@ -410,6 +410,14 @@ BorderWidths :: struct {
 
 Color :: [4]f32
 
+
+txv :: proc(vert: vec2) -> vec2 {
+	vert3 := [3]f32 {vert.x, vert.y, 1}
+	vert3 = draw_state.user_matrix * vert3
+	return vert3.xy
+}
+
+
 draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
 
 	vertices_buf: [1000]vec2
@@ -433,10 +441,10 @@ draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
 	botleft  := vec2{boxmin.x + corners.sw, boxmax.y - corners.sw}
 	botright := vec2{boxmax.x - corners.se, boxmax.y - corners.se}
 
-	vertices_buf[0] = topleft
-	vertices_buf[1] = topright
-	vertices_buf[2] = botleft
-	vertices_buf[3] = botright
+	vertices_buf[0] = txv(topleft)
+	vertices_buf[1] = txv(topright)
+	vertices_buf[2] = txv(botleft)
+	vertices_buf[3] = txv(botright)
 
 //	uv_center := ZERO_PIX_CLAMP + (PIXEL_Y * (width+1) * 0.5)
 	uv_outer :=  ZERO_PIX_CLAMP + (PIXEL_Y * (0.5 - PAD))
@@ -457,17 +465,17 @@ draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
 
 	// top bottom left right rectangles
 
-	vertices_buf[4] = {topleft.x,  boxmin.y - PAD}
-	vertices_buf[5] = {topright.x, boxmin.y - PAD}
+	vertices_buf[4] = txv({topleft.x,  boxmin.y - PAD})
+	vertices_buf[5] = txv({topright.x, boxmin.y - PAD})
 
-	vertices_buf[6] = {botleft.x,  boxmax.y + PAD}
-	vertices_buf[7] = {botright.x, boxmax.y + PAD}
+	vertices_buf[6] = txv({botleft.x,  boxmax.y + PAD})
+	vertices_buf[7] = txv({botright.x, boxmax.y + PAD})
 
-	vertices_buf[8] = {boxmin.x - PAD,  topleft.y}
-	vertices_buf[9] = {boxmin.x - PAD,  botleft.y}
+	vertices_buf[8] = txv({boxmin.x - PAD,  topleft.y})
+	vertices_buf[9] = txv({boxmin.x - PAD,  botleft.y})
 
-	vertices_buf[10] = {boxmax.x + PAD,  topright.y}
-	vertices_buf[11] = {boxmax.x + PAD,  botright.y}
+	vertices_buf[10] = txv({boxmax.x + PAD,  topright.y})
+	vertices_buf[11] = txv({boxmax.x + PAD,  botright.y})
 
 	uvs_buf[4] = uv_outer
 	uvs_buf[5] = uv_outer
@@ -526,10 +534,6 @@ draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
 	rect_color *= draw_state.modulate
 	fcolor := transmute(SDL.FColor)rect_color
 
-	// if draw_state.modulate != {1,1,1,1} {
-	// 	log.info("fcolor:", fcolor)
-	// }
-
 	SDL.SetRenderTextureAddressMode(renderer, .CLAMP, .CLAMP)
 	SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
 
@@ -543,13 +547,6 @@ draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
 		&indices_buf, num_indices, 1
 	)
 
-	/*
-	SDL.SetRenderDrawColor(renderer, 255, 0, 0, 50)
-	rect := SDL.FRect{
-		box.x, box.y, box.width, box.height
-	}
-	SDL.RenderRect(renderer, &rect)
-*/
 }
 
 
@@ -583,12 +580,18 @@ draw_rounded_corner :: proc (
 
 	vert_pos := start_pos
 
+	//log.info(draw_state.user_matrix)
+	//log.info(vert, vert3)
+
 	for segment in 1..<segments {
 		vert_pos = {
 			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
 			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
 		}
-		vertices_buf[num_vertices] = origin + vert_pos
+		vert := origin + vert_pos
+		vert3 := [3]f32 {vert.x, vert.y, 1}
+		vert3 = draw_state.user_matrix * vert3
+		vertices_buf[num_vertices] = vert//vert3.xy
 		uvs_buf[num_vertices] = border_uv
 		num_vertices += 1
 	}
@@ -619,57 +622,63 @@ draw_rounded_corner :: proc (
 
 draw_box_border :: proc (box: Rect, corners: CornerRadii, borders: BorderWidths, in_color: Color) {
 
-	color := in_color * draw_state.modulate
-
-    SDL.SetRenderDrawColorFloat(renderer, color[0], color[1], color[2], color[3])
-	SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
+	buffer.num_vertices = 0
+	buffer.num_indices = 0
 
     rect2: SDL.FRect
 
-	// top border
-	rect2.y = box.y
-	rect2.h = borders.n
-	rect2.x = box.x + corners.nw
-	rect2.w = box.w - corners.nw - corners.ne
-	SDL.RenderFillRect(renderer, &rect2)
+	// top
+	buffer.vertices[0] = txv({box.x + corners.nw,         box.y})
+	buffer.vertices[1] = txv({box.x + box.w - corners.ne, box.y})
+	buffer.vertices[2] = txv({box.x + corners.nw,         box.y + borders.n})
+	buffer.vertices[3] = txv({box.x + box.w - corners.ne, box.y + borders.n})
 
-	// bottom border
-	rect2.y = box.y + box.h - borders.s
-	rect2.h = borders.s
-	rect2.x = box.x + corners.sw
-	rect2.w = box.w - corners.sw - corners.se
-	SDL.RenderFillRect(renderer, &rect2)
+	end_y1 := box.y + box.h
+	end_y2 := end_y1 - borders.s
 
-	// left border
-	rect2.y = box.y + corners.nw
-	rect2.h = box.h - corners.nw - corners.sw
-	rect2.w = borders.w
-	rect2.x = box.x
-	SDL.RenderFillRect(renderer, &rect2)
+	// bottom
+	buffer.vertices[4] = txv({box.x + corners.sw,         end_y1})
+	buffer.vertices[5] = txv({box.x + box.w - corners.se, end_y1})
+	buffer.vertices[6] = txv({box.x + corners.sw,         end_y2})
+	buffer.vertices[7] = txv({box.x + box.w - corners.se, end_y2})
 
-	// right border
-	rect2.y = box.y + corners.ne
-	rect2.h = box.h - corners.ne - corners.se
-	rect2.x = box.x + box.w - borders.e
-	rect2.w = borders.e
-    SDL.RenderFillRect(renderer, &rect2)
+	// left
+	x1 := box.x
+	x2 := x1 + borders.w
+	y1 := box.y + corners.nw
+	y2 := box.y + box.h - corners.sw
+	buffer.vertices[8] = txv({x1, y1})
+	buffer.vertices[9] = txv({x2, y1})
+	buffer.vertices[10] = txv({x1, y2})
+	buffer.vertices[11] = txv({x2, y2})
 
-	segments :: 4 // maybe calculate based on perimeter and pixel precision?
-	angle: f32 = math.TAU / 2
+	x1 = box.x + box.w
+	x2 = x1 - borders.e
+	y1 = box.y + corners.ne
+	y2 = box.y + box.h - corners.se
+	buffer.vertices[12] = txv({x1, y1})
+	buffer.vertices[13] = txv({x2, y1})
+	buffer.vertices[14] = txv({x1, y2})
+	buffer.vertices[15] = txv({x2, y2})
 
-	fcolor := transmute(SDL.FColor)color
+	buffer.num_vertices += 16
 
-	vertices_buf: [1000]vec2
-	uvs_buf: [1000]vec2
-	indices_buf: [2000]u8
-
-	buffer := DrawBuffer {
-		0, 0,
-		vertices_buf[:],
-		uvs_buf[:],
-		nil,
-		indices_buf[:],
+	for idx in 0..<16 {
+		buffer.uvs[idx] = {0.75, 0.75}
 	}
+
+	for idx_long in 0..<4 {
+		idx := u8(idx_long)
+		buffer.indices[0 + (idx * 6)] = 0 + (idx * 4)
+		buffer.indices[1 + (idx * 6)] = 1 + (idx * 4)
+		buffer.indices[2 + (idx * 6)] = 2 + (idx * 4)
+		buffer.indices[3 + (idx * 6)] = 1 + (idx * 4)
+		buffer.indices[4 + (idx * 6)] = 2 + (idx * 4)
+		buffer.indices[5 + (idx * 6)] = 3 + (idx * 4)
+	}
+
+
+	buffer.num_indices += 24
 
 
 	if corners.nw != 0 {
@@ -685,6 +694,8 @@ draw_box_border :: proc (box: Rect, corners: CornerRadii, borders: BorderWidths,
 		draw_rounded_border(&buffer, borders.s, borders.e, corners.se, 3, {box.x+box.w, box.y+box.h})
 	}
 
+	color := in_color * draw_state.modulate
+	fcolor := transmute(SDL.FColor)color
 	SDL.RenderGeometryRaw(
 		renderer,
 		helper, // texture
@@ -701,7 +712,7 @@ draw_box_border :: proc (box: Rect, corners: CornerRadii, borders: BorderWidths,
 
 // corner_idx indices: (top_left, top_right, bottom_left, bottom_right)
 draw_rounded_border :: proc (buffer: ^DrawBuffer, width_h: f32, width_v: f32, radius: f32, corner_idx: int, corner: vec2) {
-	segments  := u8(math.min(30, math.floor(radius/math.ln(radius*1.6+1))))
+	segments  := u8(math.min(24, math.floor(radius/math.ln(radius*1.6+1))))
 	vertices_buf := buffer.vertices[buffer.num_vertices:]
 	uvs_buf := buffer.uvs[buffer.num_vertices:]
 	indices_buf := buffer.indices[buffer.num_indices:]
@@ -748,8 +759,8 @@ draw_rounded_border :: proc (buffer: ^DrawBuffer, width_h: f32, width_v: f32, ra
 	uvs_buf[0] = base + ({uv_outer, uv_innerv} / TEX_SIZE)
 	uvs_buf[1] = base + ({uv_innerv, uv_outer} / TEX_SIZE)
 
-	vertices_buf[0] = { centerpoint.x + v_radius.x,       centerpoint.y }
-	vertices_buf[1] = { centerpoint.x + v_radius_inner.x, keep_y ? corner.y + width_h : centerpoint.y }
+	vertices_buf[0] = txv({ centerpoint.x + v_radius.x,       centerpoint.y })
+	vertices_buf[1] = txv({ centerpoint.x + v_radius_inner.x, keep_y ? corner.y + width_h : centerpoint.y })
 	increment := math.TAU / 4 / f32(segments)
 	mat_cos := math.cos(increment)
 	mat_sin := math.sin(increment)
@@ -760,16 +771,16 @@ draw_rounded_border :: proc (buffer: ^DrawBuffer, width_h: f32, width_v: f32, ra
 			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
 			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
 		}
-		vertices_buf[idx*2] = centerpoint + (vert_pos * v_radius)
-		vertices_buf[idx*2+1] = centerpoint + ([2]f32{
+		vertices_buf[idx*2] = txv(centerpoint + (vert_pos * v_radius))
+		vertices_buf[idx*2+1] = txv(centerpoint + ([2]f32{
 			keep_x ? 1.0 : vert_pos.x,
 			keep_y ? 1.0 : vert_pos.y,
-		} * v_radius_inner)
+		} * v_radius_inner))
 		uvs_buf[idx*2] = base + ({uv_outer, uv_innerv* vert_pos.x* vert_pos.x + uv_innerh * vert_pos.y* vert_pos.y} / TEX_SIZE)
 		uvs_buf[idx*2+1] = base + ({uv_innerv* vert_pos.x* vert_pos.x + uv_innerh * vert_pos.y * vert_pos.y, uv_outer} / TEX_SIZE)
 	}
-	vertices_buf[segments*2] =   { centerpoint.x, centerpoint.y + v_radius.y }
-	vertices_buf[segments*2+1] = { keep_x ? corner.x + width_v : centerpoint.x, centerpoint.y + v_radius_inner.y}
+	vertices_buf[segments*2] =   txv({ centerpoint.x, centerpoint.y + v_radius.y })
+	vertices_buf[segments*2+1] = txv({ keep_x ? corner.x + width_v : centerpoint.x, centerpoint.y + v_radius_inner.y})
 
 	uvs_buf[segments*2] = base + ({uv_outer, uv_innerh} / TEX_SIZE)
 	uvs_buf[segments*2+1] = base + ({uv_innerh, uv_outer} / TEX_SIZE)

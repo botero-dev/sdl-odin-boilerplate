@@ -889,7 +889,7 @@ color_hover := clay.Color {0.4, 0.4, 0.4, 1}
 color_text := clay.Color {0.8, 0.8, 0.8, 1}
 
 
-
+rotate_modifier: UIModifierTransform
 
 // Re-useable components are just normal procs.
 sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil, user_data: rawptr = nil) {
@@ -916,7 +916,7 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 		info.data = user_data
 	}
 
-	config_proc := clay.UI(clay.ID(label))
+	clay.UI(clay.ID(label))
 	item_handle := nav_add_item(label, ui_button_handler, info)
 
 	is_focused := false
@@ -926,7 +926,18 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 		is_focused = nav_get_focused(item_handle)
 	}
 
+	rotate_modifier = ui_modifier_transform(
+		linalg.matrix3_rotate(math.sin(f32(app_time*3)) * 0.2, [3]f32{0,0,1}),
+		{0.5, 0.0},
+	)
+
+	if is_focused {
+		ui_modifier_push(&rotate_modifier)
+	}
+
 	item_style.backgroundColor = is_focused ? color_hover : color_idle
+
+	config_proc := clay.UI()
 
 	config_proc(DPI(item_style))
 	ui_pointer_handler(ui_button_handler, info)
@@ -935,6 +946,11 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
         label,
         text_config,
     )
+
+	if is_focused {
+		ui_modifier_pop(&rotate_modifier)
+	}
+
 }
 
 
