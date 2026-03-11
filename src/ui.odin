@@ -319,6 +319,13 @@ ui_init :: proc() {
 	nav_confirm = create_keyboard_mapping(.RETURN)
 	nav_cancel = create_keyboard_mapping(.ESCAPE)
 
+
+	min_size := clay.MinMemorySize()
+    clay_memory = make([]byte, min_size)
+    clay_arena := clay.CreateArenaWithCapacityAndMemory(uint(min_size), &clay_memory[0])
+    clay.Initialize(clay_arena, {f32(win_size.x), f32(win_size.y)}, { handler = clay_error_handler })
+    clay.SetMeasureTextFunction(clay_measure_text, nil)
+
 }
 
 
@@ -759,7 +766,6 @@ ui_modifier_transform_callback :: proc (render_data: ^CustomRenderData, render_c
 		box := transmute(Rect)render_command.boundingBox
 
 		mat: matrix[3,3]f32 = 1
-		log.info(box, modifier.pivot)
 		pivot_abs := [3]f32 {
 			box.x + (box.w * modifier.pivot.x),
 			box.y + (box.h * modifier.pivot.y),
@@ -771,19 +777,12 @@ ui_modifier_transform_callback :: proc (render_data: ^CustomRenderData, render_c
 		pivot_mat[2][2] = 1
 
 		mat *= pivot_mat
-		//log.info("a", mat)
 		mat = modifier.mat * mat
-		//log.info("b", mat)
-		//log.info("m", modifier.mat)
 
 		pivot_mat[2] = pivot_abs
 		pivot_mat[2][2] = 1
 
-		//log.info(mat)
-
 		mat = pivot_mat * mat
-		//mat[2] += pivot_abs
-		//log.info(mat)
 
 		draw_set_matrix( mat)
 

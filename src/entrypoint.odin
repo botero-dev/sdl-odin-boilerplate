@@ -107,8 +107,12 @@ sdl_app_main :: proc () {
     }
 }
 
+main_thread: SDL.ThreadID
+
 sdl_app_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResult {
 	context = ctx
+	main_thread = SDL.GetCurrentThreadID()
+
 	app_event_init()
 	return app_init(appstate, argc, argv)
 }

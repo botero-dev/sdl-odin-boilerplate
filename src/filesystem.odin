@@ -6,6 +6,7 @@ import SDL "vendor:sdl3"
 import "core:fmt"
 import "core:strings"
 import "core:log"
+import "core:sync/chan"
 
 import "base:runtime"
 
@@ -75,7 +76,7 @@ idle_process_async :: proc() {
 	outcome: SDL.AsyncIOOutcome
 	completed := SDL.GetAsyncIOResult(load_queue, &outcome)
 	if completed {
-		log.info("outcome:", outcome)
+		//log.info("outcome:", outcome)
 		if outcome.type == .READ {
 			handler := (^RequestHandler)(outcome.userdata)
 			buf := ([^]u8) (outcome.buffer)
@@ -86,6 +87,17 @@ idle_process_async :: proc() {
 			})
 			r := SDL.CloseAsyncIO(outcome.asyncio, true, load_queue, nil)
 		}
+	}
+
+
+	for true {
+		data: ^ImgPath
+		ok := chan.try_recv_raw(channel, &data)
+		if ! ok {
+			break
+		}
+		log.info("chan recv", data.index, rawptr(data))
+		finish_img_load_main_thread(data)
 	}
 }
 

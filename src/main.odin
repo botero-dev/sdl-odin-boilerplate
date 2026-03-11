@@ -15,10 +15,16 @@ import "core:math/linalg"
 import "core:time"
 import tz "core:time/timezone"
 
+import "core:thread"
+import "core:sync/chan"
+
+
 import "base:runtime"
 
 
 import clay "clay-odin"
+
+
 
 
 window: ^SDL.Window
@@ -32,7 +38,7 @@ win_size: [2]i32 = {1280, 720}
 
 clay_error_handler :: proc "c" (errorData: clay.ErrorData) {
     context = get_global_context()
-    fmt.println(errorData)
+    log.info(errorData)
 }
 
 
@@ -52,27 +58,78 @@ parse_files :: proc (result: RequestResult) {
 		image := GalleryImage {
 			img_path = path
 		}
-		ImgPath :: struct {
-			index: uint
-		}
 		img_idx := uint(len(images))
-
-        append(&images, image) // crash on web
+        append(&images, image)
+		log.info("loading image:", img_idx)
         full_path := fmt.tprintf("gallery/%s", path)
 
 		c_path := strings.clone_to_cstring(full_path)
 
 		img_path := new(ImgPath)
-		img_path^ = {img_idx}
+		img_path^ = {}
+		img_path.index = img_idx
 		request_data(c_path, img_path, proc(result: RequestResult) {
 			img_path := (^ImgPath)(result.user_data)
-			bytes := result.bytes
-			io := SDL.IOFromConstMem(&bytes[0], len(bytes))
-			image := &images[img_path.index]
-			image.texture = IMG.LoadTexture_IO(renderer, io, false)
+			img_path.data  = result.bytes
+			unpack_texture(img_path)
+			//unpack_tex_thread(img_path)
 		})
     }
 }
+
+ImgPath :: struct {
+	index: uint,
+	data: []byte,
+	surface: ^SDL.Surface,
+}
+
+unpack_texture :: proc (data: ^ImgPath) {
+	log.info("unpacking texture", data.index, len(data.data))
+	//r := SDL.CreateThread(unpack_tex_thread, "unpacktex", data)
+	thread.run_with_data(data, unpack_tex_thread)
+}
+
+
+
+unpack_tex_thread :: proc (in_data: rawptr)  {
+	context = ctx
+
+	img_path := (^ImgPath)(in_data)
+	log.info("unpack texture thread", img_path.index, len(img_path.data))
+	bytes := img_path.data
+	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
+	surface := IMG.Load_IO(io, false)
+	img_path.surface = surface
+
+	finish_img_load(img_path)
+
+	//return 0
+}
+
+finish_img_load :: proc (img_path: ^ImgPath) {
+	if SDL.GetCurrentThreadID() == main_thread {
+		finish_img_load_main_thread(img_path)
+	} else {
+		idx := img_path.index
+		log.info("queuing finish:", idx)
+		img_path_copy := img_path
+		ok := chan.send_raw(channel, &img_path_copy)
+		log.info("msg sent:", idx, ok)
+	}
+}
+
+finish_img_load_main_thread :: proc (img_path: ^ImgPath) {
+	log.info("finishing:", img_path.index)
+	texture := SDL.CreateTextureFromSurface(renderer, img_path.surface)
+	image := &images[img_path.index]
+	image.texture = texture
+
+	images[img_path.index].texture = texture
+}
+
+
+channel: ^chan.Raw_Chan
+
 
 assign_font :: proc (result: RequestResult) {
 
@@ -100,7 +157,7 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
 	SDL.SetGamepadEventsEnabled(true)
 
     if !TTF.Init() {
-        fmt.println("Failed to initialize TTF engine")
+        log.info("Failed to initialize TTF engine")
         return .FAILURE
     }
 
@@ -115,18 +172,17 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
 	}
 
     engine = TTF.CreateRendererTextEngine(renderer)
+
 	load_queue = SDL.CreateAsyncIOQueue()
+
+	err: runtime.Allocator_Error
+	channel, err = chan.create_raw(size_of(^ImgPath), align_of(^ImgPath), 1, context.allocator)
+
 
     request_data("Play-Regular.ttf", nil, assign_font)
     request_data("gallery/files.txt", nil, parse_files)
 
-    min_size := clay.MinMemorySize()
-
-    clay_memory = make([]byte, min_size)
-    clay_arena := clay.CreateArenaWithCapacityAndMemory(uint(min_size), &clay_memory[0])
-    clay.Initialize(clay_arena, {f32(win_size.x), f32(win_size.y)}, { handler = clay_error_handler })
-    clay.SetMeasureTextFunction(clay_measure_text, nil)
-
+	ui_init()
 	gfx_init()
 
 	input_fullscreen = create_keyboard_mapping(.F11)
@@ -191,7 +247,7 @@ app_event :: proc (evt: ^Event) {
 	case .JOYSTICK_UPDATE_COMPLETE:
 		log.info(event.jdevice)
 	//case:
-	//	fmt.println("event.type:", event.type)
+	//	log.info("event.type:", event.type)
 
 	}
 }
@@ -686,6 +742,8 @@ render_gallery :: proc (render_data: ^CustomRenderData, render_command: ^clay.Re
 	back_color := clay.Color{1, 1, 1, 1}
 	curr_img_tex := images[current_img_idx].texture
 
+	//log.info("curr tex: ", curr_img_tex)
+
 	rect := SDL.FRect{in_rect.x, in_rect.y, in_rect.width, in_rect.height}
 	draw_tex_rect_aspect(rect, curr_img_tex, true, back_color_dark)
 	draw_tex_rect_aspect(rect, curr_img_tex, false, back_color)
@@ -815,7 +873,7 @@ layout_toolbar :: proc() {
 
 
 select_directory :: proc() {
-	fmt.println("select_directory")
+	log.info("select_directory")
 	//ShowOpenFolderDialog         :: proc(callback: DialogFileCallback, userdata: rawptr, window: ^Window, default_location: cstring, allow_many: bool) ---
 	SDL.ShowOpenFolderDialog(select_directory_callback, nil, window, nil, true)
 
@@ -828,17 +886,17 @@ select_directory_callback: SDL.DialogFileCallback : proc "c" (userdata: rawptr, 
 	context = get_global_context()
 	if filelist == nil {
 		error := SDL.GetError()
-		fmt.println("got error:", error)
+		log.info("got error:", error)
 		return
 	}
 	idx := 0
 	file := filelist[idx]
 	if file == nil {
-		fmt.println("got no files, user cancelled input")
+		log.info("got no files, user cancelled input")
 		return
 	}
 	for file != nil {
-		fmt.println("got file idx:", idx, file)
+		log.info("got file idx:", idx, file)
 		idx += 1
 		file = filelist[idx]
 	}
@@ -846,20 +904,20 @@ select_directory_callback: SDL.DialogFileCallback : proc "c" (userdata: rawptr, 
 }
 
 playback_first :: proc() {
-	fmt.println("first")
+	log.info("first")
 	print_render_commands = true
 }
 
 playback_previous :: proc() {
-	fmt.println("previous")
+	log.info("previous")
 }
 playback_playpause :: proc() {
-	fmt.println("playpause")
+	log.info("playpause")
 	running = !running
 }
 
 playback_next :: proc() {
-	fmt.println("next")
+	log.info("next")
 }
 
 
@@ -876,7 +934,7 @@ dpi_levels := []f32 {
 	4,
 }
 playback_last :: proc() {
-	fmt.println("last")
+	log.info("last")
 	dpi_index = (dpi_index + 1) % len(dpi_levels)
 	dpi_user = dpi_levels[dpi_index]
 	DPI_set(dpi_user * dpi_window)
@@ -938,8 +996,8 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 	}
 
 	rotate_modifier = ui_modifier_transform(
-		linalg.matrix3_rotate(math.sin(f32(app_time*3)) * 0.2, [3]f32{0,0,1}),
-		{0.5, 0.0},
+		linalg.matrix3_rotate(math.sin(f32(app_time*3)) * 0.1, [3]f32{0,0,1}),
+		{0.5, 0.5},
 	)
 
 	if is_focused {

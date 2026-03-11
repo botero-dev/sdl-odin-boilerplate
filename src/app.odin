@@ -108,7 +108,6 @@ match_mapping_button :: proc {
 
 app_event_init :: proc() {
 	//add_handler(global_handler)
-	ui_init()
 }
 
 app_add_event_handler :: proc(in_handler: EventHandler) {
