@@ -106,8 +106,20 @@ match_mapping_button :: proc {
 	match_mapping_button_ptr,
 }
 
+
+input_fullscreen: MappingIndex
+input_quit: MappingIndex
+input_inspector: MappingIndex
+
 app_event_init :: proc() {
-	//add_handler(global_handler)
+
+	input_fullscreen = create_keyboard_mapping(.F11)
+	input_quit = create_keyboard_mapping(.ESCAPE)
+	input_inspector = create_keyboard_mapping(.F8)
+
+	app_add_event_handler(system_handler)
+	app_add_event_handler(nav_handle_input)
+	app_add_event_handler(ui_push_pointer_event)
 }
 
 app_add_event_handler :: proc(in_handler: EventHandler) {
@@ -115,42 +127,46 @@ app_add_event_handler :: proc(in_handler: EventHandler) {
 }
 
 
-system_handler :: proc(evt: ^Event) {
+system_handler :: proc(event: ^Event) {
 
-	event := evt.sdl_event
-	ignored := false
-	#partial switch event.type {
+	sdl_event := event.sdl_event
+	#partial switch sdl_event.type {
 
 	case .QUIT:
+		event.handled = true
 		app_quit()
-	case .WINDOW_RESIZED:
-		logical_win_size := []i32{event.window.data1, event.window.data2}
-		//log.info("window resized logical:", logical_win_size)
-		//ui_dirty = true
 
 	case .WINDOW_PIXEL_SIZE_CHANGED:
-		win_size = {event.window.data1, event.window.data2}
-		//log.info("window resized physical:", win_size)
+		event.handled = true
+		window_event := sdl_event.window
+		win_size = {window_event.data1, window_event.data2}
 		clay.SetLayoutDimensions({f32(win_size.x), f32(win_size.y)})
 		ui_dirty = true
-	case .WINDOW_DISPLAY_SCALE_CHANGED:
-		win_event := event.window
-		win := SDL.GetWindowFromID(win_event.windowID)
-		dpi_window = SDL.GetWindowDisplayScale(win)
-		DPI_set(dpi_user * dpi_window)
 
+	case .WINDOW_DISPLAY_SCALE_CHANGED:
+		event.handled = true
+		window_event := sdl_event.window
+		window := SDL.GetWindowFromID(window_event.windowID)
+		dpi_window = SDL.GetWindowDisplayScale(window)
+		DPI_set(dpi_user * dpi_window)
 		ui_dirty = true
-	case .WINDOW_SAFE_AREA_CHANGED:
-		win_event := event.window
-		win := SDL.GetWindowFromID(win_event.windowID)
-		rect: SDL.Rect
-		success := SDL.GetWindowSafeArea(win, &rect)
-		//log.info("safe area:", rect)
-	case:
-		ignored = true
 	}
 
-	evt.handled = !ignored
+	if pressed, matches := match_mapping_button(event, input_fullscreen); matches && pressed {
+		event.handled = true
+		current_fullscreen := (SDL.GetWindowFlags(window) & SDL.WINDOW_FULLSCREEN) != {}
+		SDL.SetWindowFullscreen(window, !current_fullscreen)
+	}
+
+	if pressed, matches := match_mapping_button(event, input_quit); matches && pressed {
+		event.handled = true
+		app_quit()
+	}
+
+	if pressed, matches := match_mapping_button(event, input_inspector); matches && pressed {
+		event.handled = true
+		clay.SetDebugModeEnabled(true)
+	}
 }
 
 

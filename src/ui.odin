@@ -364,6 +364,51 @@ nav_item_buffer: [dynamic]NavigationItem
 
 NavItemHandle :: u32
 
+
+ButtonHandlerSimple :: #type proc()
+ButtonHandlerType :: #type proc(userdata: ^HandlerInfo)
+
+HandlerInfo :: struct {
+	handler: ButtonHandlerType,
+}
+
+HandlerInfoSimple :: struct {
+	using generic: HandlerInfo,
+	target: ButtonHandlerSimple,
+}
+
+ui_add_button :: proc(label: string, info: ^HandlerInfo = nil) -> NavItemHandle {
+	ui_pointer_handler(ui_button_handler, info)
+	item_handle := nav_add_item(label, ui_button_handler, info)
+	return item_handle
+}
+
+ui_button_handler :: proc (event: ^Event, handler_info: rawptr) {
+	if event.phase == .Capturing { return }
+	commit := false
+	if event.sdl_event.type == .MOUSE_BUTTON_DOWN {
+		button_event := event.sdl_event.button
+		if button_event.button == SDL.BUTTON_LEFT {
+			commit = true
+		}
+	}
+
+	pressed, matches := match_mapping_button(event, nav_confirm)
+	if matches && pressed {
+		commit = true
+	}
+
+	if commit {
+		if handler_info != nil {
+			handler_data := (^HandlerInfo)(handler_info)
+			handler_data.handler(handler_data)
+		}
+		event.handled = true
+	}
+}
+
+
+
 nav_add_item :: proc(label: string, handler: PointerHandler = nil, user_data: rawptr = nil) -> NavItemHandle {
 	id := NavItemHandle(len(nav_item_buffer))
 	nav_item := NavigationItem {
@@ -432,7 +477,7 @@ nav_finish :: proc() {
 }
 
 @(deferred_none = nav_pop_scope)
-nav_scope :: proc(in_scope: ^NavigationScope, handler: PointerHandler = nil, user_data: rawptr = nil) {
+nav_scope :: proc(in_scope: ^NavigationScope, handler: PointerHandler = nil, user_data: ^HandlerInfo = nil) {
 	nav_push_scope(in_scope, handler, user_data)
 }
 

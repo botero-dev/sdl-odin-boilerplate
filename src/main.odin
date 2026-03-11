@@ -142,7 +142,7 @@ assign_font :: proc (result: RequestResult) {
 	text_font_id = load_font_io(io)
 }
 
-app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResult {
+app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> (result: SDL.AppResult = .FAILURE) {
 	log.info("app_init")
     _ = SDL.SetAppMetadata("Example", "1.0", "com.example")
 
@@ -150,26 +150,20 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
 		SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
 	}
 
-    if (!SDL.Init({.VIDEO})) {
-        return .FAILURE
-    }
-	SDL.SetJoystickEventsEnabled(true)
-	SDL.SetGamepadEventsEnabled(true)
+    success := SDL.Init({.VIDEO})
+	if !success { return }
 
-    if !TTF.Init() {
-        log.info("Failed to initialize TTF engine")
-        return .FAILURE
-    }
+    success = TTF.Init()
+	if !success { return }
 
-    if (!SDL.CreateWindowAndRenderer("examples", win_size.x, win_size.y, {.RESIZABLE, .HIGH_PIXEL_DENSITY}, &window, &renderer)){
-        return .FAILURE
-    }
-
-	pixel_density := SDL.GetWindowDisplayScale(window)
-	if pixel_density != 0 {
-		dpi_window = pixel_density
-		DPI_set(dpi_user * dpi_window)
-	}
+    success = SDL.CreateWindowAndRenderer(
+		"examples",
+		win_size.x, win_size.y,
+		{.RESIZABLE, .HIGH_PIXEL_DENSITY},
+		&window,
+		&renderer
+	)
+	if !success { return }
 
     engine = TTF.CreateRendererTextEngine(renderer)
 
@@ -177,7 +171,7 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
 
 	err: runtime.Allocator_Error
 	channel, err = chan.create_raw(size_of(^ImgPath), align_of(^ImgPath), 1, context.allocator)
-
+	if err != .None { return }
 
     request_data("Play-Regular.ttf", nil, assign_font)
     request_data("gallery/files.txt", nil, parse_files)
@@ -185,80 +179,14 @@ app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResu
 	ui_init()
 	gfx_init()
 
-	input_fullscreen = create_keyboard_mapping(.F11)
-	input_quit = create_keyboard_mapping(.ESCAPE)
-	input_inspector = create_keyboard_mapping(.F8)
-
-	app_add_event_handler(app_event)
-
-
     return .CONTINUE
 }
 
 load_queue: ^SDL.AsyncIOQueue
 
-input_fullscreen: MappingIndex
-input_quit: MappingIndex
-input_inspector: MappingIndex
-
-app_event :: proc (evt: ^Event) {
-
-	if pressed, matches := match_mapping_button(evt, input_fullscreen); matches {
-		if pressed {
-			evt.handled = true
-			current_fullscreen := (SDL.GetWindowFlags(window) & SDL.WINDOW_FULLSCREEN) != {}
-			SDL.SetWindowFullscreen(window, !current_fullscreen)
-		}
-	}
-
-	if pressed, matches := match_mapping_button(evt, input_quit); matches {
-		if pressed {
-			evt.handled = true
-			app_quit()
-		}
-	}
-
-	if pressed, matches := match_mapping_button(evt, input_inspector); matches && pressed {
-		clay.SetDebugModeEnabled(true)
-		evt.handled = true
-	}
-
-	nav_handle_input(evt)
-
-	ui_push_pointer_event(evt)
-
-	event := evt.sdl_event
-	#partial switch event.type {
-
-
-	case .PEN_PROXIMITY_IN, .PEN_PROXIMITY_OUT:
-		log.info(event.pproximity)
-	case .PEN_DOWN, .PEN_UP:
-		log.info(event.ptouch)
-	case .PEN_BUTTON_DOWN, .PEN_BUTTON_UP:
-		log.info(event.pbutton)
-	case .PEN_MOTION:
-		log.info(event.pmotion)
-	case .PEN_AXIS:
-		log.info(event.paxis)
-
-	case .JOYSTICK_AXIS_MOTION:
-		log.info(event.jaxis)
-	case .JOYSTICK_UPDATE_COMPLETE:
-		log.info(event.jdevice)
-	//case:
-	//	log.info("event.type:", event.type)
-
-	}
-}
-
-
 last_ticks : u64 = 0
-
 desired_delay_ticks: u64 = 1_000_000_000 / 60
-
 next_iterate_ticks: u64 = 0
-
 
 app_iterate :: proc (appstate: rawptr) -> SDL.AppResult {
 
@@ -355,10 +283,6 @@ get_next_img_idx :: proc(idx: int) -> int {
 	return 0
 }
 
-
-render_target: ^SDL.Texture
-
-
 app_draw :: proc () {
 	if ui_dirty {
 		ui_dirty = false
@@ -380,6 +304,8 @@ app_draw :: proc () {
 	}
 }
 
+
+render_target: ^SDL.Texture
 // code I used for drawing some pixels to a buffer and then draw them huge with nearest filtering
 // todo: refactor into a proper texture inspector
 draw_debug_texture :: proc() {
@@ -474,7 +400,6 @@ draw_debug_texture :: proc() {
 
 clock_render_data := CustomRenderData {
 	callback = draw_clock,
-//	User_data = nil
 }
 
 layout_clock :: proc() {
@@ -855,7 +780,7 @@ layout_toolbar :: proc() {
 		clay.UI(clay.ID("ToolBarSection"))(section_style)
 		clay.Text("Gallery Config", text_config)
 		clay.UI()(subsection_style)
-		sidebar_item_component("Select Folder", proc(c: rawptr) { select_directory() })
+		sidebar_item_component("Select Folder", select_directory)
 		sidebar_item_component("Config Online Src")
 	}
 
@@ -863,23 +788,17 @@ layout_toolbar :: proc() {
 		clay.UI(clay.ID("ToolBarSection2"))(section_style)
 		clay.Text("Slideshow", text_config)
 		clay.UI()(subsection_style)
-		sidebar_item_component("First", proc(c: rawptr) { playback_first()})
-		sidebar_item_component("Previous", proc(c: rawptr) { playback_previous()})
-		sidebar_item_component("Play\nPause", proc(c: rawptr) { playback_playpause()})
-		sidebar_item_component("Next", proc(c: rawptr) { playback_next()})
-		sidebar_item_component("Last", proc(c: rawptr) { playback_last()})
+		sidebar_item_component("First", playback_first)
+		sidebar_item_component("Previous", playback_previous)
+		sidebar_item_component("Play\nPause", playback_playpause)
+		sidebar_item_component("Next", playback_next)
+		sidebar_item_component("Last", playback_last)
     }
 }
 
 
 select_directory :: proc() {
-	log.info("select_directory")
-	//ShowOpenFolderDialog         :: proc(callback: DialogFileCallback, userdata: rawptr, window: ^Window, default_location: cstring, allow_many: bool) ---
 	SDL.ShowOpenFolderDialog(select_directory_callback, nil, window, nil, true)
-
-	//ShowOpenFileDialog           :: proc(callback: DialogFileCallback, userdata: rawptr, window: ^Window, filters: [^]DialogFileFilter, nfilters: c.int, default_location: cstring, allow_many: bool) ---
-	//SDL.ShowOpenFileDialog(select_directory_callback, nil, window, nil, 0, nil, false)
-
 }
 
 select_directory_callback: SDL.DialogFileCallback : proc "c" (userdata: rawptr, filelist: [^]cstring, filter: c.int) {
@@ -942,14 +861,6 @@ playback_last :: proc() {
 
 
 
-// ClayButtonHandlerType :: #type proc(id: clay.ElementId, pointerData: clay.PointerData, userdata: rawptr)
-ButtonHandlerType :: #type proc(userdata: rawptr)
-
-HandlerInfo :: struct {
-	handler: ButtonHandlerType,
-	data: rawptr,
-}
-
 color_idle := clay.Color {0.0, 0.0, 0.0, 1}
 color_border := clay.Color {1, 1, 1, 0.3}
 color_frame := clay.Color {0.2, 0.2, 0.2, 1}
@@ -961,9 +872,50 @@ color_text := clay.Color {0.8, 0.8, 0.8, 1}
 rotate_modifier: UIModifierTransform
 
 // Re-useable components are just normal procs.
-sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil, user_data: rawptr = nil) {
+sidebar_item_component :: proc {
+	sidebar_item_component_handlerinfo,
+	sidebar_item_component_proc,
+}
 
-	item_style := clay.ElementDeclaration {
+sidebar_item_component_proc :: proc($label: string, callback: ButtonHandlerSimple) {
+	info: ^HandlerInfoSimple
+	if callback != nil {
+		info = new(HandlerInfoSimple, context.temp_allocator)
+		info.handler = handle_proc_simple
+		info.target = callback
+	}
+	sidebar_item_component_handlerinfo(label, info)
+}
+
+handle_proc_simple :: proc(userdata: ^HandlerInfo) {
+	data_simple := (^HandlerInfoSimple)(userdata)
+	data_simple.target()
+}
+
+
+sidebar_item_component_handlerinfo :: proc($label: string, info: ^HandlerInfo = nil) {
+
+	clay.UI(clay.ID(label))
+	item_handle := ui_add_button(label, info)
+
+	is_focused := false
+	if toolbar_last_interaction_is_mouse {
+		is_focused = clay.Hovered()
+	} else {
+		is_focused = nav_get_focused(item_handle)
+	}
+
+	color := color_idle
+	if is_focused {
+		rotate_modifier = ui_modifier_transform(
+			linalg.matrix3_rotate(math.sin(f32(app_time*3)) * 0.1, [3]f32{0,0,1}),
+			{0.5, 0.5},
+		)
+		ui_modifier_push(&rotate_modifier)
+		color = color_hover
+	}
+
+	clay.UI()(DPI({
 		layout = {
 			sizing = {
 				width = clay.SizingFixed(64),
@@ -976,40 +928,9 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 			width = {1, 1, 1, 1, 0},
 			color = color_border,
 		},
-	}
+		backgroundColor = color,
+	}))
 
-	info: ^HandlerInfo
-	if callback != nil {
-		info = new(HandlerInfo, context.temp_allocator)
-		info.handler = callback
-		info.data = user_data
-	}
-
-	clay.UI(clay.ID(label))
-	item_handle := nav_add_item(label, ui_button_handler, info)
-
-	is_focused := false
-	if toolbar_last_interaction_is_mouse {
-		is_focused = clay.Hovered()
-	} else {
-		is_focused = nav_get_focused(item_handle)
-	}
-
-	rotate_modifier = ui_modifier_transform(
-		linalg.matrix3_rotate(math.sin(f32(app_time*3)) * 0.1, [3]f32{0,0,1}),
-		{0.5, 0.5},
-	)
-
-	if is_focused {
-		ui_modifier_push(&rotate_modifier)
-	}
-
-	item_style.backgroundColor = is_focused ? color_hover : color_idle
-
-	config_proc := clay.UI()
-
-	config_proc(DPI(item_style))
-	ui_pointer_handler(ui_button_handler, info)
 
 	clay.Text(
         label,
@@ -1022,27 +943,3 @@ sidebar_item_component :: proc($label: string, callback: ButtonHandlerType = nil
 
 }
 
-
-ui_button_handler :: proc (event: ^Event, handler_info: rawptr) {
-	if event.phase == .Capturing { return }
-	commit := false
-	if event.sdl_event.type == .MOUSE_BUTTON_DOWN {
-		button_event := event.sdl_event.button
-		if button_event.button == SDL.BUTTON_LEFT {
-			commit = true
-		}
-	}
-
-	pressed, matches := match_mapping_button(event, nav_confirm)
-	if matches && pressed {
-		commit = true
-	}
-
-	if commit {
-		if handler_info != nil {
-			handler_data := (^HandlerInfo)(handler_info)
-			handler_data.handler(handler_data.data)
-		}
-		event.handled = true
-	}
-}
