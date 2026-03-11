@@ -6,25 +6,23 @@ import IMG "vendor:sdl3/image"
 import TTF "vendor:sdl3/ttf"
 
 
-import "core:fmt"
 import "core:c"
-import "core:strings"
+import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:math/linalg"
+import "core:strings"
 import "core:time"
 import tz "core:time/timezone"
 
-import "core:thread"
 import "core:sync/chan"
+import "core:thread"
 
 
 import "base:runtime"
 
 
 import clay "clay-odin"
-
-
 
 
 window: ^SDL.Window
@@ -37,68 +35,73 @@ win_size: [2]i32 = {1280, 720}
 
 
 clay_error_handler :: proc "c" (errorData: clay.ErrorData) {
-    context = get_global_context()
-    log.info(errorData)
+	context = get_global_context()
+	log.info(errorData)
 }
 
 
 GalleryImage :: struct {
 	img_path: string,
-	bytes: []byte,
-	texture: ^SDL.Texture,
+	bytes:    []byte,
+	texture:  ^SDL.Texture,
 }
 
 images: [dynamic]GalleryImage = {}
 
-parse_files :: proc (result: RequestResult) {
+parse_files :: proc(result: RequestResult) {
 	bytes := result.bytes
-    file := string(bytes)
+	file := string(bytes)
 
-    for path in strings.split_iterator(&file, "\n") {
+	for path in strings.split_iterator(&file, "\n") {
 		image := GalleryImage {
-			img_path = path
+			img_path = path,
 		}
 		img_idx := uint(len(images))
-        append(&images, image)
+		append(&images, image)
 		log.info("loading image:", img_idx)
-        full_path := fmt.tprintf("gallery/%s", path)
+		full_path := fmt.tprintf("gallery/%s", path)
 
 		c_path := strings.clone_to_cstring(full_path)
 
 		img_path := new(ImgPath)
 		img_path^ = {}
 		img_path.index = img_idx
-		request_data(c_path, img_path, proc(result: RequestResult) {
-			img_path := (^ImgPath)(result.user_data)
-			img_path.data  = result.bytes
-			unpack_texture(img_path)
-			//unpack_tex_thread(img_path)
-		})
-    }
+		request_data(
+			c_path,
+			img_path,
+			proc(result: RequestResult) {
+				img_path := (^ImgPath)(result.user_data)
+				img_path.data = result.bytes
+				unpack_texture(img_path)
+				//unpack_tex_thread(img_path)
+			},
+		)
+	}
 }
 
 ImgPath :: struct {
-	index: uint,
-	data: []byte,
+	index:   uint,
+	data:    []byte,
 	surface: ^SDL.Surface,
 }
 
-unpack_texture :: proc (data: ^ImgPath) {
+unpack_texture :: proc(data: ^ImgPath) {
 	log.info("unpacking texture", data.index, len(data.data))
 	//r := SDL.CreateThread(unpack_tex_thread, "unpacktex", data)
 	thread.run_with_data(data, unpack_tex_thread)
 }
 
 
-
-unpack_tex_thread :: proc (in_data: rawptr)  {
+unpack_tex_thread :: proc(in_data: rawptr) {
 	context = ctx
 
 	img_path := (^ImgPath)(in_data)
-	log.info("unpack texture thread", img_path.index, len(img_path.data))
 	bytes := img_path.data
 	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
+
+	log.info("unpacking texture thread", img_path.index, len(img_path.data))
 	surface := IMG.Load_IO(io, false)
+	log.info("unpacked  texture thread", img_path.index, len(img_path.data))
 	img_path.surface = surface
 
 	finish_img_load(img_path)
@@ -106,21 +109,19 @@ unpack_tex_thread :: proc (in_data: rawptr)  {
 	//return 0
 }
 
-finish_img_load :: proc (img_path: ^ImgPath) {
+finish_img_load :: proc(img_path: ^ImgPath) {
 	if SDL.GetCurrentThreadID() == main_thread {
 		finish_img_load_main_thread(img_path)
 	} else {
-		idx := img_path.index
-		log.info("queuing finish:", idx)
 		img_path_copy := img_path
-		ok := chan.send_raw(channel, &img_path_copy)
-		log.info("msg sent:", idx, ok)
+		_ = chan.send_raw(channel, &img_path_copy)
 	}
 }
 
-finish_img_load_main_thread :: proc (img_path: ^ImgPath) {
+finish_img_load_main_thread :: proc(img_path: ^ImgPath) {
 	log.info("finishing:", img_path.index)
 	texture := SDL.CreateTextureFromSurface(renderer, img_path.surface)
+	log.info("finished: ", img_path.index)
 	image := &images[img_path.index]
 	image.texture = texture
 
@@ -131,10 +132,10 @@ finish_img_load_main_thread :: proc (img_path: ^ImgPath) {
 channel: ^chan.Raw_Chan
 
 
-assign_font :: proc (result: RequestResult) {
+assign_font :: proc(result: RequestResult) {
 
 	bytes := result.bytes
-    if len(bytes) == 0 {
+	if len(bytes) == 0 {
 		return
 	}
 	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
@@ -142,53 +143,60 @@ assign_font :: proc (result: RequestResult) {
 	text_font_id = load_font_io(io)
 }
 
-app_init :: proc (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> (result: SDL.AppResult = .FAILURE) {
+app_init :: proc(
+	appstate: ^rawptr,
+	argc: i32,
+	argv: [^]cstring,
+) -> (
+	result: SDL.AppResult = .FAILURE,
+) {
 	log.info("app_init")
-    _ = SDL.SetAppMetadata("Example", "1.0", "com.example")
+	_ = SDL.SetAppMetadata("Example", "1.0", "com.example")
 
 	when ODIN_OS == .Linux && !(ODIN_PLATFORM_SUBTARGET == .Android) {
-		SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11");
+		SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11")
 	}
 
-    success := SDL.Init({.VIDEO})
-	if !success { return }
+	success := SDL.Init({.VIDEO})
+	if !success {return}
 
-    success = TTF.Init()
-	if !success { return }
+	success = TTF.Init()
+	if !success {return}
 
-    success = SDL.CreateWindowAndRenderer(
+	success = SDL.CreateWindowAndRenderer(
 		"examples",
-		win_size.x, win_size.y,
+		win_size.x,
+		win_size.y,
 		{.RESIZABLE, .HIGH_PIXEL_DENSITY},
 		&window,
-		&renderer
+		&renderer,
 	)
-	if !success { return }
+	if !success {return}
 
-    engine = TTF.CreateRendererTextEngine(renderer)
+	engine = TTF.CreateRendererTextEngine(renderer)
 
 	load_queue = SDL.CreateAsyncIOQueue()
 
 	err: runtime.Allocator_Error
 	channel, err = chan.create_raw(size_of(^ImgPath), align_of(^ImgPath), 1, context.allocator)
-	if err != .None { return }
+	if err != .None {return}
 
-    request_data("Play-Regular.ttf", nil, assign_font)
-    request_data("gallery/files.txt", nil, parse_files)
+	request_data("Play-Regular.ttf", nil, assign_font)
+	request_data("gallery/files.txt", nil, parse_files)
 
 	ui_init()
 	gfx_init()
 
-    return .CONTINUE
+	return .CONTINUE
 }
 
 load_queue: ^SDL.AsyncIOQueue
 
-last_ticks : u64 = 0
+last_ticks: u64 = 0
 desired_delay_ticks: u64 = 1_000_000_000 / 60
 next_iterate_ticks: u64 = 0
 
-app_iterate :: proc (appstate: rawptr) -> SDL.AppResult {
+app_iterate :: proc(appstate: rawptr) -> SDL.AppResult {
 
 	idle_process_async()
 
@@ -229,11 +237,11 @@ transition_time: f64 = 1.0
 
 current_img_idx := 0
 
-app_time: f64= 0
-app_dt: f64= 0
+app_time: f64 = 0
+app_dt: f64 = 0
 running: bool = true
 
-app_tick :: proc (dt: f64) {
+app_tick :: proc(dt: f64) {
 	app_dt = dt
 	if running {
 		app_time += dt
@@ -255,7 +263,7 @@ app_tick :: proc (dt: f64) {
 	}
 	num_joys: c.int
 	joys := SDL.GetJoysticks(&num_joys)
-	for joy_idx in 0..<num_joys {
+	for joy_idx in 0 ..< num_joys {
 		joy_id := joys[joy_idx]
 		joystick := SDL.GetJoystickFromID(joy_id)
 		//log.info(joystick)
@@ -267,7 +275,7 @@ app_tick :: proc (dt: f64) {
 		if axes == -1 {
 			// log.info("error:", SDL.GetError())
 		}
-		for axis_idx in 0..<axes {
+		for _ in 0 ..< axes {
 			// axis := SDL.GetJoystickAxis(joystick, axis_idx)
 			// log.info("has joystick:", axis_idx, axis)
 		}
@@ -283,7 +291,7 @@ get_next_img_idx :: proc(idx: int) -> int {
 	return 0
 }
 
-app_draw :: proc () {
+app_draw :: proc() {
 	if ui_dirty {
 		ui_dirty = false
 
@@ -314,32 +322,24 @@ draw_debug_texture :: proc() {
 	uvs_buf: [1000]vec2
 	indices_buf: [2000]u8
 
-	buffer := DrawBuffer {
-		0, 0,
-		vertices_buf[:],
-		uvs_buf[:],
-		nil,
-		indices_buf[:],
-	}
+	buffer := DrawBuffer{0, 0, vertices_buf[:], uvs_buf[:], nil, indices_buf[:]}
 
-	pos := [2]f32{30, 30}
+	pos_t := [2]f32{30, 30}
 	yy, xx := math.sincos(f32(app_time) * 0.3)
-	//pos  += {xx, yy}
-	end := [2]f32{8, 0}
-	width := f32(3)
+	pos_t  += {xx, yy}
 	//buffer_line(&buffer, pos, pos+end, width)
-	buffer_circle(&buffer, pos, 20)
+	buffer_circle(&buffer, pos_t, 20)
 
 	SIZE :: 64
 
 	if render_target == nil {
 		render_target = SDL.CreateTexture(renderer, .RGBA32, .TARGET, SIZE, SIZE)
-	} {
+	}; {
 
 		SDL.SetTextureScaleMode(render_target, .NEAREST)
 		SDL.SetTextureBlendMode(render_target, {.BLEND_PREMULTIPLIED})
 		SDL.SetRenderTarget(renderer, render_target)
-		SDL.SetRenderDrawColorFloat(renderer, 0,0,0,0)
+		SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
 		SDL.RenderClear(renderer)
 		//color := [4]f32{0.5, 0.5, 0.5, 0.5}
 		color := [4]f32{1, 1, 1, 1}
@@ -353,22 +353,29 @@ draw_debug_texture :: proc() {
 	origin :: vec2{20, 20}
 	target_pos := SDL.FPoint{origin.x, origin.y}
 	SCALE :: 32
-	target_right := SDL.FPoint{target_pos.x + SIZE * SCALE,target_pos.y}
+	target_right := SDL.FPoint{target_pos.x + SIZE * SCALE, target_pos.y}
 	target_down := SDL.FPoint{target_pos.x, target_pos.y + SIZE * SCALE}
 
-	SDL.RenderTextureAffine(renderer, render_target, &rect, &target_pos, &target_right, &target_down)
+	SDL.RenderTextureAffine(
+		renderer,
+		render_target,
+		&rect,
+		&target_pos,
+		&target_right,
+		&target_down,
+	)
 
-	line_color := [4]f32{1,0.3,0.3,0.3}
-	for idx_int in 0..=SIZE {
+	line_color := [4]f32{1, 0.3, 0.3, 0.3}
+	for idx_int in 0 ..= SIZE {
 		idx := f32(idx_int)
 
 		draw_line(renderer, {0, idx} * SCALE + origin, {SIZE, idx} * SCALE + origin, 1, line_color)
 		draw_line(renderer, {idx, 0} * SCALE + origin, {idx, SIZE} * SCALE + origin, 1, line_color)
 	}
 
-	tx :: proc (vert: vec2) -> vec2 { return (vert * SCALE + origin) }
+	tx :: proc(vert: vec2) -> vec2 {return vert * SCALE + origin}
 
-	for idx in 0..<buffer.num_vertices {
+	for idx in 0 ..< buffer.num_vertices {
 		vert := buffer.vertices[idx]
 		uv := buffer.uvs[idx]
 		pos := vert * SCALE + {target_pos.x, target_pos.y}
@@ -378,18 +385,18 @@ draw_debug_texture :: proc() {
 		draw_circle(renderer, pos, 3)
 
 		text := fmt.ctprintf("%.6f\n%.6f", uv.x, uv.y)
-		SDL.SetRenderDrawColorFloat(renderer, 1,0,0,0.5)
-		//SDL.RenderDebugText(renderer, pos.x, pos.y, text)
+		SDL.SetRenderDrawColorFloat(renderer, 1, 0, 0, 0.5)
+		SDL.RenderDebugText(renderer, pos.x, pos.y, text)
 
 		text2 := fmt.ctprintf("%.6f\n%.6f", vert.x, vert.y)
-		SDL.SetRenderDrawColorFloat(renderer, 0,1,0,0.5)
-		//SDL.RenderDebugText(renderer, pos.x, pos.y+10, text2)
+		SDL.SetRenderDrawColorFloat(renderer, 0, 1, 0, 0.5)
+		SDL.RenderDebugText(renderer, pos.x, pos.y+10, text2)
 	}
-	for idx in 0..<buffer.num_indices {
+	for idx in 0 ..< buffer.num_indices {
 		if idx % 3 == 0 {
 			a := buffer.indices[idx]
-			b := buffer.indices[idx+1]
-			c := buffer.indices[idx+2]
+			b := buffer.indices[idx + 1]
+			c := buffer.indices[idx + 2]
 			draw_line(renderer, tx(buffer.vertices[a]), tx(buffer.vertices[b]), 1, line_color)
 			draw_line(renderer, tx(buffer.vertices[b]), tx(buffer.vertices[c]), 1, line_color)
 			draw_line(renderer, tx(buffer.vertices[c]), tx(buffer.vertices[a]), 1, line_color)
@@ -407,28 +414,32 @@ layout_clock :: proc() {
 	CLK_SIZE :: 240
 	CLK_OFFSET :: 20
 
-	clay.UI(clay.ID("clock"))(DPI({
-		layout = {
-			layoutDirection = .LeftToRight,
-			sizing = { width = clay.SizingFixed(CLK_SIZE), height = clay.SizingFixed(CLK_SIZE) },
-			childGap = 16,
-		},
-		floating = {
-			attachTo = .Parent,
-			attachment = {
-				element = .RightTop,
-				parent = .RightTop,
+	clay.UI(clay.ID("clock"))(
+		DPI(
+			{
+				layout = {
+					layoutDirection = .LeftToRight,
+					sizing = {
+						width = clay.SizingFixed(CLK_SIZE),
+						height = clay.SizingFixed(CLK_SIZE),
+					},
+					childGap = 16,
+				},
+				floating = {
+					attachTo = .Parent,
+					attachment = {element = .RightTop, parent = .RightTop},
+					offset = {-CLK_OFFSET, CLK_OFFSET},
+				},
+				backgroundColor = {1, 1, 1, 1},
+				custom = {&clock_render_data},
 			},
-			offset = {-CLK_OFFSET, CLK_OFFSET},
-		},
-		backgroundColor = {1,1,1,1},
-		custom = { &clock_render_data },
-	}))
+		),
+	)
 
 	ui_pointer_handler()
 }
 
-draw_clock :: proc (render_data: ^CustomRenderData, render_command: ^clay.RenderCommand) {
+draw_clock :: proc(render_data: ^CustomRenderData, render_command: ^clay.RenderCommand) {
 	box := render_command.boundingBox
 
 	draw_push_state()
@@ -436,16 +447,10 @@ draw_clock :: proc (render_data: ^CustomRenderData, render_command: ^clay.Render
 	angle := f32(1) + f32(app_time * 0.2)
 	axis := [3]f32{0, 0, 1}
 	axis = linalg.normalize(axis)
-	mat: matrix[3,3]f32 = 1
+	mat: matrix[3, 3]f32 = 1
 	mat *= linalg.matrix3_rotate(angle, axis)
 	mat *= {1.2, 0, 0, 0, 1, 0, 0, 0, 1}
 	mat *= linalg.matrix3_rotate(-angle, axis)
-
-	mata := matrix[3,3]f32{
-		1, 0, 0,
-		0, 1, 0,
-		0, 0, 1,
-	}
 
 	draw_set_draw_rect(renderer, {i32(box.x), i32(box.y)}, {i32(box.width), i32(box.height)})
 	draw_set_view_rect({-1.2, 1.2}, {1.2, -1.2})
@@ -464,7 +469,7 @@ draw_clock :: proc (render_data: ^CustomRenderData, render_command: ^clay.Render
 
 	draw_set_matrix(mat)
 
-	for idx in 0..<segments {
+	for _ in 0 ..< segments {
 		vert_pos = {
 			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
 			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
@@ -495,23 +500,23 @@ draw_clock :: proc (render_data: ^CustomRenderData, render_command: ^clay.Render
 
 	frac = math.min(1, frac * 15)
 
-	t_1 := frac-1
+	t_1 := frac - 1
 	t_1_2 := t_1 * t_1
 	t_1_3 := t_1_2 * t_1
 	k := f32(2.5)
-	sec_offset := 1 + (k+1)*(t_1_3) + k*(t_1_2)
+	sec_offset := 1 + (k + 1) * (t_1_3) + k * (t_1_2)
 
-	ss := f32(s) + sec_offset// + (f32(ns) / 1e9)
-	mm := f32(m) + ss/60
-	hh := f32(h) + mm/60
+	ss := f32(s) + sec_offset // + (f32(ns) / 1e9)
+	mm := f32(m) + ss / 60
+	hh := f32(h) + mm / 60
 
-	hour_sin, hour_cos := math.sincos((0.25 - hh/12) * math.TAU)
-	min_sin, min_cos := math.sincos((0.25 - mm/60) * math.TAU)
-	sec_sin, sec_cos := math.sincos((0.25 - ss/60) * math.TAU)
+	hour_sin, hour_cos := math.sincos((0.25 - hh / 12) * math.TAU)
+	min_sin, min_cos := math.sincos((0.25 - mm / 60) * math.TAU)
+	sec_sin, sec_cos := math.sincos((0.25 - ss / 60) * math.TAU)
 
-	hour_dir := vec2 {hour_cos, hour_sin}
-	min_dir := vec2 {min_cos, min_sin}
-	sec_dir := vec2 {sec_cos, sec_sin}
+	hour_dir := vec2{hour_cos, hour_sin}
+	min_dir := vec2{min_cos, min_sin}
+	sec_dir := vec2{sec_cos, sec_sin}
 
 	draw_line(renderer, -0.1 * hour_dir, 0.5 * hour_dir, 2)
 	draw_line(renderer, -0.15 * min_dir, 0.75 * min_dir, 2)
@@ -555,12 +560,14 @@ text_config: ^clay.TextElementConfig
 create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 
 	// Begin constructing the layout.
-	text_config = clay.TextConfig({
-		fontId = text_font_id,
-		textColor = color_text,
-		fontSize = border_policy(16),
-		textAlignment = .Center,
-	})
+	text_config = clay.TextConfig(
+		{
+			fontId = text_font_id,
+			textColor = color_text,
+			fontSize = border_policy(16),
+			textAlignment = .Center,
+		},
+	)
 
 	clay.BeginLayout()
 
@@ -591,20 +598,15 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 
 }
 
-gallery_render_data := CustomRenderData {
-	render_gallery
-}
+gallery_render_data := CustomRenderData{render_gallery}
 
-layout_gallery :: proc () {
-	clay.UI(clay.ID("gallery"))({
-		layout = {
-			sizing = {
-				width = clay.SizingPercent(1),
-				height = clay.SizingPercent(1),
-			},
-		},
+layout_gallery :: proc() {
+	clay.UI(clay.ID("gallery"))(
+	{
+		layout = {sizing = {width = clay.SizingPercent(1), height = clay.SizingPercent(1)}},
 		custom = {&gallery_render_data},
-	})
+	},
+	)
 }
 
 AspectRatioFitMode :: enum {
@@ -620,12 +622,12 @@ rect_aspect_fit :: proc(rect: SDL.FRect, aspect: f32) -> SDL.FRect {
 	out := rect
 	if current > aspect {
 		// current is wider, trim horizontal
-		out.x += out.w  * 0.5
+		out.x += out.w * 0.5
 		out.w = out.h * aspect
 		out.x -= out.w * 0.5
 	} else {
 		// current is taller, trim vertical
-		out.y += out.h  * 0.5
+		out.y += out.h * 0.5
 		out.h = out.w / aspect
 		out.y -= out.h * 0.5
 	}
@@ -638,7 +640,7 @@ draw_tex_rect_aspect :: proc(rect: SDL.FRect, tex: ^SDL.Texture, fill: bool, col
 		return
 	}
 
-	img_aspect :=  f32(tex.w) / f32(tex.h)
+	img_aspect := f32(tex.w) / f32(tex.h)
 	box_aspect := rect.w / rect.h
 
 	dstrect := rect
@@ -655,7 +657,7 @@ draw_tex_rect_aspect :: proc(rect: SDL.FRect, tex: ^SDL.Texture, fill: bool, col
 	SDL.RenderTexture(renderer, tex, &srcrect, &dstrect)
 }
 
-render_gallery :: proc (render_data: ^CustomRenderData, render_command: ^clay.RenderCommand) {
+render_gallery :: proc(render_data: ^CustomRenderData, render_command: ^clay.RenderCommand) {
 	in_rect := render_command.boundingBox
 
 	if len(images) <= 0 {
@@ -688,19 +690,15 @@ render_gallery :: proc (render_data: ^CustomRenderData, render_command: ^clay.Re
 }
 
 
-
 toolbar_decl := clay.ElementDeclaration {
-    layout = {
-        layoutDirection = .LeftToRight,
-        sizing = { width = clay.SizingFit(), height = clay.SizingFit() },
-        childGap = 16,
-    },
+	layout = {
+		layoutDirection = .LeftToRight,
+		sizing = {width = clay.SizingFit(), height = clay.SizingFit()},
+		childGap = 16,
+	},
 	floating = {
 		attachTo = .Parent,
-		attachment = {
-			element = .CenterBottom,
-			parent = .CenterBottom,
-		},
+		attachment = {element = .CenterBottom, parent = .CenterBottom},
 		offset = {0, -16},
 	},
 }
@@ -709,17 +707,14 @@ section_decl := clay.ElementDeclaration {
 	layout = {
 		layoutDirection = .TopToBottom,
 		padding = {4, 4, 4, 4},
-		childAlignment = {.Center, .Top}
+		childAlignment = {.Center, .Top},
 	},
 	cornerRadius = {20, 20, 20, 20},
 	backgroundColor = color_frame,
 }
 
 subsection_decl := clay.ElementDeclaration {
-	layout = {
-		layoutDirection = .LeftToRight,
-		childGap = 4,
-	},
+	layout = {layoutDirection = .LeftToRight, childGap = 4},
 }
 
 
@@ -764,13 +759,13 @@ layout_toolbar :: proc() {
 		return
 	}
 
-	opacity_modifier = ui_modifier_modulate({1,1,1,toolbar_opacity})
+	opacity_modifier = ui_modifier_modulate({1, 1, 1, toolbar_opacity})
 
 	toolbar_style := DPI(toolbar_decl)
 	section_style := DPI(section_decl)
 	subsection_style := DPI(subsection_decl)
 
-    clay.UI(clay.ID("ToolBar"))(toolbar_style)
+	clay.UI(clay.ID("ToolBar"))(toolbar_style)
 	ui_pointer_handler()
 
 	ui_modifier(&opacity_modifier)
@@ -793,7 +788,7 @@ layout_toolbar :: proc() {
 		sidebar_item_component("Play\nPause", playback_playpause)
 		sidebar_item_component("Next", playback_next)
 		sidebar_item_component("Last", playback_last)
-    }
+	}
 }
 
 
@@ -801,7 +796,11 @@ select_directory :: proc() {
 	SDL.ShowOpenFolderDialog(select_directory_callback, nil, window, nil, true)
 }
 
-select_directory_callback: SDL.DialogFileCallback : proc "c" (userdata: rawptr, filelist: [^]cstring, filter: c.int) {
+select_directory_callback: SDL.DialogFileCallback : proc "c" (
+	userdata: rawptr,
+	filelist: [^]cstring,
+	filter: c.int,
+) {
 	context = get_global_context()
 	if filelist == nil {
 		error := SDL.GetError()
@@ -843,15 +842,7 @@ playback_next :: proc() {
 dpi_index := 2
 dpi_user := f32(1)
 dpi_window := f32(1)
-dpi_levels := []f32 {
-	0.5,
-	0.8,
-	1,
-	1.5,
-	2,
-	3,
-	4,
-}
+dpi_levels := []f32{0.5, 0.8, 1, 1.5, 2, 3, 4}
 playback_last :: proc() {
 	log.info("last")
 	dpi_index = (dpi_index + 1) % len(dpi_levels)
@@ -860,13 +851,12 @@ playback_last :: proc() {
 }
 
 
-
-color_idle := clay.Color {0.0, 0.0, 0.0, 1}
-color_border := clay.Color {1, 1, 1, 0.3}
-color_frame := clay.Color {0.2, 0.2, 0.2, 1}
+color_idle := clay.Color{0.0, 0.0, 0.0, 1}
+color_border := clay.Color{1, 1, 1, 0.3}
+color_frame := clay.Color{0.2, 0.2, 0.2, 1}
 //color_frame := clay.Color {1, 1, 1, 1}
-color_hover := clay.Color {0.4, 0.4, 0.4, 1}
-color_text := clay.Color {0.8, 0.8, 0.8, 1}
+color_hover := clay.Color{0.4, 0.4, 0.4, 1}
+color_text := clay.Color{0.8, 0.8, 0.8, 1}
 
 
 rotate_modifier: UIModifierTransform
@@ -908,38 +898,32 @@ sidebar_item_component_handlerinfo :: proc($label: string, info: ^HandlerInfo = 
 	color := color_idle
 	if is_focused {
 		rotate_modifier = ui_modifier_transform(
-			linalg.matrix3_rotate(math.sin(f32(app_time*3)) * 0.1, [3]f32{0,0,1}),
+			linalg.matrix3_rotate(math.sin(f32(app_time * 3)) * 0.1, [3]f32{0, 0, 1}),
 			{0.5, 0.5},
 		)
 		ui_modifier_push(&rotate_modifier)
 		color = color_hover
 	}
 
-	clay.UI()(DPI({
-		layout = {
-			sizing = {
-				width = clay.SizingFixed(64),
-				height = clay.SizingFixed(64),
+	clay.UI()(
+		DPI(
+			{
+				layout = {
+					sizing = {width = clay.SizingFixed(64), height = clay.SizingFixed(64)},
+					childAlignment = {.Center, .Center},
+				},
+				cornerRadius = {16, 16, 16, 16},
+				border = {width = {1, 1, 1, 1, 0}, color = color_border},
+				backgroundColor = color,
 			},
-			childAlignment = {.Center, .Center}
-		},
-		cornerRadius = {16, 16, 16, 16},
-		border = {
-			width = {1, 1, 1, 1, 0},
-			color = color_border,
-		},
-		backgroundColor = color,
-	}))
+		),
+	)
 
 
-	clay.Text(
-        label,
-        text_config,
-    )
+	clay.Text(label, text_config)
 
 	if is_focused {
 		ui_modifier_pop(&rotate_modifier)
 	}
 
 }
-

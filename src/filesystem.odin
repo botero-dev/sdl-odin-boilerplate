@@ -4,32 +4,28 @@ import "emscripten"
 import SDL "vendor:sdl3"
 
 import "core:fmt"
-import "core:strings"
 import "core:log"
 import "core:sync/chan"
 
-import "base:runtime"
-
-
 RequestResult :: struct {
-	success: bool,
-	bytes: []byte,
+	success:   bool,
+	bytes:     []byte,
 	user_data: rawptr,
 }
 
 RequestHandler :: struct {
-	callback: RequestCallback,
+	callback:  RequestCallback,
 	user_data: rawptr,
 }
 
 RequestCallback :: #type proc(result: RequestResult)
 
 // async on web, synchronous on desktop
-request_data :: proc (url: cstring, user_data: rawptr, callback: RequestCallback) {
+request_data :: proc(url: cstring, user_data: rawptr, callback: RequestCallback) {
 
 	log.info("request_data", url)
 	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
-		fetch_attr := emscripten.emscripten_fetch_attr_t {}
+		fetch_attr := emscripten.emscripten_fetch_attr_t{}
 		emscripten.emscripten_fetch_attr_init(&fetch_attr)
 		fetch_attr.onsuccess = fetch_success
 		fetch_attr.onerror = fetch_error
@@ -47,7 +43,7 @@ request_data :: proc (url: cstring, user_data: rawptr, callback: RequestCallback
 
 		target_url := url
 		when ODIN_PLATFORM_SUBTARGET == .Android {
-			base := "."//SDL.GetBasePath()
+			base := "." //SDL.GetBasePath()
 			//target_url = fmt.ctprintf("%s/%s", base, url)
 		} else {
 			target_url = fmt.ctprintf("content/%s", url)
@@ -65,7 +61,7 @@ request_data :: proc (url: cstring, user_data: rawptr, callback: RequestCallback
 		handler.user_data = user_data
 
 
-		success := SDL.ReadAsyncIO(io, &data[0], 0, file_size, load_queue, handler)
+		_ = SDL.ReadAsyncIO(io, &data[0], 0, file_size, load_queue, handler)
 		append(&pending_tasks, io)
 	}
 }
@@ -79,24 +75,16 @@ idle_process_async :: proc() {
 		//log.info("outcome:", outcome)
 		if outcome.type == .READ {
 			handler := (^RequestHandler)(outcome.userdata)
-			buf := ([^]u8) (outcome.buffer)
-			handler.callback({
-				true,
-				buf[:outcome.bytes_transferred],
-				handler.user_data,
-			})
-			r := SDL.CloseAsyncIO(outcome.asyncio, true, load_queue, nil)
+			buf := ([^]u8)(outcome.buffer)
+			handler.callback({true, buf[:outcome.bytes_transferred], handler.user_data})
+			_ = SDL.CloseAsyncIO(outcome.asyncio, true, load_queue, nil)
 		}
 	}
 
 
-	for true {
-		data: ^ImgPath
-		ok := chan.try_recv_raw(channel, &data)
-		if ! ok {
-			break
-		}
-		log.info("chan recv", data.index, rawptr(data))
+	data: ^ImgPath
+	ok := chan.try_recv_raw(channel, &data)
+	if ok {
 		finish_img_load_main_thread(data)
 	}
 }
@@ -106,10 +94,10 @@ fetch_error :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
 	request_handler := (^RequestHandler)(fetch_result.userData)
 	context = ctx
 	result := RequestResult {
-		success = false,
+		success   = false,
 		user_data = request_handler.user_data,
 	}
-    request_handler.callback(result)
+	request_handler.callback(result)
 	free(request_handler)
 }
 
@@ -118,11 +106,11 @@ fetch_success :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
 	request_handler := (^RequestHandler)(fetch_result.userData)
 	context = ctx
 	result := RequestResult {
-		success = true,
+		success   = true,
 		user_data = request_handler.user_data,
-		bytes = (([^]byte)(fetch_result.data))[0:fetch_result.numBytes],
+		bytes     = (([^]byte)(fetch_result.data))[0:fetch_result.numBytes],
 	}
 
-    request_handler.callback(result)
+	request_handler.callback(result)
 	free(request_handler)
 }

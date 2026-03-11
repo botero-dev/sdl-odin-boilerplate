@@ -3,13 +3,6 @@ package main
 
 import SDL "vendor:sdl3"
 
-import "core:fmt"
-import "core:c"
-import "core:strings"
-import "core:log"
-
-import "base:runtime"
-
 import clay "clay-odin"
 
 
@@ -51,12 +44,11 @@ EventMappingKeyboard :: struct {
 }
 
 Event :: struct {
-	type: EventType,
-	phase: EventPhase,
-	handled: bool,
+	type:      EventType,
+	phase:     EventPhase,
+	handled:   bool,
 	sdl_event: ^SDL.Event,
 }
-
 
 
 action_map: [dynamic]EventMapping
@@ -66,15 +58,14 @@ EventHandler :: #type proc(event: ^Event)
 event_handler_stack: [dynamic]EventHandler
 
 
-
-create_keyboard_mapping :: proc (scancode: SDL.Scancode) -> MappingIndex {
+create_keyboard_mapping :: proc(scancode: SDL.Scancode) -> MappingIndex {
 	if action_map == nil {
 		// create empty mapping at index 0
 		append(&action_map, EventMapping{})
 	}
 	new_mapping := EventMapping {
 		type = .Keyboard,
-		data = {scancode}
+		data = {scancode},
 	}
 	index := u32(len(action_map))
 	append(&action_map, new_mapping)
@@ -82,11 +73,11 @@ create_keyboard_mapping :: proc (scancode: SDL.Scancode) -> MappingIndex {
 }
 
 
-match_mapping_button_ptr :: proc (event: ^Event, mapping_idx: u32) -> (state: bool, matches: bool) {
+match_mapping_button_ptr :: proc(event: ^Event, mapping_idx: u32) -> (state: bool, matches: bool) {
 	return match_mapping_button_val(event^, mapping_idx)
 }
 
-match_mapping_button_val :: proc (event: Event, mapping_idx: u32) -> (state: bool, matches: bool) {
+match_mapping_button_val :: proc(event: Event, mapping_idx: u32) -> (state: bool, matches: bool) {
 	mapping := action_map[mapping_idx]
 	if event.type != mapping.type {
 		return false, false
@@ -170,11 +161,13 @@ system_handler :: proc(event: ^Event) {
 }
 
 
-app_handle_event :: proc (sdl_event: ^SDL.Event) -> SDL.AppResult {
+app_handle_event :: proc(sdl_event: ^SDL.Event) -> SDL.AppResult {
 	event_retval = SDL.AppResult.CONTINUE
 	SDL.ConvertEventToRenderCoordinates(renderer, sdl_event)
 
-	event := Event{sdl_event = sdl_event}
+	event := Event {
+		sdl_event = sdl_event,
+	}
 	#partial switch sdl_event.type {
 	case .KEY_DOWN, .KEY_UP:
 		event.type = .Keyboard

@@ -7,8 +7,6 @@ import "core:log"
 import "core:math"
 import "core:math/linalg"
 
-import clay "clay-odin"
-
 helper: ^SDL.Texture
 
 TEX_SIZE :: 2
@@ -17,44 +15,44 @@ PIXEL_X := vec2{1, 0} / TEX_SIZE
 PIXEL_Y := vec2{1, 0} / TEX_SIZE
 
 
-gfx_init :: proc () {
+gfx_init :: proc() {
 	helper = SDL.CreateTexture(renderer, .RGBA32, .TARGET, 2, 2)
 	SDL.SetRenderTarget(renderer, helper)
 	SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
 	SDL.RenderClear(renderer)
-	SDL.SetRenderDrawColorFloat(renderer, 1,1,1,1)
+	SDL.SetRenderDrawColorFloat(renderer, 1, 1, 1, 1)
 	SDL.RenderPoint(renderer, 1, 1)
 	SDL.SetTextureScaleMode(helper, .PIXELART)
 	SDL.SetTextureBlendMode(helper, {.BLEND})
 }
 
-helper_uv :: proc (input: vec2) -> vec2 { return (input + 0.5) * 0.5  } // coord + half pixel / tex_size
+helper_uv :: proc(input: vec2) -> vec2 {return (input + 0.5) * 0.5} 	// coord + half pixel / tex_size
 
 
 DrawState :: struct {
-	line_scale: f32,
-	mat_scale: [2]f32,
-	mat_offset: [2]f32,
-	draw_rect: [2][2]i32, // encoded as x,y  w,h
-	view_rect: [2]vec2,   // encoded as topleft, botright
-	user_matrix: matrix[3,3]f32,
-	modulate: [4]f32,
+	line_scale:  f32,
+	mat_scale:   [2]f32,
+	mat_offset:  [2]f32,
+	draw_rect:   [2][2]i32, // encoded as x,y  w,h
+	view_rect:   [2]vec2, // encoded as topleft, botright
+	user_matrix: matrix[3, 3]f32,
+	modulate:    [4]f32,
 }
 
 draw_state_stack: [dynamic]DrawState
 
 draw_state_initial := DrawState {
-	line_scale = 0,
-	mat_scale = {1, 1},
-	mat_offset = {0, 0},
-	draw_rect = {},
-	view_rect = {},
+	line_scale  = 0,
+	mat_scale   = {1, 1},
+	mat_offset  = {0, 0},
+	draw_rect   = {},
+	view_rect   = {},
 	user_matrix = 1,
-	modulate = {1,1,1,1},
+	modulate    = {1, 1, 1, 1},
 }
 
 draw_state := draw_state_initial
-draw_matrix: matrix[3,3]f32 = 1
+draw_matrix: matrix[3, 3]f32 = 1
 
 draw_push_state :: proc() {
 	append(&draw_state_stack, draw_state)
@@ -89,7 +87,7 @@ draw_present :: proc() {
 	SDL.RenderPresent(renderer)
 }
 
-draw_set_matrix :: proc(in_user_matrix: matrix[3,3]f32) {
+draw_set_matrix :: proc(in_user_matrix: matrix[3, 3]f32) {
 	draw_state.user_matrix = in_user_matrix
 	draw_state.user_matrix[0][2] = 0
 	draw_state.user_matrix[1][2] = 0
@@ -128,8 +126,8 @@ draw_clear_draw_rect :: proc(renderer: ^SDL.Renderer) {
 
 draw_clear_view_rect :: proc() {
 	draw_state.view_rect = {}
-	draw_state.mat_scale = {1,1}
-	draw_state.mat_offset = {0,0}
+	draw_state.mat_scale = {1, 1}
+	draw_state.mat_offset = {0, 0}
 }
 
 draw_set_view_rect :: proc(view_topleft: vec2, view_botright: vec2) {
@@ -141,8 +139,8 @@ update_matrix :: proc() {
 	view_topleft := draw_state.view_rect[0]
 	view_botright := draw_state.view_rect[1]
 	if view_topleft == {} && view_botright == {} {
-		draw_state.mat_scale = {1,1}
-		draw_state.mat_offset = {0,0}
+		draw_state.mat_scale = {1, 1}
+		draw_state.mat_offset = {0, 0}
 		return
 	}
 
@@ -157,11 +155,11 @@ update_matrix :: proc() {
 	draw_state.mat_scale = vec2{f32(draw_size.x), f32(draw_size.y)} / view_range
 	draw_state.mat_offset = draw_pos - (view_topleft * draw_state.mat_scale)
 
-	draw_matrix = (matrix[3,3]f32{
-		draw_state.mat_scale.x, 0, draw_state.mat_offset.x,
-		0, draw_state.mat_scale.y, draw_state.mat_offset.y,
-		0, 0, 1,
-	})
+	draw_matrix = (matrix[3, 3]f32{
+				draw_state.mat_scale.x, 0, draw_state.mat_offset.x,
+				0, draw_state.mat_scale.y, draw_state.mat_offset.y,
+				0, 0, 1,
+			})
 
 	draw_matrix = draw_matrix * draw_state.user_matrix
 }
@@ -181,37 +179,41 @@ draw_buffer :: proc(renderer: ^SDL.Renderer, buffer: ^DrawBuffer, in_color: [4]f
 	SDL.RenderGeometryRaw(
 		renderer,
 		helper, // texture
-		&buffer.vertices[0][0], 8, // verts + stride
-		&fcolor, 0, // color + stride
-		&buffer.uvs[0][0], 8, // uvs
+		&buffer.vertices[0][0],
+		8, // verts + stride
+		&fcolor,
+		0, // color + stride
+		&buffer.uvs[0][0],
+		8, // uvs
 		buffer.num_vertices,
-		indices, buffer.num_indices,
+		indices,
+		buffer.num_indices,
 		1,
 	)
 }
 
 DrawBuffer :: struct {
 	num_vertices: i32,
-	num_indices: i32,
-	vertices: []vec2,
-	uvs: []vec2,
-	colors: [][4]f32,
-	indices: []u8,
+	num_indices:  i32,
+	vertices:     []vec2,
+	uvs:          []vec2,
+	colors:       [][4]f32,
+	indices:      []u8,
 }
 
 vertices_buf: [1000]vec2
 uvs_buf: [1000]vec2
 indices_buf: [2000]u8
-buffer := DrawBuffer {
-	0, 0,
-	vertices_buf[:],
-	uvs_buf[:],
-	nil,
-	indices_buf[:],
-}
+buffer := DrawBuffer{0, 0, vertices_buf[:], uvs_buf[:], nil, indices_buf[:]}
 
 
-draw_circle :: proc(renderer: ^SDL.Renderer, in_center: vec2, in_radius: f32, in_color:[4]f32 = {1,1,1,1}, int_coords: bool = false) {
+draw_circle :: proc(
+	renderer: ^SDL.Renderer,
+	in_center: vec2,
+	in_radius: f32,
+	in_color: [4]f32 = {1, 1, 1, 1},
+	int_coords: bool = false,
+) {
 	buffer.num_vertices = 0
 	buffer.num_indices = 0
 	buffer_circle(&buffer, in_center, in_radius, int_coords)
@@ -219,11 +221,16 @@ draw_circle :: proc(renderer: ^SDL.Renderer, in_center: vec2, in_radius: f32, in
 }
 
 // corner_idx indices: (top_left, top_right, bottom_left, bottom_right)
-buffer_circle :: proc (buffer: ^DrawBuffer, in_center: vec2, in_radius: f32, int_coords: bool = false) {
+buffer_circle :: proc(
+	buffer: ^DrawBuffer,
+	in_center: vec2,
+	in_radius: f32,
+	int_coords: bool = false,
+) {
 
 	center := (draw_matrix * [3]f32{in_center.x, in_center.y, 1}).xy
 
-	scale_mat := matrix[2,2]f32 {
+	scale_mat := matrix[2, 2]f32{
 		draw_matrix[0][0], draw_matrix[0][1],
 		draw_matrix[1][0], draw_matrix[1][1],
 	}
@@ -234,7 +241,7 @@ buffer_circle :: proc (buffer: ^DrawBuffer, in_center: vec2, in_radius: f32, int
 		radius -= 0.5
 	} // half pixel offset
 
-	segments := i32( math.floor(radius*math.TAU/math.ln(radius*math.TAU*1.6+1)))
+	segments := i32(math.floor(radius * math.TAU / math.ln(radius * math.TAU * 1.6 + 1)))
 	segments = math.min(124, math.max(segments, 8))
 	segments = i32(math.round(f32(segments) / 4)) * 4
 	vertices_buf := buffer.vertices[buffer.num_vertices:]
@@ -243,7 +250,6 @@ buffer_circle :: proc (buffer: ^DrawBuffer, in_center: vec2, in_radius: f32, int
 
 	num_vertices := segments + 1
 	num_indices := segments * 3
-	start_index := u8(buffer.num_vertices)
 
 	buffer.num_vertices += num_vertices
 	buffer.num_indices += num_indices
@@ -255,15 +261,14 @@ buffer_circle :: proc (buffer: ^DrawBuffer, in_center: vec2, in_radius: f32, int
 	increment := math.TAU / f32(segments)
 	mat_sin, mat_cos := math.sincos(increment)
 
-	radius_pad := radius+PAD
 	vert_pos := vec2{1, 0}
 
 	vertices_buf[0] = center
 	vertices_buf[1] = center + (vert_pos * scale_mat) // TODO: account for pad
-	uvs_buf[0] = helper_uv({1,1})
-	uvs_buf[1] = helper_uv({1, 0.5 - (0.5*PAD/radius)})
+	uvs_buf[0] = helper_uv({1, 1})
+	uvs_buf[1] = helper_uv({1, 0.5 - (0.5 * PAD / radius)})
 
-	for idx in 2..=segments {
+	for idx in 2 ..= segments {
 		vert_pos = {
 			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
 			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
@@ -273,17 +278,23 @@ buffer_circle :: proc (buffer: ^DrawBuffer, in_center: vec2, in_radius: f32, int
 	}
 
 	STRIDE :: 3
-	for idx_wide in 0..<segments {
+	for idx_wide in 0 ..< segments {
 		idx := u8(idx_wide)
-		indices_buf[idx_wide * STRIDE]     = 0
+		indices_buf[idx_wide * STRIDE] = 0
 		indices_buf[idx_wide * STRIDE + 1] = 1 + idx
 		indices_buf[idx_wide * STRIDE + 2] = 2 + idx
 	}
-	indices_buf[(segments-1)*STRIDE+2] = 1 // last triangle end is actually first triangle begin
+	indices_buf[(segments - 1) * STRIDE + 2] = 1 // last triangle end is actually first triangle begin
 }
 
 
-draw_line :: proc(renderer: ^SDL.Renderer, in_start: vec2, in_end: vec2, in_width: f32, in_color:[4]f32 = {1,1,1,1}) {
+draw_line :: proc(
+	renderer: ^SDL.Renderer,
+	in_start: vec2,
+	in_end: vec2,
+	in_width: f32,
+	in_color: [4]f32 = {1, 1, 1, 1},
+) {
 	buffer.num_vertices = 0
 	buffer.num_indices = 0
 	buffer_line(&buffer, in_start, in_end, in_width)
@@ -310,12 +321,12 @@ buffer_line :: proc(buffer: ^DrawBuffer, in_start: vec2, in_end: vec2, in_width:
 	start = starta.xy
 	end = enda.xy
 
-	delta := end-start
+	delta := end - start
 	length := linalg.length(delta)
 	dir := delta / length
 	dir_side := vec2{dir.y, -dir.x}
 
-	PAD :=  f32(0.5)
+	PAD := f32(0.5)
 	side := dir_side * (width * 0.5 + PAD)
 
 	vstart := start + vec2{0.5, 0.5} // offset to find pixel center
@@ -325,35 +336,16 @@ buffer_line :: proc(buffer: ^DrawBuffer, in_start: vec2, in_end: vec2, in_width:
 	line_start := vstart - line_offset
 	line_end := vend + line_offset
 
-	verts := []vec2{
+	verts := []vec2 {
 		line_start - side,
 		line_start + side,
 		line_end - side,
-
 		line_end + side,
 		line_end - side,
 		line_start + side,
 	}
 
-	indices := []u8{
-		0, 1, 2, 3, 4, 5,
-	}
-
-
-	UV_OUTER := 0.5 - PAD
-	UV_END := 0.5 + PAD
-	uv_start := helper_uv({UV_OUTER, UV_OUTER})
-	uv_length := helper_uv({length + 1 + UV_END, UV_OUTER})
-	uv_width :=  helper_uv({UV_OUTER, width + UV_END})
-
-	uvas := []vec2{
-		uv_start,
-		uv_width,
-		uv_length,
-		uv_start,
-		uv_width,
-		uv_length,
-	}
+	indices := []u8{0, 1, 2, 3, 4, 5}
 
 	width_falloff := 0.5 / width
 	length_falloff := 0.5 / length
@@ -363,7 +355,7 @@ buffer_line :: proc(buffer: ^DrawBuffer, in_start: vec2, in_end: vec2, in_width:
 	LEFT := 0.5 - width_falloff
 	RIGHT := 1.5 + width_falloff
 
-	uvs := []vec2{
+	uvs := []vec2 {
 		helper_uv({START, LEFT}),
 		helper_uv({START, RIGHT}),
 		helper_uv({END, LEFT}),
@@ -375,13 +367,13 @@ buffer_line :: proc(buffer: ^DrawBuffer, in_start: vec2, in_end: vec2, in_width:
 	vertices_write := buffer.vertices[buffer.num_vertices:]
 	uvs_write := buffer.uvs[buffer.num_vertices:]
 	buffer.num_vertices += 6
-	for idx in 0..<len(verts) {
+	for idx in 0 ..< len(verts) {
 		vertices_write[idx] = verts[idx]
 		uvs_write[idx] = uvs[idx]
 	}
 
 	indices_write := buffer.indices[buffer.num_indices:]
-	for idx in 0..<len(indices) {
+	for idx in 0 ..< len(indices) {
 		indices_write[idx] = indices[idx]
 	}
 	buffer.num_indices += i32(len(indices))
@@ -412,17 +404,13 @@ Color :: [4]f32
 
 
 txv :: proc(vert: vec2) -> vec2 {
-	vert3 := [3]f32 {vert.x, vert.y, 1}
+	vert3 := [3]f32{vert.x, vert.y, 1}
 	vert3 = draw_state.user_matrix * vert3
 	return vert3.xy
 }
 
 
-draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
-
-	vertices_buf: [1000]vec2
-	uvs_buf: [1000]vec2
-	indices_buf: [2000]u8
+draw_box_filled :: proc(box: Rect, corners: CornerRadii, color: Color) {
 
 	num_vertices: i32 = 0
 	num_indices: i32 = 0
@@ -433,12 +421,12 @@ draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
 	PAD :: 1 // expand for antialiasing
 
 	//HALF_PIXEL :: vec2{0.5, 0.5}
-	boxmin := vec2{box.x,         box.y}
+	boxmin := vec2{box.x, box.y}
 	boxmax := vec2{box.x + box.w, box.y + box.h}
 
-	topleft  := vec2{boxmin.x + corners.nw, boxmin.y + corners.nw}
+	topleft := vec2{boxmin.x + corners.nw, boxmin.y + corners.nw}
 	topright := vec2{boxmax.x - corners.ne, boxmin.y + corners.ne}
-	botleft  := vec2{boxmin.x + corners.sw, boxmax.y - corners.sw}
+	botleft := vec2{boxmin.x + corners.sw, boxmax.y - corners.sw}
 	botright := vec2{boxmax.x - corners.se, boxmax.y - corners.se}
 
 	vertices_buf[0] = txv(topleft)
@@ -446,9 +434,9 @@ draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
 	vertices_buf[2] = txv(botleft)
 	vertices_buf[3] = txv(botright)
 
-//	uv_center := ZERO_PIX_CLAMP + (PIXEL_Y * (width+1) * 0.5)
-	uv_outer :=  ZERO_PIX_CLAMP + (PIXEL_Y * (0.5 - PAD))
-//	log.info(uv_outer)
+	//	uv_center := ZERO_PIX_CLAMP + (PIXEL_Y * (width+1) * 0.5)
+	uv_outer := ZERO_PIX_CLAMP + (PIXEL_Y * (0.5 - PAD))
+	//	log.info(uv_outer)
 
 	uvs_buf[0] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.nw + 0.5))
 	uvs_buf[1] = ZERO_PIX_CLAMP + (PIXEL_Y * (corners.ne + 0.5))
@@ -465,17 +453,17 @@ draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
 
 	// top bottom left right rectangles
 
-	vertices_buf[4] = txv({topleft.x,  boxmin.y - PAD})
+	vertices_buf[4] = txv({topleft.x, boxmin.y - PAD})
 	vertices_buf[5] = txv({topright.x, boxmin.y - PAD})
 
-	vertices_buf[6] = txv({botleft.x,  boxmax.y + PAD})
+	vertices_buf[6] = txv({botleft.x, boxmax.y + PAD})
 	vertices_buf[7] = txv({botright.x, boxmax.y + PAD})
 
-	vertices_buf[8] = txv({boxmin.x - PAD,  topleft.y})
-	vertices_buf[9] = txv({boxmin.x - PAD,  botleft.y})
+	vertices_buf[8] = txv({boxmin.x - PAD, topleft.y})
+	vertices_buf[9] = txv({boxmin.x - PAD, botleft.y})
 
-	vertices_buf[10] = txv({boxmax.x + PAD,  topright.y})
-	vertices_buf[11] = txv({boxmax.x + PAD,  botright.y})
+	vertices_buf[10] = txv({boxmax.x + PAD, topright.y})
+	vertices_buf[11] = txv({boxmax.x + PAD, botright.y})
 
 	uvs_buf[4] = uv_outer
 	uvs_buf[5] = uv_outer
@@ -521,10 +509,46 @@ draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
 
 	// rounded corners
 
-	draw_rounded_corner(vertices_buf[:], indices_buf[:], uvs_buf[:], &num_vertices, &num_indices,0, 8, 4)
-	draw_rounded_corner(vertices_buf[:], indices_buf[:], uvs_buf[:], &num_vertices, &num_indices,1, 5, 10)
-	draw_rounded_corner(vertices_buf[:], indices_buf[:], uvs_buf[:], &num_vertices, &num_indices,3, 11, 7)
-	draw_rounded_corner(vertices_buf[:], indices_buf[:], uvs_buf[:], &num_vertices, &num_indices,2, 6, 9)
+	draw_rounded_corner(
+		vertices_buf[:],
+		indices_buf[:],
+		uvs_buf[:],
+		&num_vertices,
+		&num_indices,
+		0,
+		8,
+		4,
+	)
+	draw_rounded_corner(
+		vertices_buf[:],
+		indices_buf[:],
+		uvs_buf[:],
+		&num_vertices,
+		&num_indices,
+		1,
+		5,
+		10,
+	)
+	draw_rounded_corner(
+		vertices_buf[:],
+		indices_buf[:],
+		uvs_buf[:],
+		&num_vertices,
+		&num_indices,
+		3,
+		11,
+		7,
+	)
+	draw_rounded_corner(
+		vertices_buf[:],
+		indices_buf[:],
+		uvs_buf[:],
+		&num_vertices,
+		&num_indices,
+		2,
+		6,
+		9,
+	)
 
 	//num_vertices = i32(start_vert)
 	//num_indices = start_idx + 12
@@ -532,7 +556,7 @@ draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
 	// submit
 	rect_color := color
 	rect_color *= draw_state.modulate
-	fcolor := transmute(SDL.FColor)rect_color
+	fcolor := SDL.FColor(rect_color)
 
 	SDL.SetRenderTextureAddressMode(renderer, .CLAMP, .CLAMP)
 	SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
@@ -540,20 +564,31 @@ draw_box_filled :: proc (box: Rect, corners: CornerRadii, color: Color) {
 	SDL.RenderGeometryRaw(
 		renderer,
 		helper, // texture
-		&vertices_buf[0][0], 8, // verts, stride
-		&fcolor, 0, // color, stride
-		&uvs_buf[0][0], 8, // uvs
+		&vertices_buf[0][0],
+		8, // verts, stride
+		&fcolor,
+		0, // color, stride
+		&uvs_buf[0][0],
+		8, // uvs
 		num_vertices,
-		&indices_buf, num_indices, 1
+		&indices_buf,
+		num_indices,
+		1,
 	)
 
 }
 
 
-draw_rounded_corner :: proc (
-	vertices_buf: []vec2, indices_buf: []u8, uvs_buf: []vec2,
-	ptr_num_vertices: ^i32, ptr_num_indices: ^i32,
-	pivot_idx: u8, left_idx: u8, right_idx: u8) {
+draw_rounded_corner :: proc(
+	vertices_buf: []vec2,
+	indices_buf: []u8,
+	uvs_buf: []vec2,
+	ptr_num_vertices: ^i32,
+	ptr_num_indices: ^i32,
+	pivot_idx: u8,
+	left_idx: u8,
+	right_idx: u8,
+) {
 
 	origin := vertices_buf[pivot_idx]
 	start_pos := vertices_buf[left_idx] - origin
@@ -561,57 +596,56 @@ draw_rounded_corner :: proc (
 	border_uv := uvs_buf[left_idx]
 
 	num_vertices := ptr_num_vertices^
-		num_indices := ptr_num_indices^
+	num_indices := ptr_num_indices^
 
 	segments: u8
 	radius: f32 = math.abs(start_pos.x) + math.abs(start_pos.y)
 
-	segments = u8(math.min(127, math.floor(radius/math.ln(radius*1.6+1))))
+	segments = u8(math.min(127, math.floor(radius / math.ln(radius * 1.6 + 1))))
 	if segments < 2 {
 		segments = 2
 	}
 	//log.info("segments", segments)
-	delta_angle := (math.TAU/4) / f32(segments)
+	delta_angle := (math.TAU / 4) / f32(segments)
 	mat_cos := math.cos(delta_angle)
 	mat_sin := math.sin(delta_angle)
 
 	start_vert := u8(num_vertices)
-	start_idx := num_indices
 
 	vert_pos := start_pos
 
 	//log.info(draw_state.user_matrix)
 	//log.info(vert, vert3)
 
-	for segment in 1..<segments {
+	for _ in 1 ..< segments {
 		vert_pos = {
 			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
 			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
 		}
 		vert := origin + vert_pos
-		vert3 := [3]f32 {vert.x, vert.y, 1}
+		vert3 := [3]f32{vert.x, vert.y, 1}
 		vert3 = draw_state.user_matrix * vert3
-		vertices_buf[num_vertices] = vert//vert3.xy
+		vertices_buf[num_vertices] = vert //vert3.xy
 		uvs_buf[num_vertices] = border_uv
 		num_vertices += 1
 	}
 
 	indices_buf[num_indices] = pivot_idx
-	indices_buf[num_indices+1] = left_idx
-	indices_buf[num_indices+2] = start_vert
+	indices_buf[num_indices + 1] = left_idx
+	indices_buf[num_indices + 2] = start_vert
 	num_indices += 3
 
-	for segment in 2..<segments {
+	for segment in 2 ..< segments {
 
 		indices_buf[num_indices] = pivot_idx
-		indices_buf[num_indices+1] = start_vert + segment - 2
-		indices_buf[num_indices+2] = start_vert + segment - 1
+		indices_buf[num_indices + 1] = start_vert + segment - 2
+		indices_buf[num_indices + 2] = start_vert + segment - 1
 		num_indices += 3
 	}
 
 	indices_buf[num_indices] = pivot_idx
-	indices_buf[num_indices+1] = start_vert + segments - 2
-	indices_buf[num_indices+2] = right_idx
+	indices_buf[num_indices + 1] = start_vert + segments - 2
+	indices_buf[num_indices + 2] = right_idx
 	num_indices += 3
 
 	ptr_num_vertices^ = num_vertices
@@ -620,26 +654,24 @@ draw_rounded_corner :: proc (
 }
 
 
-draw_box_border :: proc (box: Rect, corners: CornerRadii, borders: BorderWidths, in_color: Color) {
+draw_box_border :: proc(box: Rect, corners: CornerRadii, borders: BorderWidths, in_color: Color) {
 
 	buffer.num_vertices = 0
 	buffer.num_indices = 0
 
-    rect2: SDL.FRect
-
 	// top
-	buffer.vertices[0] = txv({box.x + corners.nw,         box.y})
+	buffer.vertices[0] = txv({box.x + corners.nw, box.y})
 	buffer.vertices[1] = txv({box.x + box.w - corners.ne, box.y})
-	buffer.vertices[2] = txv({box.x + corners.nw,         box.y + borders.n})
+	buffer.vertices[2] = txv({box.x + corners.nw, box.y + borders.n})
 	buffer.vertices[3] = txv({box.x + box.w - corners.ne, box.y + borders.n})
 
 	end_y1 := box.y + box.h
 	end_y2 := end_y1 - borders.s
 
 	// bottom
-	buffer.vertices[4] = txv({box.x + corners.sw,         end_y1})
+	buffer.vertices[4] = txv({box.x + corners.sw, end_y1})
 	buffer.vertices[5] = txv({box.x + box.w - corners.se, end_y1})
-	buffer.vertices[6] = txv({box.x + corners.sw,         end_y2})
+	buffer.vertices[6] = txv({box.x + corners.sw, end_y2})
 	buffer.vertices[7] = txv({box.x + box.w - corners.se, end_y2})
 
 	// left
@@ -663,11 +695,11 @@ draw_box_border :: proc (box: Rect, corners: CornerRadii, borders: BorderWidths,
 
 	buffer.num_vertices += 16
 
-	for idx in 0..<16 {
+	for idx in 0 ..< 16 {
 		buffer.uvs[idx] = {0.75, 0.75}
 	}
 
-	for idx_long in 0..<4 {
+	for idx_long in 0 ..< 4 {
 		idx := u8(idx_long)
 		buffer.indices[0 + (idx * 6)] = 0 + (idx * 4)
 		buffer.indices[1 + (idx * 6)] = 1 + (idx * 4)
@@ -685,40 +717,57 @@ draw_box_border :: proc (box: Rect, corners: CornerRadii, borders: BorderWidths,
 		draw_rounded_border(&buffer, borders.n, borders.w, corners.nw, 0, {box.x, box.y})
 	}
 	if corners.ne != 0 {
-		draw_rounded_border(&buffer, borders.n, borders.e, corners.ne, 1, {box.x+box.w, box.y})
+		draw_rounded_border(&buffer, borders.n, borders.e, corners.ne, 1, {box.x + box.w, box.y})
 	}
 	if corners.sw != 0 {
-		draw_rounded_border(&buffer, borders.s, borders.w, corners.sw, 2, {box.x, box.y+box.h})
+		draw_rounded_border(&buffer, borders.s, borders.w, corners.sw, 2, {box.x, box.y + box.h})
 	}
 	if corners.se != 0 {
-		draw_rounded_border(&buffer, borders.s, borders.e, corners.se, 3, {box.x+box.w, box.y+box.h})
+		draw_rounded_border(
+			&buffer,
+			borders.s,
+			borders.e,
+			corners.se,
+			3,
+			{box.x + box.w, box.y + box.h},
+		)
 	}
 
 	color := in_color * draw_state.modulate
-	fcolor := transmute(SDL.FColor)color
+	fcolor := SDL.FColor(color)
 	SDL.RenderGeometryRaw(
 		renderer,
 		helper, // texture
-		&buffer.vertices[0][0], 8, // verts + stride
-		&fcolor, 0, // color + stride
-		&buffer.uvs[0][0], 8, // uvs
+		&buffer.vertices[0][0],
+		8, // verts + stride
+		&fcolor,
+		0, // color + stride
+		&buffer.uvs[0][0],
+		8, // uvs
 		buffer.num_vertices,
-		&buffer.indices[0], buffer.num_indices,
+		&buffer.indices[0],
+		buffer.num_indices,
 		1,
 	)
 }
 
 
-
 // corner_idx indices: (top_left, top_right, bottom_left, bottom_right)
-draw_rounded_border :: proc (buffer: ^DrawBuffer, width_h: f32, width_v: f32, radius: f32, corner_idx: int, corner: vec2) {
-	segments  := u8(math.min(24, math.floor(radius/math.ln(radius*1.6+1))))
+draw_rounded_border :: proc(
+	buffer: ^DrawBuffer,
+	width_h: f32,
+	width_v: f32,
+	radius: f32,
+	corner_idx: int,
+	corner: vec2,
+) {
+	segments := u8(math.min(24, math.floor(radius / math.ln(radius * 1.6 + 1))))
 	vertices_buf := buffer.vertices[buffer.num_vertices:]
 	uvs_buf := buffer.uvs[buffer.num_vertices:]
 	indices_buf := buffer.indices[buffer.num_indices:]
 
-	num_vertices : i32 = i32(segments) * 2 + 2
-	num_indices : i32 = i32(segments) * 6
+	num_vertices: i32 = i32(segments) * 2 + 2
+	num_indices: i32 = i32(segments) * 6
 	start_index := u8(buffer.num_vertices)
 
 	buffer.num_vertices += num_vertices
@@ -743,7 +792,7 @@ draw_rounded_border :: proc (buffer: ^DrawBuffer, width_h: f32, width_v: f32, ra
 	centerpoint := corner - (flip * radius)
 
 	v_radius := flip * (radius + PAD)
-	v_radius_inner := flip * vec2{radius-width_v-PAD, radius-width_h-PAD}
+	v_radius_inner := flip * vec2{radius - width_v - PAD, radius - width_h - PAD}
 
 	// draw from centerpoint +- x to centerpoint +- y
 	STROKE_OFFSET :: 0
@@ -751,44 +800,60 @@ draw_rounded_border :: proc (buffer: ^DrawBuffer, width_h: f32, width_v: f32, ra
 	base := vec2{0.5, 0.5} / TEX_SIZE + STROKE_OFFSET
 
 
-	uv_outer :f32 = (0.5 - PAD) * STROKE_CONTRAST
+	uv_outer: f32 = (0.5 - PAD) * STROKE_CONTRAST
 
-	uv_innerh :f32 = (width_h + PAD + 0.5 ) * STROKE_CONTRAST
-	uv_innerv :f32 = (width_v + PAD + 0.5 ) * STROKE_CONTRAST
+	uv_innerh: f32 = (width_h + PAD + 0.5) * STROKE_CONTRAST
+	uv_innerv: f32 = (width_v + PAD + 0.5) * STROKE_CONTRAST
 
 	uvs_buf[0] = base + ({uv_outer, uv_innerv} / TEX_SIZE)
 	uvs_buf[1] = base + ({uv_innerv, uv_outer} / TEX_SIZE)
 
-	vertices_buf[0] = txv({ centerpoint.x + v_radius.x,       centerpoint.y })
-	vertices_buf[1] = txv({ centerpoint.x + v_radius_inner.x, keep_y ? corner.y + width_h : centerpoint.y })
+	vertices_buf[0] = txv({centerpoint.x + v_radius.x, centerpoint.y})
+	vertices_buf[1] = txv(
+		{centerpoint.x + v_radius_inner.x, keep_y ? corner.y + width_h : centerpoint.y},
+	)
 	increment := math.TAU / 4 / f32(segments)
 	mat_cos := math.cos(increment)
 	mat_sin := math.sin(increment)
 
 	vert_pos := vec2{1, 0}
-	for idx in 1..<segments {
+	for idx in 1 ..< segments {
 		vert_pos = {
 			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
 			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
 		}
-		vertices_buf[idx*2] = txv(centerpoint + (vert_pos * v_radius))
-		vertices_buf[idx*2+1] = txv(centerpoint + ([2]f32{
-			keep_x ? 1.0 : vert_pos.x,
-			keep_y ? 1.0 : vert_pos.y,
-		} * v_radius_inner))
-		uvs_buf[idx*2] = base + ({uv_outer, uv_innerv* vert_pos.x* vert_pos.x + uv_innerh * vert_pos.y* vert_pos.y} / TEX_SIZE)
-		uvs_buf[idx*2+1] = base + ({uv_innerv* vert_pos.x* vert_pos.x + uv_innerh * vert_pos.y * vert_pos.y, uv_outer} / TEX_SIZE)
+		vertices_buf[idx * 2] = txv(centerpoint + (vert_pos * v_radius))
+		vertices_buf[idx * 2 + 1] = txv(
+			centerpoint +
+			([2]f32{keep_x ? 1.0 : vert_pos.x, keep_y ? 1.0 : vert_pos.y} * v_radius_inner),
+		)
+		uvs_buf[idx * 2] =
+			base +
+			({
+						uv_outer,
+						uv_innerv * vert_pos.x * vert_pos.x + uv_innerh * vert_pos.y * vert_pos.y,
+					} /
+					TEX_SIZE)
+		uvs_buf[idx * 2 + 1] =
+			base +
+			({
+						uv_innerv * vert_pos.x * vert_pos.x + uv_innerh * vert_pos.y * vert_pos.y,
+						uv_outer,
+					} /
+					TEX_SIZE)
 	}
-	vertices_buf[segments*2] =   txv({ centerpoint.x, centerpoint.y + v_radius.y })
-	vertices_buf[segments*2+1] = txv({ keep_x ? corner.x + width_v : centerpoint.x, centerpoint.y + v_radius_inner.y})
+	vertices_buf[segments * 2] = txv({centerpoint.x, centerpoint.y + v_radius.y})
+	vertices_buf[segments * 2 + 1] = txv(
+		{keep_x ? corner.x + width_v : centerpoint.x, centerpoint.y + v_radius_inner.y},
+	)
 
-	uvs_buf[segments*2] = base + ({uv_outer, uv_innerh} / TEX_SIZE)
-	uvs_buf[segments*2+1] = base + ({uv_innerh, uv_outer} / TEX_SIZE)
+	uvs_buf[segments * 2] = base + ({uv_outer, uv_innerh} / TEX_SIZE)
+	uvs_buf[segments * 2 + 1] = base + ({uv_innerh, uv_outer} / TEX_SIZE)
 
 
-	for idx_wide in 0..<segments {
+	for idx_wide in 0 ..< segments {
 		idx := u8(idx_wide)
-		indices_buf[idx * 6]     = start_index + idx * 2
+		indices_buf[idx * 6] = start_index + idx * 2
 		indices_buf[idx * 6 + 1] = start_index + idx * 2 + 1
 		indices_buf[idx * 6 + 2] = start_index + idx * 2 + 2
 		indices_buf[idx * 6 + 3] = start_index + idx * 2 + 2

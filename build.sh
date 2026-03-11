@@ -151,6 +151,12 @@ if [[ "$TARGET" = "linux" ]]; then
 
 	compile_cmd+=(
 		-debug
+		-vet
+		-vet-tabs
+		-strict-style
+		-vet-style
+		-warnings-as-errors
+		-disallow-do
 		-out:"$PACKAGE_PATH/game.bin"
 	)
 

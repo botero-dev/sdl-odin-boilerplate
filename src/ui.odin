@@ -1,10 +1,10 @@
 
 package main
 
+import "core:c"
 import "core:fmt"
 import "core:log"
 import "core:math"
-import "core:c"
 import "core:strings"
 
 import SDL "vendor:sdl3"
@@ -29,7 +29,9 @@ border_policy :: proc "contextless" (border: $T) -> u16 {
 	return u16(math.round(f32(border) * dpi)) // could also be ceil or floor
 }
 
-DPI_ElementDeclaration :: proc "contextless" (decl: clay.ElementDeclaration) -> clay.ElementDeclaration {
+DPI_ElementDeclaration :: proc "contextless" (
+	decl: clay.ElementDeclaration,
+) -> clay.ElementDeclaration {
 	result := decl
 	result.cornerRadius = DPI_CornerRadius(decl.cornerRadius)
 	result.border.width = DPI_BorderWidth(result.border.width)
@@ -83,32 +85,30 @@ DPI_Padding :: proc "contextless" (padding: clay.Padding) -> clay.Padding {
 print_render_commands: bool
 
 
-
-
 render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
-	for idx in 0..<i32(render_commands.length) {
-        render_command := clay.RenderCommandArray_Get(render_commands, idx)
+	for idx in 0 ..< i32(render_commands.length) {
+		render_command := clay.RenderCommandArray_Get(render_commands, idx)
 
 		box := transmute(Rect)render_command.boundingBox
 
-        switch render_command.commandType {
-        case .Rectangle:
+		switch render_command.commandType {
+		case .Rectangle:
 			if print_render_commands {
 				log.info("cmd:", idx, render_command, render_command.renderData.rectangle)
 			}
 
-            rect := render_command.renderData.rectangle
+			rect := render_command.renderData.rectangle
 			corners := rect.cornerRadius
 			if corners == {0, 0, 0, 0} {
 				//fmt.println(render_command)
 				color := rect.backgroundColor
 				SDL.SetRenderDrawColorFloat(renderer, color[0], color[1], color[2], color[3])
 				SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
-				rect2 := transmute(SDL.FRect)box
+				rect2 := SDL.FRect(box)
 				SDL.RenderFillRect(renderer, &rect2)
 			} else {
-				corners := transmute(CornerRadii) rect.cornerRadius
-				color := transmute(Color) rect.backgroundColor
+				corners := transmute(CornerRadii)rect.cornerRadius
+				color := Color(rect.backgroundColor)
 				draw_box_filled(box, corners, color)
 			}
 
@@ -118,23 +118,25 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 			}
 
 			border := render_command.renderData.border
-			radii := transmute(CornerRadii) border.cornerRadius
+			radii := transmute(CornerRadii)border.cornerRadius
 			borders := BorderWidths {
 				f32(border.width.left),
 				f32(border.width.right),
 				f32(border.width.top),
 				f32(border.width.bottom),
 			}
-			color := transmute(Color)border.color
-			draw_box_border(box, radii, borders, color)
+			draw_box_border(box, radii, borders, border.color)
 
 		case .Text:
-            //fmt.println(render_command)
-            text_data := render_command.renderData.text
-            string_slice := text_data.stringContents
-            color := transmute([4]f32) text_data.textColor
+			//fmt.println(render_command)
+			text_data := render_command.renderData.text
+			string_slice := text_data.stringContents
+			color := text_data.textColor
 			if print_render_commands {
-				str_to_draw := strings.string_from_ptr(string_slice.chars, int(string_slice.length))
+				str_to_draw := strings.string_from_ptr(
+					string_slice.chars,
+					int(string_slice.length),
+				)
 				log.info("cmd:", idx, render_command, render_command.renderData.text)
 				log.info("text:", str_to_draw)
 			}
@@ -144,11 +146,17 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 
 			if text != nil {
 				color *= draw_state.modulate
-				TTF.SetTextColor(text, u8(color[0]*255), u8(color[1]*255), u8(color[2]*255), u8(color[3]*255))
-                TTF.SetTextString(text, cstring(string_slice.chars), uint(string_slice.length))
-                TTF.SetTextWrapWidth(text, 0)
-                TTF.DrawRendererText(text, math.round(box.x), math.round(box.y))
-            }
+				TTF.SetTextColor(
+					text,
+					u8(color[0] * 255),
+					u8(color[1] * 255),
+					u8(color[2] * 255),
+					u8(color[3] * 255),
+				)
+				TTF.SetTextString(text, cstring(string_slice.chars), uint(string_slice.length))
+				TTF.SetTextWrapWidth(text, 0)
+				TTF.DrawRendererText(text, math.round(box.x), math.round(box.y))
+			}
 
 		case .Image:
 			if print_render_commands {
@@ -156,51 +164,53 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 			}
 
 			image := render_command.renderData.image
-            color := image.backgroundColor
+			color := image.backgroundColor
 
 			tex := (^SDL.Texture)(image.imageData)
-            SDL.SetTextureColorModFloat(tex, color[0], color[1], color[2])
+			SDL.SetTextureColorModFloat(tex, color[0], color[1], color[2])
 			SDL.SetTextureAlphaModFloat(tex, color[3])
 			SDL.SetTextureBlendMode(tex, {.BLEND})
 
-            rect2 := transmute(SDL.FRect) box
-            SDL.RenderTexture(renderer, tex, nil, &rect2)
+			rect2 := SDL.FRect(box)
+			SDL.RenderTexture(renderer, tex, nil, &rect2)
 
 			corners := image.cornerRadius
 			if corners != {0, 0, 0, 0} {
 				log.info("image unhandled case!")
 			}
 		case .ScissorStart:
-			clip_rect := SDL.Rect {i32(box.x), i32(box.y), i32(box.w), i32(box.h)}
-            SDL.SetRenderClipRect(renderer, &clip_rect);
+			clip_rect := SDL.Rect{i32(box.x), i32(box.y), i32(box.w), i32(box.h)}
+			SDL.SetRenderClipRect(renderer, &clip_rect)
 		case .ScissorEnd:
-            SDL.SetRenderClipRect(renderer, nil);
+			SDL.SetRenderClipRect(renderer, nil)
 		case .None:
-			fmt.println("unhandled render command type: None", render_command.commandType, render_command)
+			fmt.println(
+				"unhandled render command type: None",
+				render_command.commandType,
+				render_command,
+			)
 		case .Custom:
-			bounding_box := render_command.boundingBox
-
 			custom_render_data: clay.CustomRenderData = render_command.renderData.custom
-			background_color := custom_render_data.backgroundColor
-			corner_radius := custom_render_data.cornerRadius
 
 			custom_data := (^CustomRenderData)(custom_render_data.customData)
 			custom_data.callback(custom_data, render_command)
-        }
-    }
+		}
+	}
 }
 
-CustomRenderCallback :: #type proc (render_data: ^CustomRenderData, render_command: ^clay.RenderCommand)
+CustomRenderCallback :: #type proc(
+	render_data: ^CustomRenderData,
+	render_command: ^clay.RenderCommand,
+)
 
 CustomRenderData :: struct {
 	callback: CustomRenderCallback,
 }
 
 
-
 FontData :: struct {
 	font_io: ^SDL.IOStream,
-	sizes: map[u16]^TTF.Font,
+	sizes:   map[u16]^TTF.Font,
 }
 
 loaded_fonts: u16 = 0 // we reserve fontid=0 for null font
@@ -208,7 +218,7 @@ fonts: [dynamic]FontData
 
 load_font_io :: proc(io: ^SDL.IOStream) -> u16 {
 	new_font := FontData {
-		font_io = io
+		font_io = io,
 	}
 	loaded_font_id := loaded_fonts
 	log.info("set font io:", loaded_font_id)
@@ -236,9 +246,9 @@ load_font_io :: proc(io: ^SDL.IOStream) -> u16 {
 
 
 clay_measure_text :: proc "c" (
-    text: clay.StringSlice,
-    config: ^clay.TextElementConfig,
-    userData: rawptr,
+	text: clay.StringSlice,
+	config: ^clay.TextElementConfig,
+	userData: rawptr,
 ) -> clay.Dimensions {
 	context = ctx
 	font := get_font_with_size(config.fontId, config.fontSize)
@@ -247,11 +257,8 @@ clay_measure_text :: proc "c" (
 		return {}
 	}
 	size := [2]c.int{}
-	success := TTF.GetStringSize(font, cstring(text.chars), uint(text.length), &size.x, &size.y)
-    return {
-        width = f32(size.x),
-        height = f32(size.y),
-    }
+	TTF.GetStringSize(font, cstring(text.chars), uint(text.length), &size.x, &size.y)
+	return {width = f32(size.x), height = f32(size.y)}
 }
 
 NIL_FONT :: ~u16(0)
@@ -321,10 +328,10 @@ ui_init :: proc() {
 
 
 	min_size := clay.MinMemorySize()
-    clay_memory = make([]byte, min_size)
-    clay_arena := clay.CreateArenaWithCapacityAndMemory(uint(min_size), &clay_memory[0])
-    clay.Initialize(clay_arena, {f32(win_size.x), f32(win_size.y)}, { handler = clay_error_handler })
-    clay.SetMeasureTextFunction(clay_measure_text, nil)
+	clay_memory = make([]byte, min_size)
+	clay_arena := clay.CreateArenaWithCapacityAndMemory(uint(min_size), &clay_memory[0])
+	clay.Initialize(clay_arena, {f32(win_size.x), f32(win_size.y)}, {handler = clay_error_handler})
+	clay.SetMeasureTextFunction(clay_measure_text, nil)
 
 }
 
@@ -338,19 +345,19 @@ NavigationDirection :: enum {
 
 
 NavigationItem :: struct {
-	label: string,
-	handler: PointerHandler,
+	label:     string,
+	handler:   PointerHandler,
 	user_data: rawptr,
-	scope: ^NavigationScope,
-	owner: NavItemHandle
+	scope:     ^NavigationScope,
+	owner:     NavItemHandle,
 }
 
 NavigationScope :: struct {
 	direction: NavigationDirection,
-	reverse: bool, // why would you?
-	wrap: bool,
-	contents: [dynamic]NavItemHandle,
-	current: u32, // index of contents array
+	reverse:   bool, // why would you?
+	wrap:      bool,
+	contents:  [dynamic]NavItemHandle,
+	current:   u32, // index of contents array
 }
 
 
@@ -374,7 +381,7 @@ HandlerInfo :: struct {
 
 HandlerInfoSimple :: struct {
 	using generic: HandlerInfo,
-	target: ButtonHandlerSimple,
+	target:        ButtonHandlerSimple,
 }
 
 ui_add_button :: proc(label: string, info: ^HandlerInfo = nil) -> NavItemHandle {
@@ -383,8 +390,8 @@ ui_add_button :: proc(label: string, info: ^HandlerInfo = nil) -> NavItemHandle 
 	return item_handle
 }
 
-ui_button_handler :: proc (event: ^Event, handler_info: rawptr) {
-	if event.phase == .Capturing { return }
+ui_button_handler :: proc(event: ^Event, handler_info: rawptr) {
+	if event.phase == .Capturing {return}
 	commit := false
 	if event.sdl_event.type == .MOUSE_BUTTON_DOWN {
 		button_event := event.sdl_event.button
@@ -408,12 +415,13 @@ ui_button_handler :: proc (event: ^Event, handler_info: rawptr) {
 }
 
 
-
-nav_add_item :: proc(label: string, handler: PointerHandler = nil, user_data: rawptr = nil) -> NavItemHandle {
+nav_add_item :: proc(
+	label: string,
+	handler: PointerHandler = nil,
+	user_data: rawptr = nil,
+) -> NavItemHandle {
 	id := NavItemHandle(len(nav_item_buffer))
-	nav_item := NavigationItem {
-		label, handler, user_data, nil, nav_scope_handle,
-	}
+	nav_item := NavigationItem{label, handler, user_data, nil, nav_scope_handle}
 	append(&nav_item_buffer, nav_item)
 	if navigation_scope != nil {
 		append(&navigation_scope.contents, id)
@@ -447,7 +455,11 @@ nav_get_focused :: proc(in_item_handle: NavItemHandle) -> bool {
 	return focused_item
 }
 
-nav_push_scope :: proc(in_scope: ^NavigationScope, handler: PointerHandler = nil, user_data: rawptr = nil) {
+nav_push_scope :: proc(
+	in_scope: ^NavigationScope,
+	handler: PointerHandler = nil,
+	user_data: rawptr = nil,
+) {
 	prev_scope := navigation_scope
 	if prev_scope == nil {
 		clear(&nav_item_buffer)
@@ -477,7 +489,11 @@ nav_finish :: proc() {
 }
 
 @(deferred_none = nav_pop_scope)
-nav_scope :: proc(in_scope: ^NavigationScope, handler: PointerHandler = nil, user_data: ^HandlerInfo = nil) {
+nav_scope :: proc(
+	in_scope: ^NavigationScope,
+	handler: PointerHandler = nil,
+	user_data: ^HandlerInfo = nil,
+) {
 	nav_push_scope(in_scope, handler, user_data)
 }
 
@@ -608,8 +624,8 @@ nav_handle_input :: proc(event: ^Event) {
 
 PointerEvent :: struct {
 	using event: Event,
-	current: clay.ElementId,
-	target: clay.ElementId,
+	current:     clay.ElementId,
+	target:      clay.ElementId,
 }
 
 
@@ -617,9 +633,9 @@ PointerHandler :: #type proc(event: ^Event, user_data: rawptr)
 
 
 PointerHandlerEntry :: struct {
-	user_data: rawptr,
+	user_data:  rawptr,
 	parent_idx: i32,
-	handler: PointerHandler,
+	handler:    PointerHandler,
 }
 
 pointer_handler_buffer: [dynamic]PointerHandlerEntry
@@ -639,9 +655,9 @@ ui_reset_handler_buffer :: proc() {
 ui_push_pointer_handler :: proc(handler: PointerHandler = nil, user_data: rawptr = nil) {
 
 	handler_frame := PointerHandlerEntry {
-		user_data = user_data,
+		user_data  = user_data,
 		parent_idx = current_handler,
-		handler = handler,
+		handler    = handler,
 	}
 
 	handler_idx := i32(len(pointer_handler_buffer))
@@ -672,7 +688,11 @@ ui_pointer_handler :: proc(handler: PointerHandler = nil, user_data: rawptr = ni
 
 receiver: i32 = 0
 
-layout_handle_mouse_input :: proc "c" (id: clay.ElementId, pointerData: clay.PointerData, userData: rawptr) {
+layout_handle_mouse_input :: proc "c" (
+	id: clay.ElementId,
+	pointerData: clay.PointerData,
+	userData: rawptr,
+) {
 	receiver = i32(uintptr(userData))
 }
 
@@ -717,14 +737,14 @@ finish_handling_mouse_input :: proc(event: ^Event) {
 
 wheel_delta: [2]f32
 
-ui_push_pointer_event :: proc(event: ^Event)  {
+ui_push_pointer_event :: proc(event: ^Event) {
 
 	sdl_event := event.sdl_event
 
 	if event.type != .Mouse {
 		return
 	}
-	coords := vec2 {}
+	coords := vec2{}
 	receiver = 0
 	#partial switch sdl_event.type {
 	case .MOUSE_MOTION:
@@ -759,26 +779,25 @@ update_scroll :: proc(dt: f32) {
 
 UIModifier :: struct {
 	using custom_render_data: CustomRenderData,
-	pushed: bool,
-	wrap: bool,
+	pushed:                   bool,
+	wrap:                     bool,
 	// wrap modifiers are added as parents of modified elements
 	// while nowrap are added as siblings
 }
 
 UIModifierModulate :: struct {
 	using base: UIModifier,
-	color: [4]f32,
+	color:      [4]f32,
 }
 
 ui_modifier_modulate :: proc(color: [4]f32) -> UIModifierModulate {
-	return {
-		callback = ui_modifier_modulate_callback,
-		wrap = false,
-		color = color,
-	}
+	return {callback = ui_modifier_modulate_callback, wrap = false, color = color}
 }
 
-ui_modifier_modulate_callback :: proc (render_data: ^CustomRenderData, render_command: ^clay.RenderCommand) {
+ui_modifier_modulate_callback :: proc(
+	render_data: ^CustomRenderData,
+	render_command: ^clay.RenderCommand,
+) {
 	modulate := (^UIModifierModulate)(render_data)
 	if !modulate.pushed {
 		draw_push_state()
@@ -792,32 +811,33 @@ ui_modifier_modulate_callback :: proc (render_data: ^CustomRenderData, render_co
 
 UIModifierTransform :: struct {
 	using base: UIModifier,
-	mat: matrix[3,3]f32,
-	pivot: vec2
+	mat:        matrix[3, 3]f32,
+	pivot:      vec2,
 }
-ui_modifier_transform :: proc "contextless" (in_mat: matrix[3,3]f32, in_pivot: vec2) -> UIModifierTransform {
-	return {
-		callback = ui_modifier_transform_callback,
-		wrap = true,
-		mat = in_mat,
-		pivot = in_pivot,
-	}
+ui_modifier_transform :: proc "contextless" (
+	in_mat: matrix[3, 3]f32,
+	in_pivot: vec2,
+) -> UIModifierTransform {
+	return {callback = ui_modifier_transform_callback, wrap = true, mat = in_mat, pivot = in_pivot}
 }
-ui_modifier_transform_callback :: proc (render_data: ^CustomRenderData, render_command: ^clay.RenderCommand) {
+ui_modifier_transform_callback :: proc(
+	render_data: ^CustomRenderData,
+	render_command: ^clay.RenderCommand,
+) {
 	modifier := (^UIModifierTransform)(render_data)
 	if !modifier.pushed {
 		draw_push_state()
 
 		box := transmute(Rect)render_command.boundingBox
 
-		mat: matrix[3,3]f32 = 1
+		mat: matrix[3, 3]f32 = 1
 		pivot_abs := [3]f32 {
 			box.x + (box.w * modifier.pivot.x),
 			box.y + (box.h * modifier.pivot.y),
 			0,
 		}
 
-		pivot_mat: matrix[3,3]f32 = 1
+		pivot_mat: matrix[3, 3]f32 = 1
 		pivot_mat[2] = -pivot_abs
 		pivot_mat[2][2] = 1
 
@@ -829,7 +849,7 @@ ui_modifier_transform_callback :: proc (render_data: ^CustomRenderData, render_c
 
 		mat = pivot_mat * mat
 
-		draw_set_matrix( mat)
+		draw_set_matrix(mat)
 
 		modifier.pushed = true
 	} else {
@@ -849,15 +869,11 @@ ui_modifier_push :: proc(modifier: ^UIModifier) {
 	if modifier.wrap {
 		// only open
 		clay._OpenElement()
-		clay.ConfigureOpenElement({
-			custom = { modifier }
-		})
+		clay.ConfigureOpenElement({custom = {modifier}})
 
 	} else {
 		// open and close
-		clay.UI()({
-			custom = { modifier }
-		})
+		clay.UI()({custom = {modifier}})
 	}
 }
 
@@ -865,12 +881,10 @@ ui_modifier_pop :: proc(modifier: ^UIModifier) {
 	if modifier.wrap {
 		clay._CloseElement()
 	}
-	clay.UI()({
-		custom = { modifier }
-	})
+	clay.UI()({custom = {modifier}})
 }
 
-@(deferred_in=ui_modifier_pop)
+@(deferred_in = ui_modifier_pop)
 ui_modifier :: proc(modifier: ^UIModifier) {
 	ui_modifier_push(modifier)
 }

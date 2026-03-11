@@ -4,8 +4,6 @@ package main
 import SDL "vendor:sdl3"
 
 import "core:fmt"
-import "core:c"
-import "core:strings"
 import "core:log"
 
 import "base:runtime"
@@ -23,17 +21,17 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 		log.info("wasm main")
 	}
 
-	@export
+	@(export)
 	main_start :: proc "c" () {
 		sdl_app_init(nil, 0, nil)
 	}
 
-	@export
+	@(export)
 	web_window_size_changed :: proc "c" (w: c.int, h: c.int) {
 		SDL.SetWindowSize(window, w, h)
 	}
 
-	@export
+	@(export)
 	main_update :: proc "c" () -> bool {
 		event: SDL.Event
 		context = ctx
@@ -43,7 +41,7 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 		return sdl_app_iterate(nil) == .CONTINUE
 	}
 
-	@export
+	@(export)
 	main_end :: proc "c" () {
 		sdl_app_quit(nil, {})
 	}
@@ -53,20 +51,20 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 	android_main :: proc "c" (appstate: rawptr) {
 		context = runtime.default_context()
 		context.logger = runtime.Logger {
-			procedure = sdl_log_proc
+			procedure = sdl_log_proc,
 		}
 		log.info("android_main")
 	}
 
 	@(export)
-	SDL_main :: proc "c" (argc: c.int, argv: [^]cstring) -> c.int {
+	SDL_main :: proc "c" (argc: i32, argv: [^]cstring) -> i32 {
 		context = runtime.default_context()
 		context.logger = runtime.Logger {
-			procedure = sdl_log_proc
+			procedure = sdl_log_proc,
 		}
 		log.info("android SDL_main")
 		sdl_app_main()
-		return 0;
+		return 0
 	}
 
 } else {
@@ -84,27 +82,40 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 Logger_Proc :: #type proc(data: rawptr, level: Level, text: string, options: Options, location := #caller_location);
 */
 
-sdl_log_proc :: proc(data: rawptr, level: runtime.Logger_Level, text: string, options: runtime.Logger_Options, location := #caller_location) {
+sdl_log_proc :: proc(
+	data: rawptr,
+	level: runtime.Logger_Level,
+	text: string,
+	options: runtime.Logger_Options,
+	location := #caller_location,
+) {
 	temporary := fmt.ctprintf("[%s] %s", level, text)
 	SDL.Log("%s", temporary)
 }
 
-sdl_app_main :: proc () {
+sdl_app_main :: proc() {
 	if context.logger.procedure == runtime.default_logger_proc {
 		context.logger = runtime.Logger {
-			procedure = sdl_log_proc
+			procedure = sdl_log_proc,
 		}
 	}
 	ctx = context
 	log.info("sdl_app_main()")
 
 
-    //args := os.args
+	//args := os.args
 	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 		// we don't use this as we call the callbacks directly
 	} else {
-        SDL.EnterAppMainCallbacks(0, nil, sdl_app_init, sdl_app_iterate, sdl_app_event, sdl_app_quit)
-    }
+		SDL.EnterAppMainCallbacks(
+			0,
+			nil,
+			sdl_app_init,
+			sdl_app_iterate,
+			sdl_app_event,
+			sdl_app_quit,
+		)
+	}
 }
 
 main_thread: SDL.ThreadID
