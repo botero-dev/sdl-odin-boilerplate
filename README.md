@@ -1,9 +1,9 @@
 Odin + SDL + WASM + Android Boilerplate
 =======================================
 
-This project is a framework for building cross-platform applications using SDL library and Odin Language. A gallery application is 
+This project is a framework for building cross-platform applications using SDL library and Odin Language. 
 
-So far the framework is built as a gallery has a simple implementation of these components:
+A gallery application is developed as a test environment to implement the many systems needed to run:
 
 - Main loop to grab input, do idle processing, layout and rendering.
 - Event handling like pointer routing and keyboard/gamepad/tv remote navigation.
