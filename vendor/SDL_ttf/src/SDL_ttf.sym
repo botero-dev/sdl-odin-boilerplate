@@ -17,6 +17,7 @@ SDL3_ttf_0.0.0 {
     TTF_DestroySurfaceTextEngine;
     TTF_DestroyText;
     TTF_DrawRendererText;
+    TTF_DrawRendererTextTx;
     TTF_DrawSurfaceText;
     TTF_FontHasGlyph;
     TTF_FontIsFixedWidth;

@@ -959,6 +959,78 @@ bool TTF_DrawRendererText(TTF_Text *text, float x, float y)
     return true;
 }
 
+bool TTF_DrawRendererTextTx(TTF_Text *text, float tx, float ty, float xx, float xy, float yx, float yy)
+{
+    if (!text || !text->internal || text->internal->engine->CreateText != CreateText) {
+        return SDL_InvalidParamError("text");
+    }
+
+    // Make sure the text is up to date
+    if (!TTF_UpdateText(text)) {
+        return false;
+    }
+
+    TTF_RendererTextEngineTextData *data = (TTF_RendererTextEngineTextData *)text->internal->engine_text;
+    if (!data) {
+        // Empty string, nothing to do
+        return true;
+    }
+
+    SDL_Renderer *renderer = ((TTF_RendererTextEngineData *)text->internal->engine->userdata)->renderer;
+    AtlasDrawSequence *sequence = data->draw_sequence;
+    while (sequence) {
+        float *position = sequence->positions;
+        for (int i = 0; i < sequence->num_rects; ++i) {
+            const SDL_Rect *dst = &sequence->rects[i];
+
+            float x0 = dst->x;
+            float x1 = dst->x + dst->w;
+            float y0 = dst->y;
+            float y1 = dst->y + dst->h;
+
+            float nw_x = tx + (x0 * xx + y0 * xy);
+            float nw_y = ty + (x0 * yx + y0 * yy);
+            float ne_x = tx + (x1 * xx + y0 * xy);
+            float ne_y = ty + (x1 * yx + y0 * yy);
+            float se_x = tx + (x1 * xx + y1 * xy);
+            float se_y = ty + (x1 * yx + y1 * yy);
+            float sw_x = tx + (x0 * xx + y1 * xy);
+            float sw_y = ty + (x0 * yx + y1 * yy);
+
+            *position++ = nw_x;
+            *position++ = nw_y;
+            *position++ = ne_x;
+            *position++ = ne_y;
+            *position++ = se_x;
+            *position++ = se_y;
+            *position++ = sw_x;
+            *position++ = sw_y;
+        }
+
+        SDL_FColor color;
+        if (sequence->image_type == TTF_IMAGE_ALPHA) {
+            SDL_copyp(&color, &text->internal->color);
+        } else {
+            // Don't alter the color data in the image
+            color.r = 1.0f;
+            color.g = 1.0f;
+            color.b = 1.0f;
+            color.a = text->internal->color.a;
+        }
+
+        SDL_RenderGeometryRaw(renderer,
+                              sequence->texture,
+                              sequence->positions, 2 * sizeof(float),
+                              &color, 0,
+                              sequence->texcoords, 2 * sizeof(float),
+                              sequence->num_rects * 4,
+                              sequence->indices, sequence->num_rects * 6, sizeof(*sequence->indices));
+
+        sequence = sequence->next;
+    }
+    return true;
+}
+
 void TTF_DestroyRendererTextEngine(TTF_TextEngine *engine)
 {
     if (!engine || engine->CreateText != CreateText) {

@@ -22,7 +22,8 @@ gfx_init :: proc() {
 	SDL.RenderClear(renderer)
 	SDL.SetRenderDrawColorFloat(renderer, 1, 1, 1, 1)
 	SDL.RenderPoint(renderer, 1, 1)
-	SDL.SetTextureScaleMode(helper, .PIXELART)
+	//SDL.SetTextureScaleMode(helper, .PIXELART)
+	SDL.SetTextureScaleMode(helper, .LINEAR)
 	SDL.SetTextureBlendMode(helper, {.BLEND})
 }
 
