@@ -1,138 +1,56 @@
-#! /bin/bash
+#!/usr/bin/env bash
 # Copyright Andrés Botero 2025
 #
-set -e
+set -euo pipefail
 
-# first ensure that you have:
+source "scripts/build_utils.sh"
+
+
+# your environment should have:
 #  - clang
-#  - odin
 #  - cmake
-#  - emsdk install latest
-#  - source emsdk_env
-#  - clone https://github.com/libsdl-org/SDL.git
-#  - cd SDL && git checkout release-3.2.24
-#
+#  - emsdk install latest && source emsdk_env
 
-if [[ "$(uname)" = "Linux" ]]; then
-	SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-else
-	SCRIPT_PATH="c:/abotero/webtest"
-fi
-ODIN_PATH="$SCRIPT_PATH/../odin"
 
-SDL_PATH="$SCRIPT_PATH/../SDL"
-SDLIMG_PATH="$SCRIPT_PATH/../SDL_image"
-SDLTTF_PATH="$SCRIPT_PATH/../SDL_ttf"
+# ensure we have odin toolchain
+ODIN=$("./vendor/odin.sh")
 
-# git clone emsdk
-# ./emsdk install latest
-# ./emsdk activate latest
-# you don't need to source emsdk_env as we do here manually
-EMSDK_PATH="$SCRIPT_PATH/../emsdk"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [[ "$TARGET" = "" ]]; then
+SDL_PATH="$REPO_ROOT/../SDL"
+SDLIMG_PATH="$REPO_ROOT/../SDL_image"
+SDLTTF_PATH="$REPO_ROOT/../SDL_ttf"
+
+if [[ "${TARGET:-}" = "" ]]; then
 	if [[ "$(uname)" = "Linux" ]]; then
-		TARGET="linux"
+		export TARGET="linux"
 	else
-		TARGET="win"
+		export TARGET="win"
 	fi
 fi
 
-source_emsdk() {
-	if [ -z "$EMSDK" ]; then
-		echo "Loading emsdk environment"
-		source "$EMSDK_PATH/emsdk_env.sh"
-	fi
-}
-
-cmake_cmd() {
-	if [[ "$TARGET" = "web" ]]; then
-		source_emsdk
-		echo emcmake cmake "$@"
-		emcmake cmake "$@"
-	else
-		echo cmake "$@"
-		cmake "$@"
-	fi
-}
-
-BUILD_PATH="$SCRIPT_PATH/build"
-BUILD_CONFIG="Debug"
-
-# ensure that SDL is built
-BUILD_SRC_PATH="$BUILD_PATH/src/$TARGET"
-BUILD_OBJ_PATH="$BUILD_PATH/obj/$TARGET"
-INSTALL_PATH="$BUILD_PATH/lib/$TARGET"
-#BUILD_LIB_PATH="$INSTALL_PATH/lib"
-PACKAGE_PATH="$BUILD_PATH/package/$TARGET"
-
-PREFIX=""
-
-SUFFIX=".ext"
-if [[ "$TARGET" = "linux" ]]; then
-	SUFFIX=".so"
-	PREFIX="lib"
-fi
-if [[ "$TARGET" = "win" ]]; then
-	SUFFIX=".lib"
-fi
-if [[ "$TARGET" = "web" ]]; then
-	PREFIX="lib"
-	SUFFIX=".a"
-fi
-
-#PREFIX="$PREFIX/$BUILD_CONFIG"
-
-SDL_LIBRARY="${PREFIX}SDL3${SUFFIX}"
-SDLIMG_LIBRARY="${PREFIX}SDL3_image${SUFFIX}"
-SDLTTF_LIBRARY="${PREFIX}SDL3_ttf${SUFFIX}"
-
-cmake_common_args=(
-	-DCMAKE_INSTALL_PREFIX="$INSTALL_PATH"
-)
+set_target "$TARGET" # sets environment variables
 
 
-if [ ! -e "$INSTALL_PATH/lib/$SDL_LIBRARY" ]; then
-    mkdir -p "$BUILD_SRC_PATH/sdl"
-    pushd "$BUILD_SRC_PATH/sdl"
+./vendor/sdl.sh
+make_cmake_library vendor/SDL SDL3  \
+	-DSDL_X11_XTEST=OFF             \
+	-DSDL_TEST_LIBRARY=OFF 
 
-	cmake_cmd "$SDL_PATH" "${cmake_common_args[@]}" -DSDL_X11_XTEST=OFF -DSDL_TEST_LIBRARY=OFF
-    cmake --build . --config "$BUILD_CONFIG" --parallel
-	cmake --install . --config "$BUILD_CONFIG"
+./vendor/sdl_image.sh
+make_cmake_library vendor/SDL_image SDL3_image  \
+	-DSDL3_DIR="$BUILD_CMAKE_PATH/SDL3"         \
+	-DSDL_X11_XTEST=OFF                         \
+	-DSDL_TEST_LIBRARY=OFF 
 
-	popd
-fi
-
-cmake_common_args+=(
-	-DSDL3_DIR="$BUILD_SRC_PATH/sdl"
-)
-
-
-if [ ! -e "$INSTALL_PATH/lib/$SDLIMG_LIBRARY" ]; then
-    mkdir -p "$BUILD_SRC_PATH/sdl_image"
-    pushd "$BUILD_SRC_PATH/sdl_image"
-
-    cmake_cmd "$SDLIMG_PATH" "${cmake_common_args[@]}" -DSDLIMG_AVIF=OFF # -DSDLIMAGE_VENDORED=true
-    cmake --build . --config "$BUILD_CONFIG" --parallel
-	cmake --install . --config "$BUILD_CONFIG"
-
-	popd
-fi
+./vendor/sdl_ttf.sh
+make_cmake_library vendor/SDL_ttf SDL3_ttf  \
+	-DSDL3_DIR="$BUILD_CMAKE_PATH/SDL3"         \
+	-DSDLTTF_VENDORED=OFF                  \
+	-DSDLTTF_SAMPLES=false
 
 
-if [ ! -e "$INSTALL_PATH/lib/$SDLTTF_LIBRARY" ]; then
-    mkdir -p "$BUILD_SRC_PATH/sdl_ttf"
-    pushd "$BUILD_SRC_PATH/sdl_ttf"
-    cmake_cmd "$SDLTTF_PATH"  "${cmake_common_args[@]}" -DSDLTTF_VENDORED=true -DSDLTTF_SAMPLES=false
-    cmake --build . --config "$BUILD_CONFIG" --parallel
-	cmake --install . --config "$BUILD_CONFIG"
-
-	popd
-fi
-
-
-
-compile_cmd=("$ODIN_PATH/odin" build src)
+compile_cmd=("$ODIN" build src)
 
 if [[ "$TARGET" = "linux" ]]; then
 
@@ -190,8 +108,8 @@ echo "Packaging"
 
 if [[ "$TARGET" = "win" ]]; then
 	echo "Copying .dll files."
-	INSTALL_PATH_BASH=$(echo "$INSTALL_PATH" | sed 's|^\([A-Za-z]\):/|/\1/|')
-	PACKAGE_PATH_BASH=$(echo "$PACKAGE_PATH" | sed 's|^\([A-Za-z]\):/|/\1/|')
+	INSTALL_PATH_BASH=$(to_bash_path "$INSTALL_PATH")
+	PACKAGE_PATH_BASH=$(to_bash_path "$PACKAGE_PATH")
 	cp "$INSTALL_PATH_BASH/bin/"* "$PACKAGE_PATH_BASH"
 
 
@@ -243,5 +161,5 @@ elif [ -d "$PACKAGE_CONTENT_PATH" ]; then
 else
 	echo "creating symlink to content folder"
 	rm -f "$PACKAGE_CONTENT_PATH"
-	ln -s "$SCRIPT_PATH/content" "$PACKAGE_CONTENT_PATH"
+	ln -s "$REPO_ROOT/content" "$PACKAGE_CONTENT_PATH"
 fi

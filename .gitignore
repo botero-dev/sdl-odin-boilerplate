@@ -1,9 +1,12 @@
 /build
 /content
 /platform/android/.gradle
+/out
 
 # Ignore everything by default, we can force add to our repo as needed
-/vendor/clay
+/vendor/*/
+
+
 
 /src/clay-odin
 
