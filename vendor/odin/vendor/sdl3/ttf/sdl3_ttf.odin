@@ -255,7 +255,7 @@ foreign lib {
 	DestroySurfaceTextEngine  :: proc(engine: ^TextEngine) ---
 
 	DrawRendererText          :: proc(text: ^Text, x, y: f32) -> bool ---
-	DrawRendererTextTx        :: proc(text: ^Text, tx, ty, xx, xy, yx, yy: f32) -> bool ---
+	DrawRendererTextTx        :: proc(text: ^Text, x, y: f32, tx: ^f32) -> bool ---
 	DestroyRendererTextEngine :: proc(engine: ^TextEngine) ---
 
 	DestroyGPUTextEngine      :: proc(engine: ^TextEngine) ---

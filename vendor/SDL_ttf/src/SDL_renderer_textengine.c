@@ -201,7 +201,7 @@ static AtlasTexture *CreateAtlas(SDL_Renderer *renderer, int atlas_texture_size)
         DestroyAtlas(atlas);
         return NULL;
     }
-    SDL_SetTextureScaleMode(atlas->texture, SDL_SCALEMODE_NEAREST);
+    SDL_SetTextureScaleMode(atlas->texture, SDL_SCALEMODE_LINEAR);
 
     int num_nodes = atlas_texture_size / 4;
     atlas->packing_nodes = (stbrp_node *)SDL_calloc(num_nodes, sizeof(*atlas->packing_nodes));
@@ -959,7 +959,7 @@ bool TTF_DrawRendererText(TTF_Text *text, float x, float y)
     return true;
 }
 
-bool TTF_DrawRendererTextTx(TTF_Text *text, float tx, float ty, float xx, float xy, float yx, float yy)
+bool TTF_DrawRendererTextTx(TTF_Text *text, float x, float y, float *tx)
 {
     if (!text || !text->internal || text->internal->engine->CreateText != CreateText) {
         return SDL_InvalidParamError("text");
@@ -983,28 +983,19 @@ bool TTF_DrawRendererTextTx(TTF_Text *text, float tx, float ty, float xx, float 
         for (int i = 0; i < sequence->num_rects; ++i) {
             const SDL_Rect *dst = &sequence->rects[i];
 
-            float x0 = dst->x;
-            float x1 = dst->x + dst->w;
-            float y0 = dst->y;
-            float y1 = dst->y + dst->h;
-
-            float nw_x = tx + (x0 * xx + y0 * xy);
-            float nw_y = ty + (x0 * yx + y0 * yy);
-            float ne_x = tx + (x1 * xx + y0 * xy);
-            float ne_y = ty + (x1 * yx + y0 * yy);
-            float se_x = tx + (x1 * xx + y1 * xy);
-            float se_y = ty + (x1 * yx + y1 * yy);
-            float sw_x = tx + (x0 * xx + y1 * xy);
-            float sw_y = ty + (x0 * yx + y1 * yy);
-
-            *position++ = nw_x;
-            *position++ = nw_y;
-            *position++ = ne_x;
-            *position++ = ne_y;
-            *position++ = se_x;
-            *position++ = se_y;
-            *position++ = sw_x;
-            *position++ = sw_y;
+            float minx = x + dst->x;
+            float maxx = x + dst->x + dst->w;
+            float miny = y + dst->y;
+            float maxy = y + dst->y + dst->h;
+            
+            *position++ = minx * tx[0] + miny * tx[1] + tx[2];
+            *position++ = minx * tx[3] + miny * tx[4] + tx[5];
+            *position++ = maxx * tx[0] + miny * tx[1] + tx[2];
+            *position++ = maxx * tx[3] + miny * tx[4] + tx[5];
+            *position++ = maxx * tx[0] + maxy * tx[1] + tx[2];
+            *position++ = maxx * tx[3] + maxy * tx[4] + tx[5];
+            *position++ = minx * tx[0] + maxy * tx[1] + tx[2];
+            *position++ = minx * tx[3] + maxy * tx[4] + tx[5];
         }
 
         SDL_FColor color;

@@ -17,10 +17,6 @@ ODIN=$("./vendor/odin.sh")
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-SDL_PATH="$REPO_ROOT/../SDL"
-SDLIMG_PATH="$REPO_ROOT/../SDL_image"
-SDLTTF_PATH="$REPO_ROOT/../SDL_ttf"
-
 if [[ "${TARGET:-}" = "" ]]; then
 	if [[ "$(uname)" = "Linux" ]]; then
 		export TARGET="linux"
@@ -40,8 +36,8 @@ make_cmake_library vendor/SDL SDL3  \
 ./vendor/sdl_image.sh
 make_cmake_library vendor/SDL_image SDL3_image  \
 	-DSDL3_DIR="$BUILD_CMAKE_PATH/SDL3"         \
-	-DSDL_X11_XTEST=OFF                         \
-	-DSDL_TEST_LIBRARY=OFF 
+	-DSDLIMG_AVIF=OFF 
+	# -DSDLIMAGE_VENDORED=true 
 
 ./vendor/sdl_ttf.sh
 make_cmake_library vendor/SDL_ttf SDL3_ttf  \

@@ -5,6 +5,7 @@ import "core:c"
 import "core:fmt"
 import "core:log"
 import "core:math"
+import "core:math/linalg"
 import "core:strings"
 
 import SDL "vendor:sdl3"
@@ -157,8 +158,8 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 				TTF.SetTextWrapWidth(text, 0)
 				//TTF.DrawRendererText(text, math.round(box.x), math.round(box.y))
 
-				m := draw_state.user_matrix
-				TTF.DrawRendererTextTx(text, box.x + m[0][2], box.y + m[1][2], m[0][0], m[1][0], m[0][1], m[1][1])
+				m := linalg.transpose(draw_state.user_matrix)
+				TTF.DrawRendererTextTx(text, box.x, box.y, &m[0][0])
 			}
 
 		case .Image:

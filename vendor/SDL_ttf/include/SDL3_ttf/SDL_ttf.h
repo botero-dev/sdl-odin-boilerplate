@@ -1861,7 +1861,7 @@ extern SDL_DECLSPEC TTF_TextEngine * SDLCALL TTF_CreateRendererTextEngineWithPro
  */
 extern SDL_DECLSPEC bool SDLCALL TTF_DrawRendererText(TTF_Text *text, float x, float y);
 
-extern SDL_DECLSPEC bool SDLCALL TTF_DrawRendererTextTx(TTF_Text *text, float tx, float ty, float xx, float xy, float yx, float yy);
+extern SDL_DECLSPEC bool SDLCALL TTF_DrawRendererTextTx(TTF_Text *text, float x, float y, float *tx);
 
 /**
  * Destroy a text engine created for drawing text on an SDL renderer.

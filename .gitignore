@@ -11,6 +11,7 @@
 
 
 /src/clay-odin
+.vscode
 
 *.a
 *.o
