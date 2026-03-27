@@ -5,7 +5,9 @@
 
 # Ignore everything by default, we can force add to our repo as needed
 /vendor/*/
-
+!/vendor/SDL_ttf/
+!/vendor/odin/
+!/vendor/clay/
 
 
 /src/clay-odin
