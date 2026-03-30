@@ -19,36 +19,20 @@ import "core:sync/chan"
 import "core:thread"
 
 
+
 import "base:runtime"
 
 
-import clay "clay-odin"
+import clay "engine:clay-odin"
 
+import ab "engine:."
 
-window: ^SDL.Window
-renderer: ^SDL.Renderer
-engine: ^TTF.TextEngine
-
-clay_memory: []byte
-
-win_size: [2]i32 = {1280, 720}
-
-
-clay_error_handler :: proc "c" (errorData: clay.ErrorData) {
-	context = get_global_context()
-	log.info(errorData)
+main :: proc() {
+	fmt.println("hello world")
+	ab.app_init(init, iterate)
 }
 
-
-GalleryImage :: struct {
-	img_path: string,
-	bytes:    []byte,
-	texture:  ^SDL.Texture,
-}
-
-images: [dynamic]GalleryImage = {}
-
-parse_files :: proc(result: RequestResult) {
+parse_files :: proc(result: ab.RequestResult) {
 	bytes := result.bytes
 	file := string(bytes)
 
@@ -56,6 +40,7 @@ parse_files :: proc(result: RequestResult) {
 		image := GalleryImage {
 			img_path = path,
 		}
+
 		img_idx := uint(len(images))
 		append(&images, image)
 		log.info("loading image:", img_idx)
@@ -66,10 +51,10 @@ parse_files :: proc(result: RequestResult) {
 		img_path := new(ImgPath)
 		img_path^ = {}
 		img_path.index = img_idx
-		request_data(
+		ab.request_data(
 			c_path,
 			img_path,
-			proc(result: RequestResult) {
+			proc(result: ab.RequestResult) {
 				img_path := (^ImgPath)(result.user_data)
 				img_path.data = result.bytes
 				unpack_texture(img_path)
@@ -79,11 +64,7 @@ parse_files :: proc(result: RequestResult) {
 	}
 }
 
-ImgPath :: struct {
-	index:   uint,
-	data:    []byte,
-	surface: ^SDL.Surface,
-}
+
 
 unpack_texture :: proc(data: ^ImgPath) {
 	log.info("unpacking texture", data.index, len(data.data))
@@ -93,7 +74,7 @@ unpack_texture :: proc(data: ^ImgPath) {
 
 
 unpack_tex_thread :: proc(in_data: rawptr) {
-	context = ctx
+	context = ab.ctx
 
 	img_path := (^ImgPath)(in_data)
 	bytes := img_path.data
@@ -106,11 +87,20 @@ unpack_tex_thread :: proc(in_data: rawptr) {
 
 	finish_img_load(img_path)
 
-	//return 0
 }
 
+
+handle_queued_loads :: proc() {
+	data: ^ImgPath
+	ok := chan.try_recv_raw(channel, &data)
+	if ok {
+		finish_img_load_main_thread(data)
+	}
+}
+
+
 finish_img_load :: proc(img_path: ^ImgPath) {
-	if SDL.GetCurrentThreadID() == main_thread {
+	if SDL.GetCurrentThreadID() == ab.main_thread {
 		finish_img_load_main_thread(img_path)
 	} else {
 		img_path_copy := img_path
@@ -118,21 +108,19 @@ finish_img_load :: proc(img_path: ^ImgPath) {
 	}
 }
 
-finish_img_load_main_thread :: proc(img_path: ^ImgPath) {
-	log.info("finishing:", img_path.index)
-	texture := SDL.CreateTextureFromSurface(renderer, img_path.surface)
-	log.info("finished: ", img_path.index)
-	image := &images[img_path.index]
-	image.texture = texture
-
-	images[img_path.index].texture = texture
-}
 
 
 channel: ^chan.Raw_Chan
 
+ImgPath :: struct {
+	index:   uint,
+	data:    []byte,
+	surface: ^SDL.Surface,
+}
 
-assign_font :: proc(result: RequestResult) {
+
+
+assign_font :: proc(result: ab.RequestResult) {
 
 	bytes := result.bytes
 	if len(bytes) == 0 {
@@ -140,16 +128,10 @@ assign_font :: proc(result: RequestResult) {
 	}
 	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
 
-	text_font_id = load_font_io(io)
+	text_font_id = ab.load_font_io(io)
 }
 
-app_init :: proc(
-	appstate: ^rawptr,
-	argc: i32,
-	argv: [^]cstring,
-) -> (
-	result: SDL.AppResult = .FAILURE,
-) {
+init :: proc() {
 	log.info("app_init")
 	_ = SDL.SetAppMetadata("Example", "1.0", "com.example")
 
@@ -158,10 +140,21 @@ app_init :: proc(
 	}
 
 	success := SDL.Init({.VIDEO})
-	if !success {return}
+	if !success {
+		ab.app_status = .FAILURE
+		return
+	}
 
 	success = TTF.Init()
-	if !success {return}
+	if !success {
+		ab.app_status = .FAILURE
+		return
+	}
+
+	renderer: ^SDL.Renderer
+	window: ^SDL.Window
+
+	win_size: [2]i32 = {1280, 720}
 
 	success = SDL.CreateWindowAndRenderer(
 		"examples",
@@ -171,34 +164,36 @@ app_init :: proc(
 		&window,
 		&renderer,
 	)
-	if !success {return}
-
-	engine = TTF.CreateRendererTextEngine(renderer)
-
-	load_queue = SDL.CreateAsyncIOQueue()
+	if !success {
+		ab.app_status = .FAILURE
+		return
+	}
 
 	err: runtime.Allocator_Error
 	channel, err = chan.create_raw(size_of(^ImgPath), align_of(^ImgPath), 1, context.allocator)
-	if err != .None {return}
+	if err != .None {
+		ab.app_status = .FAILURE
+		return
+	}
 
-	request_data("Play-Regular.ttf", nil, assign_font)
-	request_data("gallery/files.txt", nil, parse_files)
+	ab.request_data("Play-Regular.ttf", nil, assign_font)
+	ab.request_data("gallery/files.txt", nil, parse_files)
 
-	ui_init()
-	gfx_init()
+	ab.ui_init()
+	ab.gfx_init(renderer, window)
 
-	return .CONTINUE
 }
 
-load_queue: ^SDL.AsyncIOQueue
 
 last_ticks: u64 = 0
 desired_delay_ticks: u64 = 1_000_000_000 / 60
 next_iterate_ticks: u64 = 0
 
-app_iterate :: proc(appstate: rawptr) -> SDL.AppResult {
+iterate :: proc() {
 
-	idle_process_async()
+	handle_queued_loads()
+
+	ab.idle_process_async()
 
 	current_ticks := SDL.GetTicksNS()
 	missing_ticks: i64 = i64(next_iterate_ticks) - i64(current_ticks)
@@ -219,7 +214,6 @@ app_iterate :: proc(appstate: rawptr) -> SDL.AppResult {
 	ui_dirty = true
 
 	app_draw()
-	return .CONTINUE
 }
 
 SlideState :: enum {
@@ -284,6 +278,27 @@ app_tick :: proc(dt: f64) {
 
 }
 
+images: [dynamic]GalleryImage = {}
+
+
+
+GalleryImage :: struct {
+	img_path: string,
+	bytes:    []byte,
+	texture:  ^SDL.Texture,
+}
+
+finish_img_load_main_thread :: proc(img_path: ^ImgPath) {
+	log.info("finishing:", img_path.index)
+	texture := SDL.CreateTextureFromSurface(ab.renderer, img_path.surface)
+	log.info("finished: ", img_path.index)
+	image := &images[img_path.index]
+	image.texture = texture
+
+	images[img_path.index].texture = texture
+}
+
+
 get_next_img_idx :: proc(idx: int) -> int {
 	if images != nil {
 		return (idx + 1) % len(images)
@@ -297,18 +312,18 @@ app_draw :: proc() {
 
 		free_all(context.temp_allocator)
 
-		ui_idle(app_dt)
+		ab.ui_idle(app_dt)
 		render_commands := create_layout()
 
-		SDL.SetRenderTarget(renderer, nil)
-		SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
-		SDL.RenderClear(renderer)
+		SDL.SetRenderTarget(ab.renderer, nil)
+		SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 0)
+		SDL.RenderClear(ab.renderer)
 
-		render_layout(&render_commands)
+		ab.render_layout(&render_commands)
 
 		// draw_debug_texture()
 
-		draw_present()
+		ab.draw_present()
 	}
 }
 
@@ -318,46 +333,46 @@ render_target: ^SDL.Texture
 // todo: refactor into a proper texture inspector
 draw_debug_texture :: proc() {
 
-	vertices_buf: [1000]vec2
-	uvs_buf: [1000]vec2
+	vertices_buf: [1000][2]f32
+	uvs_buf: [1000][2]f32
 	indices_buf: [2000]u8
 
-	buffer := DrawBuffer{0, 0, vertices_buf[:], uvs_buf[:], nil, indices_buf[:]}
+	buffer := ab.DrawBuffer{0, 0, vertices_buf[:], uvs_buf[:], nil, indices_buf[:]}
 
 	pos_t := [2]f32{30, 30}
 	yy, xx := math.sincos(f32(app_time) * 0.3)
 	pos_t  += {xx, yy}
 	//buffer_line(&buffer, pos, pos+end, width)
-	buffer_circle(&buffer, pos_t, 20)
+	ab.buffer_circle(&buffer, pos_t, 20)
 
 	SIZE :: 64
 
 	if render_target == nil {
-		render_target = SDL.CreateTexture(renderer, .RGBA32, .TARGET, SIZE, SIZE)
+		render_target = SDL.CreateTexture(ab.renderer, .RGBA32, .TARGET, SIZE, SIZE)
 	}; {
 
 		SDL.SetTextureScaleMode(render_target, .NEAREST)
 		SDL.SetTextureBlendMode(render_target, {.BLEND_PREMULTIPLIED})
-		SDL.SetRenderTarget(renderer, render_target)
-		SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
-		SDL.RenderClear(renderer)
+		SDL.SetRenderTarget(ab.renderer, render_target)
+		SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 0)
+		SDL.RenderClear(ab.renderer)
 		//color := [4]f32{0.5, 0.5, 0.5, 0.5}
 		color := [4]f32{1, 1, 1, 1}
 		//color := [4]f32{200, 200, 200, 1}
-		draw_buffer(renderer, &buffer, color)
-		SDL.SetRenderTarget(renderer, nil)
+		ab.draw_buffer(ab.renderer, &buffer, color)
+		SDL.SetRenderTarget(ab.renderer, nil)
 	}
 
 	rect := SDL.FRect{0, 0, SIZE, SIZE}
 
-	origin :: vec2{20, 20}
+	origin :: [2]f32{20, 20}
 	target_pos := SDL.FPoint{origin.x, origin.y}
 	SCALE :: 32
 	target_right := SDL.FPoint{target_pos.x + SIZE * SCALE, target_pos.y}
 	target_down := SDL.FPoint{target_pos.x, target_pos.y + SIZE * SCALE}
 
 	SDL.RenderTextureAffine(
-		renderer,
+		ab.renderer,
 		render_target,
 		&rect,
 		&target_pos,
@@ -369,11 +384,11 @@ draw_debug_texture :: proc() {
 	for idx_int in 0 ..= SIZE {
 		idx := f32(idx_int)
 
-		draw_line(renderer, {0, idx} * SCALE + origin, {SIZE, idx} * SCALE + origin, 1, line_color)
-		draw_line(renderer, {idx, 0} * SCALE + origin, {idx, SIZE} * SCALE + origin, 1, line_color)
+		ab.draw_line(ab.renderer, {0, idx} * SCALE + origin, {SIZE, idx} * SCALE + origin, 1, line_color)
+		ab.draw_line(ab.renderer, {idx, 0} * SCALE + origin, {idx, SIZE} * SCALE + origin, 1, line_color)
 	}
 
-	tx :: proc(vert: vec2) -> vec2 {return vert * SCALE + origin}
+	tx :: proc(vert: [2]f32) -> [2]f32 {return vert * SCALE + origin}
 
 	for idx in 0 ..< buffer.num_vertices {
 		vert := buffer.vertices[idx]
@@ -382,30 +397,30 @@ draw_debug_texture :: proc() {
 		pos.x = math.round(pos.x)
 		pos.y = math.round(pos.y)
 
-		draw_circle(renderer, pos, 3)
+		ab.draw_circle(ab.renderer, pos, 3)
 
 		text := fmt.ctprintf("%.6f\n%.6f", uv.x, uv.y)
-		SDL.SetRenderDrawColorFloat(renderer, 1, 0, 0, 0.5)
-		SDL.RenderDebugText(renderer, pos.x, pos.y, text)
+		SDL.SetRenderDrawColorFloat(ab.renderer, 1, 0, 0, 0.5)
+		SDL.RenderDebugText(ab.renderer, pos.x, pos.y, text)
 
 		text2 := fmt.ctprintf("%.6f\n%.6f", vert.x, vert.y)
-		SDL.SetRenderDrawColorFloat(renderer, 0, 1, 0, 0.5)
-		SDL.RenderDebugText(renderer, pos.x, pos.y+10, text2)
+		SDL.SetRenderDrawColorFloat(ab.renderer, 0, 1, 0, 0.5)
+		SDL.RenderDebugText(ab.renderer, pos.x, pos.y+10, text2)
 	}
 	for idx in 0 ..< buffer.num_indices {
 		if idx % 3 == 0 {
 			a := buffer.indices[idx]
 			b := buffer.indices[idx + 1]
 			c := buffer.indices[idx + 2]
-			draw_line(renderer, tx(buffer.vertices[a]), tx(buffer.vertices[b]), 1, line_color)
-			draw_line(renderer, tx(buffer.vertices[b]), tx(buffer.vertices[c]), 1, line_color)
-			draw_line(renderer, tx(buffer.vertices[c]), tx(buffer.vertices[a]), 1, line_color)
+			ab.draw_line(ab.renderer, tx(buffer.vertices[a]), tx(buffer.vertices[b]), 1, line_color)
+			ab.draw_line(ab.renderer, tx(buffer.vertices[b]), tx(buffer.vertices[c]), 1, line_color)
+			ab.draw_line(ab.renderer, tx(buffer.vertices[c]), tx(buffer.vertices[a]), 1, line_color)
 		}
 	}
 }
 
 
-clock_render_data := CustomRenderData {
+clock_render_data := ab.CustomRenderData {
 	callback = draw_clock,
 }
 
@@ -415,7 +430,7 @@ layout_clock :: proc() {
 	CLK_OFFSET :: 20
 
 	clay.UI(clay.ID("clock"))(
-		DPI(
+		ab.DPI(
 			{
 				layout = {
 					layoutDirection = .LeftToRight,
@@ -436,13 +451,13 @@ layout_clock :: proc() {
 		),
 	)
 
-	ui_pointer_handler()
+	ab.ui_pointer_handler()
 }
 
-draw_clock :: proc(render_data: ^CustomRenderData, render_command: ^clay.RenderCommand) {
+draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
 	box := render_command.boundingBox
 
-	draw_push_state()
+	ab.draw_push_state()
 
 	angle := f32(1) + f32(app_time * 0.2)
 	axis := [3]f32{0, 0, 1}
@@ -452,29 +467,29 @@ draw_clock :: proc(render_data: ^CustomRenderData, render_command: ^clay.RenderC
 	mat *= {1.2, 0, 0, 0, 1, 0, 0, 0, 1}
 	mat *= linalg.matrix3_rotate(-angle, axis)
 
-	draw_set_draw_rect(renderer, {i32(box.x), i32(box.y)}, {i32(box.width), i32(box.height)})
-	draw_set_view_rect({-1.2, 1.2}, {1.2, -1.2})
+	ab.draw_set_draw_rect(ab.renderer, {i32(box.x), i32(box.y)}, {i32(box.width), i32(box.height)})
+	ab.draw_set_view_rect({-1.2, 1.2}, {1.2, -1.2})
 
 	LINE_SCALE :: 0.02
-	draw_set_line_scale(0.02)
+	ab.draw_set_line_scale(0.02)
 
-	draw_circle(renderer, {0, 0}, 1.1, {0, 0, 0, 0.8})
+	ab.draw_circle(ab.renderer, {0, 0}, 1.1, {0, 0, 0, 0.8})
 
-	vert_pos := vec2{1, 0}
+	vert_pos := [2]f32{1, 0}
 
 	segments := 12
 	delta_angle := (math.TAU) / f32(segments)
 	mat_cos := math.cos(delta_angle)
 	mat_sin := math.sin(delta_angle)
 
-	draw_set_matrix(mat)
+	ab.draw_set_matrix(mat)
 
 	for _ in 0 ..< segments {
 		vert_pos = {
 			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
 			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
 		}
-		draw_line(renderer, vert_pos * 0.8, vert_pos, 2)
+		ab.draw_line(ab.renderer, vert_pos * 0.8, vert_pos, 2)
 	}
 
 	time_now := time.now()
@@ -514,24 +529,24 @@ draw_clock :: proc(render_data: ^CustomRenderData, render_command: ^clay.RenderC
 	min_sin, min_cos := math.sincos((0.25 - mm / 60) * math.TAU)
 	sec_sin, sec_cos := math.sincos((0.25 - ss / 60) * math.TAU)
 
-	hour_dir := vec2{hour_cos, hour_sin}
-	min_dir := vec2{min_cos, min_sin}
-	sec_dir := vec2{sec_cos, sec_sin}
+	hour_dir := [2]f32{hour_cos, hour_sin}
+	min_dir := [2]f32{min_cos, min_sin}
+	sec_dir := [2]f32{sec_cos, sec_sin}
 
-	draw_line(renderer, -0.1 * hour_dir, 0.5 * hour_dir, 2)
-	draw_line(renderer, -0.15 * min_dir, 0.75 * min_dir, 2)
-	draw_line(renderer, -0.15 * sec_dir, 0.7 * sec_dir, 2, {1, 0, 0, 1})
-	draw_clear_matrix()
+	ab.draw_line(ab.renderer, -0.1 * hour_dir, 0.5 * hour_dir, 2)
+	ab.draw_line(ab.renderer, -0.15 * min_dir, 0.75 * min_dir, 2)
+	ab.draw_line(ab.renderer, -0.15 * sec_dir, 0.7 * sec_dir, 2, {1, 0, 0, 1})
+	ab.draw_clear_matrix()
 
-	draw_pop_state()
+	ab.draw_pop_state()
 }
 
 
 ui_dirty: bool = true
 
-text_font_id: u16 = NIL_FONT
+text_font_id: u16 = ab.NIL_FONT
 
-main_nav: NavigationScope
+main_nav: ab.NavigationScope
 
 
 hide_ui_timeout := f32(5)
@@ -539,7 +554,7 @@ hide_ui_time: f64
 
 toolbar_last_interaction_is_mouse := false
 
-main_handler :: proc(event: ^Event, user_data: rawptr) {
+main_handler :: proc(event: ^ab.Event, user_data: rawptr) {
 	if event.type == .Keyboard {
 		//log.info(event)
 
@@ -564,7 +579,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 		{
 			fontId = text_font_id,
 			textColor = color_text,
-			fontSize = border_policy(16),
+			fontSize = ab.border_policy(16),
 			textAlignment = .Center,
 		},
 	)
@@ -572,17 +587,17 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 	clay.BeginLayout()
 
 	{
-		ui_reset_handler_buffer()
-		ui_pointer_handler(main_handler)
+		ab.ui_reset_handler_buffer()
+		ab.ui_pointer_handler(main_handler)
 
 		clear(&main_nav.contents)
 		//navigation_scope.wrap = true
 		main_nav.direction = .Vertical
 
-		nav_scope(&main_nav, main_handler)
+		ab.nav_scope(&main_nav, main_handler)
 
 		{
-			nav_add_item("center")
+			ab.nav_add_item("center")
 		}
 
 		layout_gallery()
@@ -590,7 +605,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 
 		layout_clock()
 	}
-	nav_finish()
+	ab.nav_finish()
 
 	// Returns a list of render commands
 	result := clay.EndLayout()
@@ -598,7 +613,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 
 }
 
-gallery_render_data := CustomRenderData{render_gallery}
+gallery_render_data := ab.CustomRenderData{render_gallery}
 
 layout_gallery :: proc() {
 	clay.UI(clay.ID("gallery"))(
@@ -654,10 +669,10 @@ draw_tex_rect_aspect :: proc(rect: SDL.FRect, tex: ^SDL.Texture, fill: bool, col
 	SDL.SetTextureBlendMode(tex, {.BLEND})
 	SDL.SetTextureColorModFloat(tex, color[0], color[1], color[2])
 	SDL.SetTextureAlphaModFloat(tex, color[3])
-	SDL.RenderTexture(renderer, tex, &srcrect, &dstrect)
+	SDL.RenderTexture(ab.renderer, tex, &srcrect, &dstrect)
 }
 
-render_gallery :: proc(render_data: ^CustomRenderData, render_command: ^clay.RenderCommand) {
+render_gallery :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
 	in_rect := render_command.boundingBox
 
 	if len(images) <= 0 {
@@ -719,7 +734,7 @@ subsection_decl := clay.ElementDeclaration {
 
 
 toolbar_opacity: f32
-toolbar_nav: NavigationScope
+toolbar_nav: ab.NavigationScope
 
 idle_toolbar :: proc(dt: f64) {
 
@@ -743,7 +758,7 @@ idle_toolbar :: proc(dt: f64) {
 }
 
 
-opacity_modifier: UIModifierModulate
+opacity_modifier: ab.UIModifierModulate
 
 layout_toolbar :: proc() {
 
@@ -753,22 +768,22 @@ layout_toolbar :: proc() {
 	clear(&toolbar_nav.contents)
 	toolbar_nav.direction = .Horizontal
 
-	nav_scope(&toolbar_nav)
+	ab.nav_scope(&toolbar_nav)
 
 	if toolbar_opacity == 0 {
 		return
 	}
 
-	opacity_modifier = ui_modifier_modulate({1, 1, 1, toolbar_opacity})
+	opacity_modifier = ab.ui_modifier_modulate({1, 1, 1, toolbar_opacity})
 
-	toolbar_style := DPI(toolbar_decl)
-	section_style := DPI(section_decl)
-	subsection_style := DPI(subsection_decl)
+	toolbar_style := ab.DPI(toolbar_decl)
+	section_style := ab.DPI(section_decl)
+	subsection_style := ab.DPI(subsection_decl)
 
 	clay.UI(clay.ID("ToolBar"))(toolbar_style)
-	ui_pointer_handler()
+	ab.ui_pointer_handler()
 
-	ui_modifier(&opacity_modifier)
+	ab.ui_modifier(&opacity_modifier)
 
 
 	{
@@ -793,7 +808,7 @@ layout_toolbar :: proc() {
 
 
 select_directory :: proc() {
-	SDL.ShowOpenFolderDialog(select_directory_callback, nil, window, nil, true)
+	SDL.ShowOpenFolderDialog(select_directory_callback, nil, ab.window, nil, true)
 }
 
 select_directory_callback: SDL.DialogFileCallback : proc "c" (
@@ -801,7 +816,7 @@ select_directory_callback: SDL.DialogFileCallback : proc "c" (
 	filelist: [^]cstring,
 	filter: c.int,
 ) {
-	context = get_global_context()
+	context = ab.get_global_context()
 	if filelist == nil {
 		error := SDL.GetError()
 		log.info("got error:", error)
@@ -823,7 +838,7 @@ select_directory_callback: SDL.DialogFileCallback : proc "c" (
 
 playback_first :: proc() {
 	log.info("first")
-	print_render_commands = true
+	ab.print_render_commands = true
 }
 
 playback_previous :: proc() {
@@ -840,14 +855,12 @@ playback_next :: proc() {
 
 
 dpi_index := 2
-dpi_user := f32(1)
-dpi_window := f32(1)
 dpi_levels := []f32{0.5, 0.8, 1, 1.5, 2, 3, 4}
 playback_last :: proc() {
 	log.info("last")
 	dpi_index = (dpi_index + 1) % len(dpi_levels)
-	dpi_user = dpi_levels[dpi_index]
-	DPI_set(dpi_user * dpi_window)
+	ab.dpi_user = dpi_levels[dpi_index]
+	ab.DPI_set(ab.dpi_user * ab.dpi_window)
 }
 
 
@@ -859,7 +872,7 @@ color_hover := clay.Color{0.4, 0.4, 0.4, 1}
 color_text := clay.Color{0.8, 0.8, 0.8, 1}
 
 
-rotate_modifier: UIModifierTransform
+rotate_modifier: ab.UIModifierTransform
 
 // Re-useable components are just normal procs.
 sidebar_item_component :: proc {
@@ -867,46 +880,46 @@ sidebar_item_component :: proc {
 	sidebar_item_component_proc,
 }
 
-sidebar_item_component_proc :: proc($label: string, callback: ButtonHandlerSimple) {
-	info: ^HandlerInfoSimple
+sidebar_item_component_proc :: proc($label: string, callback: ab.ButtonHandlerSimple) {
+	info: ^ab.HandlerInfoSimple
 	if callback != nil {
-		info = new(HandlerInfoSimple, context.temp_allocator)
+		info = new(ab.HandlerInfoSimple, context.temp_allocator)
 		info.handler = handle_proc_simple
 		info.target = callback
 	}
 	sidebar_item_component_handlerinfo(label, info)
 }
 
-handle_proc_simple :: proc(userdata: ^HandlerInfo) {
-	data_simple := (^HandlerInfoSimple)(userdata)
+handle_proc_simple :: proc(userdata: ^ab.HandlerInfo) {
+	data_simple := (^ab.HandlerInfoSimple)(userdata)
 	data_simple.target()
 }
 
 
-sidebar_item_component_handlerinfo :: proc($label: string, info: ^HandlerInfo = nil) {
+sidebar_item_component_handlerinfo :: proc($label: string, info: ^ab.HandlerInfo = nil) {
 
 	clay.UI(clay.ID(label))
-	item_handle := ui_add_button(label, info)
+	item_handle := ab.ui_add_button(label, info)
 
 	is_focused := false
 	if toolbar_last_interaction_is_mouse {
 		is_focused = clay.Hovered()
 	} else {
-		is_focused = nav_get_focused(item_handle)
+		is_focused = ab.nav_get_focused(item_handle)
 	}
 
 	color := color_idle
 	if is_focused {
-		rotate_modifier = ui_modifier_transform(
+		rotate_modifier = ab.ui_modifier_transform(
 			linalg.matrix3_rotate(math.sin(f32(app_time * 3)) * 0.1, [3]f32{0, 0, 1}),
 			{0.5, 0.5},
 		)
-		ui_modifier_push(&rotate_modifier)
+		ab.ui_modifier_push(&rotate_modifier)
 		color = color_hover
 	}
 
 	clay.UI()(
-		DPI(
+		ab.DPI(
 			{
 				layout = {
 					sizing = {width = clay.SizingFixed(64), height = clay.SizingFixed(64)},
@@ -923,7 +936,7 @@ sidebar_item_component_handlerinfo :: proc($label: string, info: ^HandlerInfo = 
 	clay.Text(label, text_config)
 
 	if is_focused {
-		ui_modifier_pop(&rotate_modifier)
+		ab.ui_modifier_pop(&rotate_modifier)
 	}
 
 }

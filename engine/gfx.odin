@@ -1,7 +1,9 @@
 
-package main
+package engine
 
 import SDL "vendor:sdl3"
+import TTF "vendor:sdl3/ttf"
+
 
 import "core:log"
 import "core:math"
@@ -9,13 +11,26 @@ import "core:math/linalg"
 
 helper: ^SDL.Texture
 
+renderer: ^SDL.Renderer
+text_engine: ^TTF.TextEngine
+window: ^SDL.Window
+
 TEX_SIZE :: 2
 ZERO_PIX_CLAMP := vec2{0.5, 1.5} / TEX_SIZE
 PIXEL_X := vec2{1, 0} / TEX_SIZE
 PIXEL_Y := vec2{1, 0} / TEX_SIZE
 
+win_size: [2]i32 = {1280, 720}
 
-gfx_init :: proc() {
+
+
+gfx_init :: proc(in_renderer: ^SDL.Renderer, in_window: ^SDL.Window) {
+	
+	renderer = in_renderer
+	window = in_window
+	text_engine = TTF.CreateRendererTextEngine(renderer)
+
+
 	helper = SDL.CreateTexture(renderer, .RGBA32, .TARGET, 2, 2)
 	SDL.SetRenderTarget(renderer, helper)
 	SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)

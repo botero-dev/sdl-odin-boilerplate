@@ -1,11 +1,10 @@
-package main
+package engine
 
 import "emscripten"
 import SDL "vendor:sdl3"
 
 import "core:fmt"
 import "core:log"
-import "core:sync/chan"
 
 RequestResult :: struct {
 	success:   bool,
@@ -67,6 +66,7 @@ request_data :: proc(url: cstring, user_data: rawptr, callback: RequestCallback)
 }
 
 pending_tasks: [dynamic]^SDL.AsyncIO
+load_queue: ^SDL.AsyncIOQueue
 
 idle_process_async :: proc() {
 	outcome: SDL.AsyncIOOutcome
@@ -79,13 +79,6 @@ idle_process_async :: proc() {
 			handler.callback({true, buf[:outcome.bytes_transferred], handler.user_data})
 			_ = SDL.CloseAsyncIO(outcome.asyncio, true, load_queue, nil)
 		}
-	}
-
-
-	data: ^ImgPath
-	ok := chan.try_recv_raw(channel, &data)
-	if ok {
-		finish_img_load_main_thread(data)
 	}
 }
 

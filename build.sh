@@ -11,6 +11,11 @@ source "scripts/build_utils.sh"
 #  - cmake
 #  - emsdk install latest && source emsdk_env
 
+PROJECT=${1:-}
+if [[ "$PROJECT" = "" ]]; then
+	echo "Usage: ./build.sh <project>"
+	exit 1
+fi
 
 # ensure we have odin toolchain
 ODIN=$("./vendor/odin.sh")
@@ -46,7 +51,7 @@ make_cmake_library vendor/SDL_ttf SDL3_ttf  \
 	-DSDLTTF_SAMPLES=false
 
 
-compile_cmd=("$ODIN" build src)
+compile_cmd=("$ODIN" build "$PROJECT" "-collection:engine=engine")
 
 if [[ "$TARGET" = "linux" ]]; then
 
@@ -71,14 +76,14 @@ if [[ "$TARGET" = "linux" ]]; then
 		-vet-style
 		-warnings-as-errors
 		-disallow-do
-		-out:"$PACKAGE_PATH/game.bin"
+		-out:"$PACKAGE_PATH/$PROJECT.bin"
 	)
 
 elif [[ "$TARGET" = "win" ]]; then
 
 	compile_cmd+=(
 		-debug
-		-out:"$PACKAGE_PATH/game.exe"
+		-out:"$PACKAGE_PATH/$PROJECT.exe"
 	)
 
 elif [[ "$TARGET" = "web" ]]; then

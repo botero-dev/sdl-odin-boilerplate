@@ -1,5 +1,5 @@
 
-package main
+package engine
 
 import "core:c"
 import "core:fmt"
@@ -13,7 +13,11 @@ import TTF "vendor:sdl3/ttf"
 
 import clay "clay-odin"
 
+
+
 vec2 :: [2]f32
+dpi_user := f32(1)
+dpi_window := f32(1)
 
 
 dpi := f32(1.0)
@@ -295,7 +299,7 @@ get_text_with_font_size :: proc(font_id: u16, size: u16) -> ^TTF.Text {
 		return nil
 	}
 	if single_text == nil {
-		single_text = TTF.CreateText(engine, font, "My Text", 0)
+		single_text = TTF.CreateText(text_engine, font, "My Text", 0)
 	}
 	TTF.SetTextFont(single_text, font)
 	return single_text
@@ -316,6 +320,7 @@ nav_select: MappingIndex
 nav_confirm: MappingIndex
 nav_cancel: MappingIndex
 
+clay_memory: []byte
 
 ui_init :: proc() {
 	nav_left = create_keyboard_mapping(.LEFT)
@@ -337,6 +342,11 @@ ui_init :: proc() {
 	clay.Initialize(clay_arena, {f32(win_size.x), f32(win_size.y)}, {handler = clay_error_handler})
 	clay.SetMeasureTextFunction(clay_measure_text, nil)
 
+}
+
+clay_error_handler :: proc "c" (errorData: clay.ErrorData) {
+	context = get_global_context()
+	log.info(errorData)
 }
 
 

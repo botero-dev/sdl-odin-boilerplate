@@ -1,5 +1,5 @@
 
-package main
+package engine
 
 import SDL "vendor:sdl3"
 
@@ -132,7 +132,7 @@ system_handler :: proc(event: ^Event) {
 		window_event := sdl_event.window
 		win_size = {window_event.data1, window_event.data2}
 		clay.SetLayoutDimensions({f32(win_size.x), f32(win_size.y)})
-		ui_dirty = true
+		//ui_dirty = true
 
 	case .WINDOW_DISPLAY_SCALE_CHANGED:
 		event.handled = true
@@ -140,7 +140,7 @@ system_handler :: proc(event: ^Event) {
 		window := SDL.GetWindowFromID(window_event.windowID)
 		dpi_window = SDL.GetWindowDisplayScale(window)
 		DPI_set(dpi_user * dpi_window)
-		ui_dirty = true
+		//ui_dirty = true
 	}
 
 	if pressed, matches := match_mapping_button(event, input_fullscreen); matches && pressed {

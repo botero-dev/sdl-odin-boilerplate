@@ -1,5 +1,5 @@
 
-package main
+package engine
 
 import SDL "vendor:sdl3"
 
@@ -36,14 +36,14 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 		event: SDL.Event
 		context = ctx
 		for (SDL.PollEvent(&event)) {
-			sdl_app_event(nil, &event)
+			sdl_event(nil, &event)
 		}
-		return sdl_app_iterate(nil) == .CONTINUE
+		return sdl_iterate(nil) == .CONTINUE
 	}
 
 	@(export)
 	main_end :: proc "c" () {
-		sdl_app_quit(nil, {})
+		sdl_quit(nil, {})
 	}
 } else when ODIN_PLATFORM_SUBTARGET == .Android {
 	// entry point for .so load in android
@@ -72,7 +72,7 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 	// standard entry point for desktop targets
 	main :: proc() {
 		context.logger = log.create_console_logger()
-		sdl_app_main()
+		//sdl_app_main()
 	}
 
 }
@@ -93,7 +93,18 @@ sdl_log_proc :: proc(
 	SDL.Log("%s", temporary)
 }
 
-sdl_app_main :: proc() {
+
+
+callback_init: proc()
+callback_iterate: proc()
+callback_quit: proc()
+
+
+app_init :: proc(handler_init: proc(), handler_iterate: proc(), handler_quit: proc() = nil) {
+	callback_init = handler_init
+	callback_iterate = handler_iterate
+	callback_quit = handler_quit
+
 	if context.logger.procedure == runtime.default_logger_proc {
 		context.logger = runtime.Logger {
 			procedure = sdl_log_proc,
@@ -110,38 +121,46 @@ sdl_app_main :: proc() {
 		SDL.EnterAppMainCallbacks(
 			0,
 			nil,
-			sdl_app_init,
-			sdl_app_iterate,
-			sdl_app_event,
-			sdl_app_quit,
+			sdl_init,
+			sdl_iterate,
+			sdl_event,
+			sdl_quit,
 		)
 	}
 }
 
 main_thread: SDL.ThreadID
 
-sdl_app_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResult {
+app_status: SDL.AppResult = .CONTINUE
+
+sdl_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResult {
 	context = ctx
 	main_thread = SDL.GetCurrentThreadID()
 
 	app_event_init()
-	return app_init(appstate, argc, argv)
+	load_queue = SDL.CreateAsyncIOQueue()
+
+	callback_init()
+	return app_status
 }
 
-sdl_app_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
+sdl_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
 	context = ctx
-
 	return app_handle_event(event)
 }
 
-sdl_app_iterate :: proc "c" (appstate: rawptr) -> SDL.AppResult {
+sdl_iterate :: proc "c" (appstate: rawptr) -> SDL.AppResult {
 	context = ctx
-	return app_iterate(appstate)
+	callback_iterate()
+	return app_status
 }
 
-sdl_app_quit :: proc "c" (appstate: rawptr, result: SDL.AppResult) {
+sdl_quit :: proc "c" (appstate: rawptr, result: SDL.AppResult) {
 	context = ctx
 	log.info("quit")
+	if callback_quit != nil {
+		callback_quit()
+	}
 }
 
 get_global_context :: proc "c" () -> runtime.Context {
