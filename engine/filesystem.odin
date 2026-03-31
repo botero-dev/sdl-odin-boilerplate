@@ -19,10 +19,11 @@ RequestHandler :: struct {
 
 RequestCallback :: #type proc(result: RequestResult)
 
-// async on web, synchronous on desktop
-request_data :: proc(url: cstring, user_data: rawptr, callback: RequestCallback) {
+// On desktop, it loads file relative to executable path
+// on mobile, makes http request for asset relative to current website path
+request_data_async :: proc(url: cstring, user_data: rawptr, callback: RequestCallback) {
 
-	log.info("request_data", url)
+	log.info("request_data_async", url)
 	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 		fetch_attr := emscripten.emscripten_fetch_attr_t{}
 		emscripten.emscripten_fetch_attr_init(&fetch_attr)

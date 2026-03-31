@@ -32,7 +32,7 @@ main :: proc() {
 	ab.app_init(init, iterate)
 }
 
-parse_files :: proc(result: ab.RequestResult) {
+on_gallery_loaded :: proc(result: ab.RequestResult) {
 	bytes := result.bytes
 	file := string(bytes)
 
@@ -51,7 +51,7 @@ parse_files :: proc(result: ab.RequestResult) {
 		img_path := new(ImgPath)
 		img_path^ = {}
 		img_path.index = img_idx
-		ab.request_data(
+		ab.request_data_async(
 			c_path,
 			img_path,
 			proc(result: ab.RequestResult) {
@@ -136,7 +136,7 @@ init :: proc() {
 	_ = SDL.SetAppMetadata("Example", "1.0", "com.example")
 
 	when ODIN_OS == .Linux && !(ODIN_PLATFORM_SUBTARGET == .Android) {
-		SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11")
+		SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11") // prefer wayland if available
 	}
 
 	success := SDL.Init({.VIDEO})
@@ -176,8 +176,8 @@ init :: proc() {
 		return
 	}
 
-	ab.request_data("Play-Regular.ttf", nil, assign_font)
-	ab.request_data("gallery/files.txt", nil, parse_files)
+	ab.request_data_async("Play-Regular.ttf", nil, assign_font)
+	ab.request_data_async("gallery/files.txt", nil, on_gallery_loaded)
 
 	ab.ui_init()
 	ab.gfx_init(renderer, window)
