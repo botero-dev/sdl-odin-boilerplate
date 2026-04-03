@@ -8,6 +8,7 @@
 !/vendor/SDL_ttf/
 !/vendor/odin/
 !/vendor/clay/
+!/vendor/back/
 
 
 /src/clay-odin

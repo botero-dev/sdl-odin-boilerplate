@@ -170,12 +170,28 @@ style_directory: StyleDirectory
 setup_directory :: proc() {
 
 	btn_style := ButtonStyle{}
-	btn_style.idle_box = BoxStyleColored{
-		background = {1, 0, 0, 1},
-		border_color = {0, 1, 0, 1},
-		border_width = {2, 2, 2, 2},
+	idle_box := BoxStyleColored{
+		border_width = {1, 1, 1, 1},
 		padding = {12, 12, 4, 4},
+		corner_radii = {2,2,2,2},
 	}
+
+	idle_box.background = {0.1, 0.1, 0.1, 1}
+	idle_box.border_color = {1, 1, 1, 0.2}
+	btn_style.idle_box = idle_box
+
+	hover_box := idle_box
+	hover_box.background = {0.2, 0.2, 0.2, 1}
+	hover_box.border_color = {1, 1, 1, 0.5}
+	btn_style.hover_box = hover_box
+
+	pressed_box := idle_box
+	pressed_box.background = {0.3, 0.3, 0.3, 1}
+	pressed_box.border_color = {1, 1, 1, 0.1}
+	btn_style.pressed_box = pressed_box
+
+	
+	
 	c := style_class("Button")
 	push_style(&c, btn_style)
 

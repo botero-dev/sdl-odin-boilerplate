@@ -26,5 +26,5 @@ else
 fi
 popd
 
-rm -rf ../src/clay-odin
-cp -r clay/bindings/odin/clay-odin ../src/clay-odin
+rm -rf ../engine/clay-odin
+cp -r clay/bindings/odin/clay-odin ../engine/clay-odin

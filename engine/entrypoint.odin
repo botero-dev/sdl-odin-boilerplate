@@ -3,10 +3,13 @@ package engine
 
 import SDL "vendor:sdl3"
 
-import "core:fmt"
+import "core:strings"
 import "core:log"
 
 import "base:runtime"
+
+import "../vendor/back"
+
 
 ctx: runtime.Context
 
@@ -89,29 +92,58 @@ sdl_log_proc :: proc(
 	options: runtime.Logger_Options,
 	location := #caller_location,
 ) {
-	temporary := fmt.ctprintf("[%s] %s", level, text)
-	SDL.Log("%s", temporary)
-}
+	priority := SDL.LogPriority.INVALID
 
+	switch level {
+	case .Debug:
+		priority = SDL.LogPriority.DEBUG
+	case .Info:
+		priority = SDL.LogPriority.INFO
+	case .Warning:
+		priority = SDL.LogPriority.WARN
+	case .Error:
+		priority = SDL.LogPriority.ERROR
+	case .Fatal:
+		priority = SDL.LogPriority.CRITICAL
+	}
+
+	temporary := strings.clone_to_cstring(text, context.temp_allocator)
+	SDL.LogMessage(i32(SDL.LogCategory.APPLICATION), priority, "%s", temporary)
+}
 
 
 callback_init: proc()
 callback_iterate: proc()
 callback_quit: proc()
 
+AppMetadata :: struct {
+	name: cstring,
+	version: cstring,
+	identifier: cstring,
+}
 
-app_init :: proc(handler_init: proc(), handler_iterate: proc(), handler_quit: proc() = nil) {
+
+app_init :: proc(metadata: Maybe(AppMetadata), handler_init: proc(), handler_iterate: proc(), handler_quit: proc() = nil) {
+
+	back.register_segfault_handler()
+	context.assertion_failure_proc = back.assertion_failure_proc
+
+	if meta, has_meta := metadata.?; has_meta {
+		_ = SDL.SetAppMetadata(meta.name, meta.version, meta.identifier)
+	}
+
 	callback_init = handler_init
 	callback_iterate = handler_iterate
 	callback_quit = handler_quit
 
-	if context.logger.procedure == runtime.default_logger_proc {
-		context.logger = runtime.Logger {
-			procedure = sdl_log_proc,
-		}
-	}
+	// use console logger
+	context.logger = log.create_console_logger()
+
+	// use SDL logger
+	// context.logger = runtime.Logger { procedure = sdl_log_proc }
+
 	ctx = context
-	log.info("sdl_app_main()")
+	log.info("app_init")
 
 
 	//args := os.args
@@ -135,10 +167,18 @@ app_status: SDL.AppResult = .CONTINUE
 
 sdl_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.AppResult {
 	context = ctx
+	log.debug("sdl_init")
+
 	main_thread = SDL.GetCurrentThreadID()
 
 	app_event_init()
 	load_queue = SDL.CreateAsyncIOQueue()
+
+
+	when ODIN_OS == .Linux && !(ODIN_PLATFORM_SUBTARGET == .Android) {
+		SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11") // prefer wayland if available
+	}
+
 
 	callback_init()
 	return app_status
@@ -151,6 +191,8 @@ sdl_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
 
 sdl_iterate :: proc "c" (appstate: rawptr) -> SDL.AppResult {
 	context = ctx
+
+	idle_process_async()
 	callback_iterate()
 	return app_status
 }

@@ -3,7 +3,6 @@ package main
 
 import SDL "vendor:sdl3"
 import IMG "vendor:sdl3/image"
-import TTF "vendor:sdl3/ttf"
 
 
 import "core:c"
@@ -26,10 +25,11 @@ import "base:runtime"
 import clay "engine:clay-odin"
 
 import ab "engine:."
+import "engine:ui"
 
 main :: proc() {
 	fmt.println("hello world")
-	ab.app_init(init, iterate)
+	ab.app_init(nil, init, iterate)
 }
 
 on_gallery_loaded :: proc(result: ab.RequestResult) {
@@ -119,55 +119,11 @@ ImgPath :: struct {
 }
 
 
-
-assign_font :: proc(result: ab.RequestResult) {
-
-	bytes := result.bytes
-	if len(bytes) == 0 {
-		return
-	}
-	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
-
-	text_font_id = ab.load_font_io(io)
-}
-
 init :: proc() {
-	log.info("app_init")
-	_ = SDL.SetAppMetadata("Example", "1.0", "com.example")
+	log.info("init")
 
-	when ODIN_OS == .Linux && !(ODIN_PLATFORM_SUBTARGET == .Android) {
-		SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11") // prefer wayland if available
-	}
-
-	success := SDL.Init({.VIDEO})
-	if !success {
-		ab.app_status = .FAILURE
-		return
-	}
-
-	success = TTF.Init()
-	if !success {
-		ab.app_status = .FAILURE
-		return
-	}
-
-	renderer: ^SDL.Renderer
-	window: ^SDL.Window
-
-	win_size: [2]i32 = {1280, 720}
-
-	success = SDL.CreateWindowAndRenderer(
-		"examples",
-		win_size.x,
-		win_size.y,
-		{.RESIZABLE, .HIGH_PIXEL_DENSITY},
-		&window,
-		&renderer,
-	)
-	if !success {
-		ab.app_status = .FAILURE
-		return
-	}
+	success := ui.create_window("Gallery", {1280, 720})
+	assert(success)
 
 	err: runtime.Allocator_Error
 	channel, err = chan.create_raw(size_of(^ImgPath), align_of(^ImgPath), 1, context.allocator)
@@ -176,11 +132,7 @@ init :: proc() {
 		return
 	}
 
-	ab.request_data_async("Play-Regular.ttf", nil, assign_font)
 	ab.request_data_async("gallery/files.txt", nil, on_gallery_loaded)
-
-	ab.ui_init()
-	ab.gfx_init(renderer, window)
 
 }
 
@@ -193,7 +145,6 @@ iterate :: proc() {
 
 	handle_queued_loads()
 
-	ab.idle_process_async()
 
 	current_ticks := SDL.GetTicksNS()
 	missing_ticks: i64 = i64(next_iterate_ticks) - i64(current_ticks)
@@ -313,16 +264,9 @@ app_draw :: proc() {
 		free_all(context.temp_allocator)
 
 		ab.ui_idle(app_dt)
-		render_commands := create_layout()
+		create_layout()
 
-		SDL.SetRenderTarget(ab.renderer, nil)
-		SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 0)
-		SDL.RenderClear(ab.renderer)
-
-		ab.render_layout(&render_commands)
-
-		// draw_debug_texture()
-
+		ab.render_layout(&ui.render_commands)
 		ab.draw_present()
 	}
 }
@@ -544,7 +488,6 @@ draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.Rend
 
 ui_dirty: bool = true
 
-text_font_id: u16 = ab.NIL_FONT
 
 main_nav: ab.NavigationScope
 
@@ -572,19 +515,18 @@ main_handler :: proc(event: ^ab.Event, user_data: rawptr) {
 text_config: ^clay.TextElementConfig
 
 // An example function to create your layout tree
-create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
-
+create_layout :: proc() {
 	// Begin constructing the layout.
 	text_config = clay.TextConfig(
 		{
-			fontId = text_font_id,
+			fontId = ab.default_font_id,
 			textColor = color_text,
 			fontSize = ab.border_policy(16),
 			textAlignment = .Center,
 		},
 	)
 
-	clay.BeginLayout()
+	ui.layout_begin()
 
 	{
 		ab.ui_reset_handler_buffer()
@@ -608,9 +550,7 @@ create_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 	ab.nav_finish()
 
 	// Returns a list of render commands
-	result := clay.EndLayout()
-	return result
-
+	ui.layout_end()
 }
 
 gallery_render_data := ab.CustomRenderData{render_gallery}
@@ -788,7 +728,7 @@ layout_toolbar :: proc() {
 
 	{
 		clay.UI(clay.ID("ToolBarSection"))(section_style)
-		clay.Text("Gallery Config", text_config)
+		ui.layout_text("Gallery Config", text_config)
 		clay.UI()(subsection_style)
 		sidebar_item_component("Select Folder", select_directory)
 		sidebar_item_component("Config Online Src")
@@ -796,7 +736,7 @@ layout_toolbar :: proc() {
 
 	{
 		clay.UI(clay.ID("ToolBarSection2"))(section_style)
-		clay.Text("Slideshow", text_config)
+		ui.layout_text("Slideshow", text_config)
 		clay.UI()(subsection_style)
 		sidebar_item_component("First", playback_first)
 		sidebar_item_component("Previous", playback_previous)
@@ -933,7 +873,7 @@ sidebar_item_component_handlerinfo :: proc($label: string, info: ^ab.HandlerInfo
 	)
 
 
-	clay.Text(label, text_config)
+	ui.layout_text(label)
 
 	if is_focused {
 		ab.ui_modifier_pop(&rotate_modifier)

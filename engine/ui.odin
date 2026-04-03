@@ -91,6 +91,11 @@ print_render_commands: bool
 
 
 render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
+
+	SDL.SetRenderTarget(renderer, nil)
+	SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
+	SDL.RenderClear(renderer)
+
 	for idx in 0 ..< i32(render_commands.length) {
 		render_command := clay.RenderCommandArray_Get(render_commands, idx)
 
@@ -339,10 +344,28 @@ ui_init :: proc() {
 	min_size := clay.MinMemorySize()
 	clay_memory = make([]byte, min_size)
 	clay_arena := clay.CreateArenaWithCapacityAndMemory(uint(min_size), &clay_memory[0])
-	clay.Initialize(clay_arena, {f32(win_size.x), f32(win_size.y)}, {handler = clay_error_handler})
+	clay.Initialize(clay_arena, {}, {handler = clay_error_handler})
 	clay.SetMeasureTextFunction(clay_measure_text, nil)
+	clay.SetCullingEnabled(false)
 
+	request_data_async("Play-Regular.ttf", nil, assign_font)
 }
+
+
+
+assign_font :: proc(result: RequestResult) {
+
+	bytes := result.bytes
+	assert(len(bytes) != 0)
+	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
+
+	default_font_id = load_font_io(io)
+}
+
+
+default_font_id: u16 = NIL_FONT
+
+
 
 clay_error_handler :: proc "c" (errorData: clay.ErrorData) {
 	context = get_global_context()
@@ -760,13 +783,22 @@ ui_push_pointer_event :: proc(event: ^Event) {
 	}
 	coords := vec2{}
 	receiver = 0
+
+	pressed: bool = false
+
 	#partial switch sdl_event.type {
 	case .MOUSE_MOTION:
 		motion := sdl_event.motion
 		coords = {motion.x, motion.y}
+		if .LEFT in motion.state {
+			pressed = true
+		}
 	case .MOUSE_BUTTON_DOWN:
 		button_event := sdl_event.button
 		coords = {button_event.x, button_event.y}
+		if button_event.button == 0 {
+			pressed = true
+		}
 	case .MOUSE_BUTTON_UP:
 		button_event := sdl_event.button
 		coords = {button_event.x, button_event.y}
@@ -775,7 +807,7 @@ ui_push_pointer_event :: proc(event: ^Event) {
 		wheel_delta += {wheel_data.x, wheel_data.y}
 		coords = {wheel_data.mouse_x, wheel_data.mouse_y}
 	}
-	clay.SetPointerState({coords.x, coords.y}, false)
+	clay.SetPointerState({coords.x, coords.y}, pressed)
 
 	finish_handling_mouse_input(event)
 

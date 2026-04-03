@@ -1,7 +1,7 @@
 
 set -ex
 
-cp ../../clay.h clay.c;
+echo '#include "../../clay.h"' > clay.c
 
 # Intel Mac
 rm -f clay-odin/macos/clay-x64.a
@@ -19,7 +19,7 @@ clang -c -DCLAY_IMPLEMENTATION -o clay-odin/windows/clay.lib -ffreestanding -tar
 
 # Linux
 rm -f clay-odin/linux/clay.a
-clang -c -DCLAY_IMPLEMENTATION -o clay.o -ffreestanding -static -target x86_64-unknown-linux-gnu clay.c -fPIC -O3
+clang -c -DCLAY_IMPLEMENTATION -o clay.o -ffreestanding -static -target x86_64-unknown-linux-gnu clay.c -fPIC -g -O3
 ar r clay-odin/linux/clay.a clay.o
 
 mkdir -p clay-odin/android
