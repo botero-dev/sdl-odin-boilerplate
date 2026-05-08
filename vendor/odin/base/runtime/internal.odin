@@ -23,12 +23,42 @@ HAS_HARDWARE_SIMD :: false when (ODIN_ARCH == .amd64 || ODIN_ARCH == .i386) && !
 	false when (ODIN_ARCH == .riscv64) && !intrinsics.has_target_feature("v") else
 	true
 
+// Size of a native SIMD register for the current compilation target
+NATIVE_SIMD_BIT_WIDTH :: 
+	512 when (ODIN_ARCH == .amd64) && intrinsics.has_target_feature("avx512f") else
+	256 when (ODIN_ARCH == .amd64) && (intrinsics.has_target_feature("avx2") || intrinsics.has_target_feature("avx")) else
+	// Fallback for no hardware SIMD, but also SSE, NEON, SVE, RVV and WASM SIMD128.
+	128
 
 @(private)
 byte_slice :: #force_inline proc "contextless" (data: rawptr, len: int) -> []byte #no_bounds_check {
 	return ([^]byte)(data)[:max(len, 0)]
 }
 
+@(require_results)
+align_forward_uint :: #force_inline proc "odin" (ptr, align: uint) -> uint {
+	assert(is_power_of_two_uint(align))
+	return (ptr + align-1) & ~(align-1)
+}
+
+@(require_results)
+align_forward_int :: #force_inline proc "odin" (ptr, align: int) -> int {
+	assert(is_power_of_two_int(align))
+	return int(align_forward_uint(uint(ptr), uint(align)))
+}
+
+@(require_results)
+align_forward_uintptr :: #force_inline proc "odin" (ptr, align: uintptr) -> uintptr {
+	return uintptr(align_forward_uint(uint(ptr), uint(align)))
+}
+
+align_forward :: proc {
+	align_forward_int,
+	align_forward_uint,
+	align_forward_uintptr,
+}
+
+@(require_results)
 is_power_of_two_int :: #force_inline proc "contextless" (x: int) -> bool {
 	if x <= 0 {
 		return false
@@ -36,63 +66,23 @@ is_power_of_two_int :: #force_inline proc "contextless" (x: int) -> bool {
 	return (x & (x-1)) == 0
 }
 
-align_forward_int :: #force_inline proc "odin" (ptr, align: int) -> int {
-	assert(is_power_of_two_int(align))
-
-	p := ptr
-	modulo := p & (align-1)
-	if modulo != 0 {
-		p += align - modulo
-	}
-	return p
-}
-
+@(require_results)
 is_power_of_two_uint :: #force_inline proc "contextless" (x: uint) -> bool {
-	if x <= 0 {
+	if x == 0 {
 		return false
 	}
 	return (x & (x-1)) == 0
 }
 
-align_forward_uint :: #force_inline proc "odin" (ptr, align: uint) -> uint {
-	assert(is_power_of_two_uint(align))
-
-	p := ptr
-	modulo := p & (align-1)
-	if modulo != 0 {
-		p += align - modulo
-	}
-	return p
-}
-
+@(require_results)
 is_power_of_two_uintptr :: #force_inline proc "contextless" (x: uintptr) -> bool {
-	if x <= 0 {
-		return false
-	}
-	return (x & (x-1)) == 0
-}
-
-align_forward_uintptr :: #force_inline proc "odin" (ptr, align: uintptr) -> uintptr {
-	assert(is_power_of_two_uintptr(align))
-
-	p := ptr
-	modulo := p & (align-1)
-	if modulo != 0 {
-		p += align - modulo
-	}
-	return p
+	return is_power_of_two_uint(uint(x))
 }
 
 is_power_of_two :: proc {
 	is_power_of_two_int,
 	is_power_of_two_uint,
 	is_power_of_two_uintptr,
-}
-
-align_forward :: proc {
-	align_forward_int,
-	align_forward_uint,
-	align_forward_uintptr,
 }
 
 mem_zero :: proc "contextless" (data: rawptr, len: int) -> rawptr {
@@ -718,7 +708,7 @@ quaternion256_eq :: #force_inline proc "contextless" (a, b: quaternion256) -> bo
 quaternion256_ne :: #force_inline proc "contextless" (a, b: quaternion256) -> bool { return real(a) != real(b) || imag(a) != imag(b) || jmag(a) != jmag(b) || kmag(a) != kmag(b) }
 
 
-string_decode_rune :: proc "contextless" (s: string) -> (rune, int) {
+string_decode_rune :: proc "contextless" (s: string) -> (rune, int) #no_bounds_check {
 	// NOTE(bill): Duplicated here to remove dependency on package unicode/utf8
 
 	@(static, rodata) accept_sizes := [256]u8{
@@ -797,7 +787,7 @@ string_decode_rune :: proc "contextless" (s: string) -> (rune, int) {
 	return rune(s0&MASK4)<<18 | rune(b1&MASKX)<<12 | rune(b2&MASKX)<<6 | rune(b3&MASKX), 4
 }
 
-string_decode_last_rune :: proc "contextless" (s: string) -> (rune, int) {
+string_decode_last_rune :: proc "contextless" (s: string) -> (rune, int) #no_bounds_check {
 	RUNE_ERROR :: '\ufffd'
 	RUNE_SELF  :: 0x80
 	UTF_MAX    :: 4
@@ -833,7 +823,7 @@ string_decode_last_rune :: proc "contextless" (s: string) -> (rune, int) {
 }
 
 
-string16_decode_rune :: proc "contextless" (s: string16) -> (rune, int) {
+string16_decode_rune :: proc "contextless" (s: string16) -> (rune, int) #no_bounds_check {
 	REPLACEMENT_CHAR :: '\ufffd'
 	_surr1           :: 0xd800
 	_surr2           :: 0xdc00
@@ -861,7 +851,7 @@ string16_decode_rune :: proc "contextless" (s: string16) -> (rune, int) {
 	return r, w
 }
 
-string16_decode_last_rune :: proc "contextless" (s: string16) -> (rune, int) {
+string16_decode_last_rune :: proc "contextless" (s: string16) -> (rune, int) #no_bounds_check {
 	REPLACEMENT_CHAR :: '\ufffd'
 	_surr1           :: 0xd800
 	_surr2           :: 0xdc00

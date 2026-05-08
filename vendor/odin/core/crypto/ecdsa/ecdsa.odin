@@ -79,7 +79,7 @@ Public_Key :: struct {
 }
 
 // private_key_generate uses the system entropy source to generate a new
-// Private_Key.  This will only fail iff the system entropy source is
+// Private_Key.  This will only fail if and only if (⟺) the system entropy source is
 // missing or broken.
 private_key_generate :: proc(priv_key: ^Private_Key, curve: Curve) -> bool {
 	private_key_clear(priv_key)
@@ -111,7 +111,7 @@ private_key_generate :: proc(priv_key: ^Private_Key, curve: Curve) -> bool {
 }
 
 // private_key_set_bytes decodes a byte-encoded private key, and returns
-// true iff the operation was successful.
+// true if and only if (⟺) the operation was successful.
 private_key_set_bytes :: proc(priv_key: ^Private_Key, curve: Curve, b: []byte) -> bool {
 	private_key_clear(priv_key)
 
@@ -194,7 +194,33 @@ private_key_bytes :: proc(priv_key: ^Private_Key, dst: []byte) {
 	}
 }
 
-// private_key_equal returns true iff the private keys are equal,
+// private_key_set sets priv_key to src.
+private_key_set :: proc(priv_key, src: ^Private_Key) {
+	if src == nil || src._curve == .Invalid {
+		private_key_clear(priv_key)
+		return
+	}
+
+	priv_key._curve = src._curve
+
+	reflect.set_union_variant_typeid(
+		priv_key._impl,
+		_PRIV_IMPL_IDS[priv_key._curve],
+	)
+
+	#partial switch priv_key._curve {
+	case .SECP256R1:
+		secec.sc_set(&priv_key._impl.(secec.Scalar_p256r1), &src._impl.(secec.Scalar_p256r1))
+	case .SECP384R1:
+		secec.sc_set(&priv_key._impl.(secec.Scalar_p384r1), &src._impl.(secec.Scalar_p384r1))
+	case:
+		panic("crypto/ecdh: invalid curve")
+	}
+
+	public_key_set(&priv_key._pub_key, &src._pub_key)
+}
+
+// private_key_equal returns true if and only if (⟺) the private keys are equal,
 // in constant time.
 private_key_equal :: proc(p, q: ^Private_Key) -> bool {
 	if p._curve != q._curve {
@@ -219,7 +245,7 @@ private_key_clear :: proc "contextless" (priv_key: ^Private_Key) {
 }
 
 // public_key_set_bytes decodes a byte-encoded public key, and returns
-// true iff the operation was successful.
+// true if and only if (⟺) the operation was successful.
 public_key_set_bytes :: proc(pub_key: ^Public_Key, curve: Curve, b: []byte) -> bool {
 	public_key_clear(pub_key)
 
@@ -262,6 +288,16 @@ public_key_set_bytes :: proc(pub_key: ^Public_Key, curve: Curve, b: []byte) -> b
 	return true
 }
 
+// public_key_set sets pub_key to src.
+public_key_set :: proc(pub_key, src: ^Public_Key) {
+	if src == nil || src._curve == .Invalid {
+		public_key_clear(pub_key)
+		return
+	}
+
+	pub_key^ = src^
+}
+
 // public_key_set_priv sets pub_key to the public component of priv_key.
 public_key_set_priv :: proc(pub_key: ^Public_Key, priv_key: ^Private_Key) {
 	ensure(priv_key._curve != .Invalid, "crypto/ecdsa: uninitialized private key")
@@ -296,7 +332,7 @@ public_key_bytes :: proc(pub_key: ^Public_Key, dst: []byte) {
 	}
 }
 
-// public_key_equal returns true iff the public keys are equal,
+// public_key_equal returns true if and only if (⟺) the public keys are equal,
 // in constant time.
 public_key_equal :: proc(p, q: ^Public_Key) -> bool {
 	if p._curve != q._curve {

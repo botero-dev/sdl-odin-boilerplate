@@ -18,8 +18,9 @@ foreign lib {
 	UnregisterApp         :: proc() ---
 	GDKSuspendComplete    :: proc() ---
 }
-
+/*
 @(default_calling_convention="c")
 foreign lib {
 	SDL_main :: proc(argc: c.int, argv: [^]cstring) -> c.int ---
 }
+*/

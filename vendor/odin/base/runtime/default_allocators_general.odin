@@ -1,6 +1,11 @@
 package runtime
 
-when ODIN_DEFAULT_TO_NIL_ALLOCATOR {
+USE_EMSCRIPTEN_ALLOCATOR :: #config(ODIN_DEFAULT_TO_EMSCRIPTEN_ALLOCATOR, false)
+
+when USE_EMSCRIPTEN_ALLOCATOR {
+	default_allocator :: emscripten_allocator
+	default_allocator_proc :: emscripten_allocator_proc
+} else when ODIN_DEFAULT_TO_NIL_ALLOCATOR {
 	default_allocator_proc :: nil_allocator_proc
 	default_allocator :: nil_allocator
 } else when ODIN_DEFAULT_TO_PANIC_ALLOCATOR {

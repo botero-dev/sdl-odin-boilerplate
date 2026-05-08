@@ -4,7 +4,9 @@ package sdl3_image
 import "core:c"
 import SDL "vendor:sdl3"
 
-when ODIN_OS == .Windows {
+when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
+	@(export) foreign import lib { "libSDL3_image.o" }
+} else when ODIN_OS == .Windows {
 	foreign import lib "SDL3_image.lib"
 } else {
 	foreign import lib "system:SDL3_image"

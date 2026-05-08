@@ -167,14 +167,19 @@ do_time_header :: proc(opts: Options, buf: ^strings.Builder, t: time.Time) {
 		if Full_Timestamp_Opts & opts != nil {
 			fmt.sbprint(buf, "[")
 			y, m, d := time.date(t)
-			h, min, s := time.clock(t)
+			h, min, s, nanos := time.precise_clock(t)
 			if .Date in opts {
 				fmt.sbprintf(buf, "%d-%02d-%02d", y, m, d)
 				if .Time in opts {
 					fmt.sbprint(buf, " ")
 				}
 			}
-			if .Time in opts { fmt.sbprintf(buf, "%02d:%02d:%02d", h, min, s) }
+			if .Time in opts {
+				fmt.sbprintf(buf, "%02d:%02d:%02d", h, min, s)
+				if .Time_Millis in opts {
+					fmt.sbprintf(buf, ".%03d", nanos / 1000000)
+				}
+			}
 			fmt.sbprint(buf, "] ")
 		}
 	}

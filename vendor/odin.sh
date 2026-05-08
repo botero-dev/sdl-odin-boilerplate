@@ -5,8 +5,8 @@ pushd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null
 if [[ ! -d "odin" ]]; then
 	"../scripts/grab_repo.sh"                           \
 		--folder "odin"                                 \
-		--repo "https://github.com/odin-lang/Odin.git"  \
-		--branch dev-2026-03
+		--repo "https://github.com/botero-dev/Odin.git"  \
+		--branch master
 fi
 
 

@@ -156,9 +156,12 @@ gb_internal void override_entity_in_scope(Entity *original_entity, Entity *new_e
 	// NOTE(bill): The original_entity's scope may not be same scope that it was inserted into
 	// e.g. file entity inserted into its package scope
 	String original_name = original_entity->token.string;
+	auto original_intern = entity_interned_name(original_entity);
+	u32 hash = original_entity->interned_name_hash.load();
+
 	Scope *found_scope = nullptr;
 	Entity *found_entity = nullptr;
-	scope_lookup_parent(original_entity->scope, original_name, &found_scope, &found_entity);
+	scope_lookup_parent(original_entity->scope, original_intern, &found_scope, &found_entity, hash);
 	if (found_scope == nullptr) {
 		return;
 	}
@@ -171,7 +174,7 @@ gb_internal void override_entity_in_scope(Entity *original_entity, Entity *new_e
 	// has been "evaluated" and the variant data can be copied across
 
 	rw_mutex_lock(&found_scope->mutex);
-	string_map_set(&found_scope->elements, original_name, new_entity);
+	scope_map_insert(&found_scope->elements, original_intern, hash, new_entity);
 	rw_mutex_unlock(&found_scope->mutex);
 
 	original_entity->flags |= EntityFlag_Overridden;
@@ -517,6 +520,8 @@ gb_internal void check_type_decl(CheckerContext *ctx, Entity *e, Ast *init_expr,
 	if (decl != nullptr) {
 		AttributeContext ac = {};
 		check_decl_attributes(ctx, decl->attributes, type_decl_attribute, &ac);
+
+		e->deprecated_message = ac.deprecated_message;
 
 		if (e->kind == Entity_TypeName && ac.objc_class != "") {
 
@@ -990,7 +995,7 @@ gb_internal Entity *init_entity_foreign_library(CheckerContext *ctx, Entity *e) 
 		error(ident, "foreign library names must be an identifier");
 	} else {
 		String name = ident->Ident.token.string;
-		Entity *found = scope_lookup(ctx->scope, name, ident->Ident.hash);
+		Entity *found = scope_lookup(ctx->scope, ident->Ident.interned, ident->Ident.hash);
 
 		if (found == nullptr) {
 			if (is_blank_ident(name)) {
@@ -1189,26 +1194,26 @@ gb_internal void check_objc_methods(CheckerContext *ctx, Entity *e, AttributeCon
 		if (!ac.objc_is_class_method) {
 			bool ok = true;
 			for (TypeNameObjCMetadataEntry const &entry : md->value_entries) {
-				if (entry.name == ac.objc_name) {
+				if (entry.interned.string() == ac.objc_name) {
 					error(e->token, "Previous declaration of @(objc_name=\"%.*s\")", LIT(ac.objc_name));
 					ok = false;
 					break;
 				}
 			}
 			if (ok) {
-				array_add(&md->value_entries, TypeNameObjCMetadataEntry{ac.objc_name, e});
+				array_add(&md->value_entries, TypeNameObjCMetadataEntry{string_interner_insert(ac.objc_name), e});
 			}
 		} else {
 			bool ok = true;
 			for (TypeNameObjCMetadataEntry const &entry : md->type_entries) {
-				if (entry.name == ac.objc_name) {
+				if (entry.interned.string() == ac.objc_name) {
 					error(e->token, "Previous declaration of @(objc_name=\"%.*s\")", LIT(ac.objc_name));
 					ok = false;
 					break;
 				}
 			}
 			if (ok) {
-				array_add(&md->type_entries, TypeNameObjCMetadataEntry{ac.objc_name, e});
+				array_add(&md->type_entries, TypeNameObjCMetadataEntry{string_interner_insert(ac.objc_name), e});
 			}
 		}
 	}
@@ -1551,9 +1556,9 @@ gb_internal void check_proc_decl(CheckerContext *ctx, Entity *e, DeclInfo *d) {
 		if (is_foreign) {
 			error(pl->body, "A foreign procedure cannot have a body");
 		}
-		if (proc_type->Proc.c_vararg) {
-			error(pl->body, "A procedure with a '#c_vararg' field cannot have a body and must be foreign");
-		}
+		// if (proc_type->Proc.c_vararg) {
+		// 	error(pl->body, "A procedure with a '#c_vararg' field cannot have a body and must be foreign");
+		// }
 
 		d->scope = ctx->scope;
 
@@ -1766,6 +1771,12 @@ gb_internal void check_global_variable_decl(CheckerContext *ctx, Entity *e, Ast 
 
 	Operand o = {};
 	check_expr_with_type_hint(ctx, &o, init_expr, e->type);
+	if (check_vet_shadowing_assignment(ctx->checker, e, init_expr)) {
+		error(e->token, "Illegal declaration cycle of `%.*s`", LIT(e->token.string));
+		o.mode = Addressing_Invalid;
+		o.type = t_invalid;
+		e->type = t_invalid;
+	}
 	check_init_variable(ctx, e, &o, str_lit("variable declaration"));
 	if (e->Variable.is_rodata && o.mode != Addressing_Constant) {
 		ERROR_BLOCK();
@@ -1878,7 +1889,8 @@ gb_internal void check_proc_group_decl(CheckerContext *ctx, Entity *pg_entity, D
 
 			ProcTypeOverloadKind kind = are_proc_types_overload_safe(p->type, q->type);
 			bool both_have_where_clauses = false;
-			if (p->decl_info->proc_lit != nullptr && q->decl_info->proc_lit != nullptr) {
+			if (p->decl_info != nullptr && q->decl_info != nullptr &&
+			    p->decl_info->proc_lit != nullptr && q->decl_info->proc_lit != nullptr) {
 				GB_ASSERT(p->decl_info->proc_lit->kind == Ast_ProcLit);
 				GB_ASSERT(q->decl_info->proc_lit->kind == Ast_ProcLit);
 				auto pl = &p->decl_info->proc_lit->ProcLit;
@@ -1975,6 +1987,20 @@ gb_internal void check_entity_decl(CheckerContext *ctx, Entity *e, DeclInfo *d, 
 
 		e->parent_proc_decl = c.curr_proc_decl;
 		e->state = EntityState_InProgress;
+		bool track_cycle_path = false;
+		switch (e->kind) {
+		case Entity_Variable:
+		case Entity_Constant:
+		case Entity_TypeName:
+			track_cycle_path = true;
+			break;
+		}
+		if (track_cycle_path) {
+			check_type_path_push(&c, e);
+		}
+		defer (if (track_cycle_path) {
+			check_type_path_pop(&c);
+		});
 
 		switch (e->kind) {
 		case Entity_Variable:

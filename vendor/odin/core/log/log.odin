@@ -40,6 +40,7 @@ Options :: runtime.Logger_Options
 Full_Timestamp_Opts :: Options{
 	.Date,
 	.Time,
+	.Time_Millis,
 }
 Location_Header_Opts :: Options{
 	.Short_File_Path,

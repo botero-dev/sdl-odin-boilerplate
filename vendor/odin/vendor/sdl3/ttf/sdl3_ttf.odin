@@ -4,7 +4,9 @@ package sdl3_ttf
 import "core:c"
 import SDL "vendor:sdl3"
 
-when ODIN_OS == .Windows {
+when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
+	@(export) foreign import lib { "libSDL3_ttf.o" }
+} else when ODIN_OS == .Windows {
 	foreign import lib "SDL3_ttf.lib"
 } else {
 	foreign import lib "system:SDL3_ttf"
@@ -255,7 +257,6 @@ foreign lib {
 	DestroySurfaceTextEngine  :: proc(engine: ^TextEngine) ---
 
 	DrawRendererText          :: proc(text: ^Text, x, y: f32) -> bool ---
-	DrawRendererTextTx        :: proc(text: ^Text, x, y: f32, tx: ^f32) -> bool ---
 	DestroyRendererTextEngine :: proc(engine: ^TextEngine) ---
 
 	DestroyGPUTextEngine      :: proc(engine: ^TextEngine) ---
