@@ -10,4 +10,7 @@ if [[ ! -d "SDL_ttf" ]]; then
 		--repo "https://github.com/libsdl-org/SDL_ttf.git"   \
 		--branch release-3.2.2
 
+	# TODO:
+	#  SDL_ttf/external/download.sh
+	#  rm SDL_ttf/external/*/.git
 fi
