@@ -35,8 +35,19 @@ gfx_init :: proc(in_renderer: ^SDL.Renderer, in_window: ^SDL.Window) {
 	SDL.SetRenderTarget(renderer, helper)
 	SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
 	SDL.RenderClear(renderer)
+
+	SDL.SetRenderDrawColorFloat(renderer, 1, 1, 1, 0)
+	SDL.RenderPoint(renderer, 0, 0)
+	SDL.RenderPoint(renderer, 0, 1)
+	SDL.RenderPoint(renderer, 1, 0)
+
 	SDL.SetRenderDrawColorFloat(renderer, 1, 1, 1, 1)
 	SDL.RenderPoint(renderer, 1, 1)
+
+	SDL.SetRenderTarget(renderer, nil)
+
+
+	// for drawing cheap lines
 	SDL.SetTextureScaleMode(helper, .PIXELART)
 	//SDL.SetTextureScaleMode(helper, .LINEAR)
 	SDL.SetTextureBlendMode(helper, {.BLEND})
@@ -50,7 +61,7 @@ DrawState :: struct {
 	mat_scale:   [2]f32,
 	mat_offset:  [2]f32,
 	draw_rect:   [2][2]i32, // encoded as x,y  w,h
-	view_rect:   [2]vec2, // encoded as topleft, botright
+	view_mode:   View_Mode,
 	user_matrix: matrix[3, 3]f32,
 	modulate:    [4]f32,
 }
@@ -62,7 +73,7 @@ draw_state_initial := DrawState {
 	mat_scale   = {1, 1},
 	mat_offset  = {0, 0},
 	draw_rect   = {},
-	view_rect   = {},
+	view_mode   = {},
 	user_matrix = 1,
 	modulate    = {1, 1, 1, 1},
 }
@@ -141,43 +152,90 @@ draw_clear_draw_rect :: proc(renderer: ^SDL.Renderer) {
 }
 
 draw_clear_view_rect :: proc() {
-	draw_state.view_rect = {}
+	draw_state.view_mode = {}
 	draw_state.mat_scale = {1, 1}
 	draw_state.mat_offset = {0, 0}
 }
 
-draw_set_view_rect :: proc(view_topleft: vec2, view_botright: vec2) {
-	draw_state.view_rect = {view_topleft, view_botright}
+
+
+View_Scaling :: enum {
+	Stretch,
+	Fit,
+	Fill,
+}
+
+View_Mode_Rect :: struct {
+	scaling: View_Scaling,
+	topleft: vec2,
+	botright: vec2,
+}
+
+View_Mode_Basis :: struct {
+	centerpoint: vec2,
+	right: vec2,
+	up: vec2,
+}
+
+View_Mode :: union {
+	View_Mode_Rect,
+	View_Mode_Basis,
+}
+
+draw_set_view_rect :: proc(view_topleft: vec2, view_botright: vec2, scaling: View_Scaling = .Stretch) {
+	draw_state.view_mode = View_Mode_Rect{scaling, view_topleft, view_botright}
+	update_matrix()
+}
+
+// absolute projection, vectors are interpreted as pixels:
+// so {100, 20) would make a unit be displaced that amount in pixels
+draw_set_view_basis :: proc(right: vec2, up: vec2, centerpoint: vec2) {
+	draw_state.view_mode = View_Mode_Basis{centerpoint, right, up}
 	update_matrix()
 }
 
 update_matrix :: proc() {
-	view_topleft := draw_state.view_rect[0]
-	view_botright := draw_state.view_rect[1]
-	if view_topleft == {} && view_botright == {} {
-		draw_state.mat_scale = {1, 1}
-		draw_state.mat_offset = {0, 0}
-		return
-	}
-
 	draw_rect := draw_state.draw_rect
 	draw_size := draw_rect[1]
 	if draw_size == {0, 0} {
+		// TODO: maybe find current framebuffer size before?
 		draw_size = {win_size.x, win_size.y}
 	}
-	view_range := view_botright - view_topleft
+	
+	switch view_mode in draw_state.view_mode {
+		case View_Mode_Rect:
+			view_rect := view_mode
+			view_topleft := view_rect.topleft
+			view_botright := view_rect.botright
+			if view_topleft == {} && view_botright == {} {
+				draw_state.mat_scale = {1, 1}
+				draw_state.mat_offset = {0, 0}
+				return
+			}
 
-	draw_pos := vec2{f32(draw_rect[0].x), f32(draw_rect[0].y)}
-	draw_state.mat_scale = vec2{f32(draw_size.x), f32(draw_size.y)} / view_range
-	draw_state.mat_offset = draw_pos - (view_topleft * draw_state.mat_scale)
+			view_range := view_botright - view_topleft
 
-	draw_matrix = (matrix[3, 3]f32{
-				draw_state.mat_scale.x, 0, draw_state.mat_offset.x,
-				0, draw_state.mat_scale.y, draw_state.mat_offset.y,
-				0, 0, 1,
-			})
+			draw_pos := vec2{f32(draw_rect[0].x), f32(draw_rect[0].y)}
+			draw_state.mat_scale = vec2{f32(draw_size.x), f32(draw_size.y)} / view_range
+			draw_state.mat_offset = draw_pos - (view_topleft * draw_state.mat_scale)
 
-	draw_matrix = draw_matrix * draw_state.user_matrix
+			draw_matrix = (matrix[3, 3]f32{
+						draw_state.mat_scale.x, 0, draw_state.mat_offset.x,
+						0, draw_state.mat_scale.y, draw_state.mat_offset.y,
+						0, 0, 1,
+					})
+
+			draw_matrix = draw_matrix * draw_state.user_matrix
+
+		case View_Mode_Basis:
+			draw_matrix = 1;
+			draw_matrix[0] = {view_mode.right.x, view_mode.right.y, 0}
+			draw_matrix[1] = {view_mode.up.x, view_mode.up.y, 0}
+			midpoint := draw_size / 2
+			offset := [2]f32{f32(midpoint.x), f32(midpoint.y)} - view_mode.centerpoint
+			draw_matrix[2] = {offset.x, offset.y, 1}
+	}
+
 }
 
 

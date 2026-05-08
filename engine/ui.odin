@@ -165,10 +165,10 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 				)
 				TTF.SetTextString(text, cstring(string_slice.chars), uint(string_slice.length))
 				TTF.SetTextWrapWidth(text, 0)
-				//TTF.DrawRendererText(text, math.round(box.x), math.round(box.y))
+				TTF.DrawRendererText(text, math.round(box.x), math.round(box.y))
 
 				m := linalg.transpose(draw_state.user_matrix)
-				TTF.DrawRendererTextTx(text, box.x, box.y, &m[0][0])
+				//TTF.DrawRendererTextTx(text, box.x, box.y, &m[0][0])
 			}
 
 		case .Image:

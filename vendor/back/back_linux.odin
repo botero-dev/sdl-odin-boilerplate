@@ -17,6 +17,8 @@ when !USE_FALLBACK {
 
 foreign import lib "system:c"
 
+
+when ODIN_PLATFORM_SUBTARGET != .Android {
 @(init)
 program_init :: proc "contextless" () {
 	context = runtime.default_context()
@@ -30,6 +32,7 @@ program_init :: proc "contextless" () {
 			}
 		}
 	}
+}
 }
 
 @(private="package")

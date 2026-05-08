@@ -27,9 +27,22 @@ import clay "engine:clay-odin"
 import ab "engine:."
 import "engine:ui"
 
-main :: proc() {
-	fmt.println("hello world")
-	ab.app_init(nil, init, iterate)
+when ODIN_PLATFORM_SUBTARGET == .Android {
+	@(export)
+	SDL_main :: proc "c" (argc: i32, argv: [^]cstring) -> i32 {
+		context = runtime.default_context()
+		context.logger = runtime.Logger {
+			procedure = ab.sdl_log_proc,
+		}
+		log.info("android SDL_main")
+		ab.app_init(nil, init, iterate)
+		return 0
+	}
+} else {
+	main :: proc() {
+		fmt.println("hello world")
+		ab.app_init(nil, init, iterate)
+	}
 }
 
 on_gallery_loaded :: proc(result: ab.RequestResult) {
@@ -398,7 +411,8 @@ layout_clock :: proc() {
 	ab.ui_pointer_handler()
 }
 
-draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
+draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {}
+draw_clock_old :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
 	box := render_command.boundingBox
 
 	ab.draw_push_state()
@@ -619,7 +633,7 @@ render_gallery :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.
 		return
 	}
 
-	dark_level := f32(0.25)
+	dark_level := f32(0.1)
 	back_color_dark := clay.Color{dark_level, dark_level, dark_level, 1}
 	back_color := clay.Color{1, 1, 1, 1}
 	curr_img_tex := images[current_img_idx].texture
@@ -630,6 +644,11 @@ render_gallery :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.
 	draw_tex_rect_aspect(rect, curr_img_tex, true, back_color_dark)
 	draw_tex_rect_aspect(rect, curr_img_tex, false, back_color)
 
+	next_img_idx := get_next_img_idx(current_img_idx)
+	if (next_img_idx == current_img_idx) {
+		return;
+	}
+
 	if current_state == .Transitioning {
 		front_color_dark := back_color_dark
 		front_color := back_color
@@ -637,7 +656,6 @@ render_gallery :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.
 		alpha := f32(progress)
 		front_color_dark.a = alpha
 		front_color.a = alpha
-		next_img_idx := get_next_img_idx(current_img_idx)
 		next_img_tex := images[next_img_idx].texture
 		draw_tex_rect_aspect(rect, next_img_tex, true, front_color_dark)
 		draw_tex_rect_aspect(rect, next_img_tex, false, front_color)
