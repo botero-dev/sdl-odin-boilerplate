@@ -228,12 +228,55 @@ update_matrix :: proc() {
 			draw_matrix = draw_matrix * draw_state.user_matrix
 
 		case View_Mode_Basis:
+
+			view_mode_basis := View_Mode_Basis(view_mode)
+
 			draw_matrix = 1;
-			draw_matrix[0] = {view_mode.right.x, view_mode.right.y, 0}
-			draw_matrix[1] = {view_mode.up.x, view_mode.up.y, 0}
+			
+			offset :=  view_mode_basis.centerpoint
+			draw_matrix = draw_matrix * matrix[3,3]f32 {
+				1, 0, -offset.x,
+				0, 1, -offset.y,
+				0, 0, 1,
+			}
+
+			scale_mat := matrix[3,3]f32 {
+				1, 0, 0,
+				0, 1, 0,
+				0, 0, 1,
+			}
+
+			scale_mat[0] = {view_mode.right.x, view_mode.right.y, 0}
+			scale_mat[1] = {view_mode.up.x, view_mode.up.y, 0}
+
+			draw_matrix = scale_mat * draw_matrix
+
 			midpoint := draw_size / 2
-			offset := [2]f32{f32(midpoint.x), f32(midpoint.y)} - view_mode.centerpoint
-			draw_matrix[2] = {offset.x, offset.y, 1}
+
+			center := [2]f32{f32(midpoint.x), f32(midpoint.y)}
+
+			draw_matrix =  matrix[3,3]f32 {
+				1, 0, center.x,
+				0, 1, center.y,
+				0, 0, 1,
+			} * draw_matrix
+
+
+
+//			draw_matrix = draw_matrix * scale_mat
+
+			/*
+			draw_matrix = draw_matrix * scale_mat
+
+			draw_matrix = draw_matrix * matrix[3,3]f32 {
+				1, 0, center.x,
+				0, 1, center.y,
+				0, 0, 1,
+			}
+
+			draw_matrix = 1
+*/
+			
 	}
 
 }
@@ -391,9 +434,11 @@ buffer_line :: proc(buffer: ^DrawBuffer, in_start: vec2, in_end: vec2, in_width:
 
 	starta = draw_matrix * starta
 	enda = draw_matrix * enda
+	//log.info(start, starta, end, enda)
 
 	start = starta.xy
 	end = enda.xy
+
 
 	delta := end - start
 	length := linalg.length(delta)
