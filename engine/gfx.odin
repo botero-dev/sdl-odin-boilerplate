@@ -260,25 +260,7 @@ update_matrix :: proc() {
 				0, 1, center.y,
 				0, 0, 1,
 			} * draw_matrix
-
-
-
-//			draw_matrix = draw_matrix * scale_mat
-
-			/*
-			draw_matrix = draw_matrix * scale_mat
-
-			draw_matrix = draw_matrix * matrix[3,3]f32 {
-				1, 0, center.x,
-				0, 1, center.y,
-				0, 0, 1,
-			}
-
-			draw_matrix = 1
-*/
-			
 	}
-
 }
 
 
@@ -324,6 +306,8 @@ indices_buf: [2000]u8
 buffer := DrawBuffer{0, 0, vertices_buf[:], uvs_buf[:], nil, indices_buf[:]}
 
 
+
+
 draw_circle :: proc(
 	renderer: ^SDL.Renderer,
 	in_center: vec2,
@@ -351,7 +335,7 @@ buffer_circle :: proc(
 		draw_matrix[0][0], draw_matrix[0][1],
 		draw_matrix[1][0], draw_matrix[1][1],
 	}
-	radius := in_radius * linalg.length(scale_mat * [2]f32{1, 0})
+	radius := in_radius * linalg.length(scale_mat * [2]f32{0.7, 0.7})
 
 	if int_coords {
 		center += {0.5, 0.5}
