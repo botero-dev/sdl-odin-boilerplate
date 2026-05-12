@@ -174,6 +174,7 @@ parse_section_entities :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 			if content == DXF_ENDSEC {
 				break
 			}
+			//fmt.println(content)
 			if content == DXF_SPLINE {
 				parse_entity_spline(parse_state, data)
 				continue
@@ -585,14 +586,7 @@ parse_entity_mtext :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 			case DXF_Code(44):
 				parse_group_code(parse_state)
 				line_space_factor := parse_content_string(parse_state)
-				/*
-			case DXF_Code(50):
-				parse_group_code(parse_state)
-				angle := parse_content_string(parse_state)
-			case DXF_Code(72):
-				parse_group_code(parse_state)
-				justification_horz := parse_content_string(parse_state)
-*/
+
 			case DXF_Code(11):
 				parse_group_code(parse_state)
 				end_x, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
@@ -603,9 +597,6 @@ parse_entity_mtext :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 				parse_group_code(parse_state)
 				end_z, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
 
-			// case DXF_Code(100):
-			// 	parse_group_code(parse_state)
-			// 	subclass_text := parse_content_string(parse_state)
 
 			case:
 				done = true
@@ -618,6 +609,72 @@ parse_entity_mtext :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 
 	append(&data.texts, text)
 }
+
+
+parse_entity_text :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
+	assert(parse_group_code(parse_state) == DXF_Code(5))	
+	handle := parse_content_string(parse_state)
+
+
+	assert(parse_group_code(parse_state) == DXF_Code(330))
+	owner := parse_content_string(parse_state)
+
+
+	parse_handle_common(parse_state, nil)
+
+
+	text := DXF_Text {}
+	done := false
+	for !done {
+		switch peek_group_code(parse_state) {
+			case DXF_Code(1):
+				parse_group_code(parse_state)
+				text := parse_content_string(parse_state)
+
+			case DXF_Code(10):
+				parse_group_code(parse_state)
+				text.pos.x, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
+			case DXF_Code(20):
+				parse_group_code(parse_state)
+				text.pos.y, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
+			case DXF_Code(30):
+				parse_group_code(parse_state)
+				text.pos.z, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
+			case DXF_Code(40):
+				parse_group_code(parse_state)
+				text_height, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
+
+			case DXF_Code(50):
+				parse_group_code(parse_state)
+				angle := parse_content_string(parse_state)
+			case DXF_Code(72):
+				parse_group_code(parse_state)
+				justify_horz := parse_content_string(parse_state)
+
+			case DXF_Code(11):
+				parse_group_code(parse_state)
+				align_x, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
+			case DXF_Code(21):
+				parse_group_code(parse_state)
+				align_y, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
+			case DXF_Code(31):
+				parse_group_code(parse_state)
+				align_z, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
+			case DXF_Code(100):
+				parse_group_code(parse_state)
+				subclass_text := parse_content_string(parse_state)
+			case DXF_Code(73):
+				parse_group_code(parse_state)
+				justify_vert := parse_content_string(parse_state)
+
+			case:
+				done = true
+		}
+	}
+
+	append(&data.texts, text)
+}
+
 
 parse_xdata :: proc(parse_state: ^DXF_ParseState) {
 	maybe_xdata := peek_group_code(parse_state)
@@ -639,46 +696,6 @@ parse_xdata :: proc(parse_state: ^DXF_ParseState) {
 		}
 	}
 	
-}
-
-parse_entity_text :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
-	assert(parse_group_code(parse_state) == DXF_Code(5))	
-	handle := parse_content_string(parse_state)
-
-
-	assert(parse_group_code(parse_state) == DXF_Code(330))
-	owner := parse_content_string(parse_state)
-
-
-	parse_handle_common(parse_state, nil)
-
-
-	text := DXF_Text {}
-	done := false
-	for !done {
-		switch peek_group_code(parse_state) {
-			case DXF_Code(10):
-				parse_group_code(parse_state)
-				text.pos.x, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
-			case DXF_Code(20):
-				parse_group_code(parse_state)
-				text.pos.y, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
-			case DXF_Code(30):
-				parse_group_code(parse_state)
-				text.pos.z, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
-			case DXF_Code(40):
-				parse_group_code(parse_state)
-				text_height, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
-
-			case:
-				done = true
-		}
-	}
-
-	parse_code_optional_ignore(parse_state, DXF_Code(1), "text")
-	parse_code_optional_ignore(parse_state, DXF_Code(100), "subclass text")
-
-	append(&data.texts, text)
 }
 
 parse_extension :: proc(parse_state: ^DXF_ParseState) {
@@ -973,8 +990,14 @@ peek_group_code :: proc(cursor_ptr: ^DXF_ParseState) -> DXF_Code {
 	
 	str := string(([^]byte)(start)[:strlen])
 	result, ok := strconv.parse_uint(str)
-
-	
+	if (!ok) {
+		str2 := string(str)
+		fmt.printf("bad parse uint:'%s'\n", str2)
+		for char in str2 {
+			fmt.printf("%d", char)
+		}
+		fmt.printf("\nbad parse uint:'%s'\n", str)
+	}
 	/*fmt.println("str: ", str)
 	for char in str {
 		fmt.print(char)
