@@ -1,6 +1,7 @@
 
 package main
 
+import "core:math/rand"
 import "core:fmt"
 import "core:log"
 import "core:strings"
@@ -217,6 +218,50 @@ view_to_model :: proc (in_coords: [2]f32) -> [2]f32 {
 	return {result.x, result.y}
 }
 
+Color :: [4]f32
+
+colors := []Color {
+	{1, 0, 1, 1}, // color is ByBlock, we shouldn't use this
+	{1, 0, 0, 1}, // 1
+	{1, 1, 0, 1}, // 2
+	{0, 1, 0, 1}, // 3
+	{0, 1, 1, 1}, // 4
+	{0, 0, 1, 1}, // 5
+	{1, 0, 1, 1}, // 6
+	{1, 1, 1, 1}, // 7
+}
+
+
+
+entity_style :: proc(entity: dxf.DXF_Entity, file: dxf.DXF_Data) -> gfx.LineStyleSimple {
+		color := [4]f32{1, 1, 1, 1}
+
+		index := entity.color
+
+		if index == 0 {
+			// TODO: resolve block color, which could be bylayer
+			index = rand.int_range(1,3)
+		}
+
+		if entity.color == 256 {
+			// TODO: grab from layer
+			layer := file.layers[entity.layer]
+			index = layer.color
+		}
+		if index == 0 {
+			color = colors[rand.int_range(1, 7)]
+		} else if index < len(colors) {
+			color = colors[index]
+		} else {
+			color = colors[7]
+		}
+
+		return gfx.LineStyleSimple {
+					width = 1,
+					color = color,
+				}
+}
+
 
 iterate :: proc() {
 
@@ -234,22 +279,25 @@ iterate :: proc() {
 		gfx.draw_circle(
 			{ {f32(circle.center.x), f32(circle.center.y)}, f32(circle.radius) },
 			{
-				line = gfx.LineStyleSimple {width = 1},
+				line = entity_style(circle, dxf_file)
 			}
 		)
 	}
 	
 	for line in dxf_file.lines {
+		style := entity_style(line, dxf_file)
 		ab.draw_line(
 			ab.renderer,
 			{f32(line.start.x), f32(line.start.y)},
 			{f32(line.end.x), f32(line.end.y)},
 			1.0,
+			style.color,
 		)
 
 	}
 
 	for polyline in dxf_file.polylines {
+		style := entity_style(polyline, dxf_file)
 		prev := polyline.points[0]
 		for idx in 1..<len(polyline.points) {
 			next := polyline.points[idx]
@@ -258,6 +306,7 @@ iterate :: proc() {
 				{f32(prev.x), f32(prev.y)},
 				{f32(next.x), f32(next.y)},
 				1.0,
+				style.color,
 			)	
 			prev = next
 		}

@@ -2,159 +2,25 @@ package dxf
 
 import "core:fmt"
 import "core:log"
-import "core:strings"
 import "core:strconv"
-import "core:mem"
-import "core:math"
-import "core:math/linalg"
-
-f64x2 :: [2]f64
-f64x3 :: [3]f64
-
-DXF_Code :: distinct u32
-DXF_Group :: string
-
-DXF_ARC :: DXF_Group("ARC")
-DXF_CIRCLE :: DXF_Group("CIRCLE")
-DXF_DIMENSION :: DXF_Group("DIMENSION")
-DXF_ELLIPSE :: DXF_Group("ELLIPSE")
-DXF_ENDSEC :: DXF_Group("ENDSEC")
-DXF_ENDTAB :: DXF_Group("ENDTAB")
-DXF_ENTITIES :: DXF_Group("ENTITIES")
-DXF_EOF :: DXF_Group("EOF")
-DXF_INSERT :: DXF_Group("INSERT")
-DXF_LINE :: DXF_Group("LINE")
-DXF_LWPOLYLINE :: DXF_Group("LWPOLYLINE")
-DXF_MTEXT :: DXF_Group("MTEXT")
-DXF_SECTION :: DXF_Group("SECTION")
-DXF_SPLINE :: DXF_Group("SPLINE")
-DXF_TABLES :: DXF_Group("TABLES")
-DXF_TABLE :: DXF_Group("TABLE")
-DXF_TEXT :: DXF_Group("TEXT")
-DXF_VIEWPORT :: DXF_Group("VIEWPORT")
-
-DXF_VPORT :: DXF_Group("VPORT")
-DXF_LTYPE :: DXF_Group("LTYPE")
-DXF_LAYER :: DXF_Group("LAYER")
-DXF_STYLE :: DXF_Group("STYLE")
-DXF_VIEW :: DXF_Group("VIEW")
-DXF_UCS :: DXF_Group("UCS")
-DXF_APPID :: DXF_Group("APPID")
-DXF_DIMSTYLE :: DXF_Group("DIMSTYLE")
-DXF_BLOCK_RECORD :: DXF_Group("BLOCK_RECORD")
-
-DXF_ParseState :: struct {
-	start: ^byte,
-	end: ^byte,
-	cursor: ^byte,
-	cursor_end: ^byte, // when different to cursor, means next line was parsed already in a peek call. TODO: you can call "consume" and cursor will be set directly to cursor_end
-}
-
-
-Entity_Line :: struct {
-	start: f64x3,
-	end: f64x3,
-}
-
-
-Entity_Circle :: struct {
-	center: f64x3,
-	radius: f64,
-}
-
-Entity_Ellipse :: struct {
-	center: f64x3,
-	axis: f64x3,
-	normal: f64x3,
-	axis_ratio: f64,
-	arc_range: f64x2,
-}
-
-
-Entity_Polyline :: struct {
-	points: []f64x2,
-	bulges: []f64,
-}
-
-Entity_Spline :: struct {
-	flags: uint,
-	degree: uint,
-	knots: []f64,
-	control_points: []f64x3,
-}
-
-
-Entity_Text :: struct {
-	content: string,
-	pos: f64x3,
-	end: f64x3,
-}
-
-Entity_MText :: struct {
-	content: string,
-	pos: f64x3,
-	end: f64x3,
-}
-
-Entity_Viewport :: struct {
-	center: f64x3,
-	size: f64x2,
-}
-
-Entity_Insert :: struct {
-	component_name: string,
-	center: f64x3,
-	scale: f64x3,
-	rotation: f64,
-}
-
-Entity_Arc :: struct {
-	center: f64x3,
-	radius: f64,
-	extrusion: f64x3,
-	angle_range: f64x2,
-}
-
-
-Entity_Dimension :: struct {
-	block: string,
-	def: f64x3,
-	text: f64x3,
-	flags: string,
-}
-
-
-
-DXF_Data :: struct {
-	polylines: [dynamic]Entity_Polyline,
-	splines: [dynamic]Entity_Spline,
-    lines: [dynamic]Entity_Line,
-    circles: [dynamic]Entity_Circle,
-    arcs: [dynamic]Entity_Arc,
-    inserts: [dynamic]Entity_Insert,
-	ellipses: [dynamic]Entity_Ellipse,
-    texts: [dynamic]Entity_Text,
-    mtexts: [dynamic]Entity_MText,
-    dimensions: [dynamic]Entity_Dimension,
-}
-
-PARSE_DEBUG :: false
 
 
 parse_dxf :: proc(bytes: []byte) -> DXF_Data {
 
+	data_data: DXF_Data
+	data := &data_data
+
 	parse_state_data := DXF_ParseState {
 		start = &bytes[0],
 		end = &(([^]byte)(&bytes[0])[len(bytes)]), // way to address past end
-		cursor = &bytes[0]
+		cursor = &bytes[0],
+		data = data,
 	}
 
 	parse_state := &parse_state_data
 
 	entity_id := -1
 
-	data_data: DXF_Data
-	data := &data_data
 
 	for parse_state.cursor < parse_state.end {
 		group_code := parse_group_code(parse_state)
@@ -307,7 +173,7 @@ parse_table_ltype :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 			case 5:
 				item.handle = parse_code_string(parse_state)
 			case 330:
-				item.parent = parse_code_string(parse_state)
+				item.owner = parse_code_string(parse_state)
 			case 100:
 				_ = parse_code_string(parse_state)
 			case 70:
@@ -341,15 +207,13 @@ parse_table_ltype :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 Table_Layer :: struct {
 	using object: DXF_Object,
 	name: string,
+	color: int,
 }
 
 DXF_Object :: struct {
+	type: typeid,
 	handle: string,
-	parent: string,
-}
-
-parse_parent :: proc(parse_state: ^DXF_ParseState, object: ^DXF_Object) {
-	object.parent = parse_code_string(parse_state)
+	owner: string,
 }
 
 parse_table_layer :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
@@ -366,13 +230,13 @@ parse_table_layer :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 			case 5:
 				layer.handle = parse_code_string(parse_state)
 			case 330:
-				layer.parent = parse_code_string(parse_state)
+				layer.owner = parse_code_string(parse_state)
 			case 100:
 				_ = parse_code_string(parse_state)
 			case 70:
 				layer_flags := parse_code_string(parse_state) // 1:frozen 4:locked
 			case 62:
-				color_number := parse_code_f64(parse_state) or_continue
+				layer.color = parse_code_int(parse_state) or_continue
 			
 			case 6:
 				line_type := parse_code_string(parse_state)
@@ -391,8 +255,7 @@ parse_table_layer :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 		}
 	}
 
-	log.info("layer", layer.name)
-
+	append(&data.layers, layer)
 }
 
 
@@ -458,51 +321,11 @@ parse_section_entities :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 	log.info("Finished parsing ENTITIES")
 }
 
-// Parse value helpers
 
-parse_code_f64 :: proc(parse_state: ^DXF_ParseState) -> (value: f64, ok: bool) {
-	code := parse_group_code(parse_state)
-	content_string := trim(parse_content_string(parse_state))
-	value, ok = strconv.parse_f64(content_string)
-	if !ok {
-		log.warn("error parsing decimal value", code , content_string)
-	}
-	return
-}
-
-parse_code_int :: proc(parse_state: ^DXF_ParseState) -> (value: int, ok: bool) {
-	code := parse_group_code(parse_state)
-	content_string := trim(parse_content_string(parse_state))
-	value, ok = strconv.parse_int(content_string)
-	if !ok {
-		log.warn("error parsing int value", code , content_string)
-	}
-	return
-}
-
-parse_code_string :: proc(parse_state: ^DXF_ParseState) -> string {
-	_ = parse_group_code(parse_state)
-	return parse_content_string(parse_state)
-}
-
-parse_code_assert_ignore :: proc(parse_state: ^DXF_ParseState, in_code: DXF_Code, _message: string) {
-	code := parse_group_code(parse_state)
-	parse_content_string(parse_state)
-	assert(code == in_code)
-}
-
-parse_code_optional_ignore :: proc(parse_state: ^DXF_ParseState, in_code: DXF_Code, _message: string) {
-	code := peek_group_code(parse_state)
-	if code == in_code {
-		parse_group_code(parse_state)
- 		parse_content_string(parse_state)
-	}
-}
-
-parse_entity_header :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
-
+parse_entity_header :: proc(parse_state: ^DXF_ParseState, entity: ^DXF_Entity) {
+	assert(entity != nil)
 	assert(parse_group_code(parse_state) == DXF_Code(5))	
-	handle := parse_content_string(parse_state)
+	entity.handle = parse_content_string(parse_state)
 
 	maybe_ext := peek_group_code(parse_state)
 	for maybe_ext == DXF_Code(102) {
@@ -511,18 +334,55 @@ parse_entity_header :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 	}
 
 	assert(parse_group_code(parse_state) == DXF_Code(330))
-	owner := parse_content_string(parse_state)
+	entity.owner = parse_content_string(parse_state)
 
-	parse_handle_common(parse_state, nil)
+	entity.color = 256 // Color:ByLayer by default
 
+	unhandled := false
+	for !unhandled {
+		switch peek_group_code(parse_state) {
+			case DXF_Code(100):
+				parse_group_code(parse_state)
+				subclass := parse_content_string(parse_state)
+			case DXF_Code(8):
+				parse_group_code(parse_state)
+				layer_name := parse_content_string(parse_state)
 
+				layer_idx := -1
+				all_layers := parse_state.data.layers
+				for idx in 0..<len(all_layers) {
+					if all_layers[idx].name == layer_name {
+						layer_idx = idx
+					}
+				}
+				assert(layer_idx != -1)
+				entity.layer = layer_idx
+			case DXF_Code(62): // color
+				entity.color = parse_code_int(parse_state) or_continue
+			case DXF_Code(67): // space
+				parse_group_code(parse_state)
+				space := parse_content_string(parse_state) // 0: model space, 1: paper space
+			case DXF_Code(6):
+				parse_group_code(parse_state)
+				linetype := parse_content_string(parse_state)
+			case DXF_Code(48):
+				parse_group_code(parse_state)
+				linetype_scale := parse_content_string(parse_state)
+
+			case DXF_Code(370): // weight
+				parse_group_code(parse_state)
+				line_weight := parse_content_string(parse_state)
+				
+			case:
+				unhandled = true
+		}
+	}
 }
-
 // parse entities functions
 
 parse_entity_ellipse :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) -> (ok: bool) {
 	ellipse := Entity_Ellipse {}
-	parse_entity_header(parse_state, data)
+	parse_entity_header(parse_state, &ellipse)
 
 	done := false
 	for !done {
@@ -571,7 +431,7 @@ parse_entity_ellipse :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) -> (
 
 parse_entity_insert :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) -> (ok: bool) {
 	insert := Entity_Insert {}
-	parse_entity_header(parse_state, data)
+	parse_entity_header(parse_state, &insert)
 	done := false
 	for !done {
 		next := peek_group_code(parse_state)
@@ -610,7 +470,7 @@ parse_entity_insert :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) -> (o
 
 parse_entity_arc :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) -> (ok: bool) {
 	arc := Entity_Arc {}
-	parse_entity_header(parse_state, data)
+	parse_entity_header(parse_state, &arc)
 	done := false
 	for !done {
 		next := peek_group_code(parse_state)
@@ -649,7 +509,7 @@ parse_entity_arc :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) -> (ok: 
 
 parse_entity_dimension :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) -> (ok: bool) {
 	dim := Entity_Dimension {}
-	parse_entity_header(parse_state, data)
+	parse_entity_header(parse_state, &dim)
 
 	done := false
 	for !done {
@@ -717,7 +577,8 @@ parse_entity_dimension :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) ->
 
 
 parse_entity_viewport :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
-	assert(parse_group_code(parse_state) == DXF_Code(5))	
+
+/*	assert(parse_group_code(parse_state) == DXF_Code(5))	
 	handle := parse_content_string(parse_state)
 
 	maybe_ext := peek_group_code(parse_state)
@@ -727,12 +588,12 @@ parse_entity_viewport :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 
 	assert(parse_group_code(parse_state) == DXF_Code(330))
 	owner := parse_content_string(parse_state)
-
-	parse_handle_common(parse_state, nil)
+*/
+	viewport := Entity_Viewport {}
+	parse_entity_header(parse_state, &viewport)
 	// assert(parse_group_code(parse_state) == DXF_Code(6))
 	// linetype := parse_content_string(parse_state)
 
-	viewport := Entity_Viewport {}
 	
 	assert(parse_group_code(parse_state) == DXF_Code(10))
 	viewport.center.x, _ = strconv.parse_f64(trim(parse_content_string(parse_state))) 
@@ -857,6 +718,7 @@ parse_entity_viewport :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 }
 
 parse_entity_mtext :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
+	/*
 	assert(parse_group_code(parse_state) == DXF_Code(5))	
 	handle := parse_content_string(parse_state)
 
@@ -864,11 +726,10 @@ parse_entity_mtext :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 	assert(parse_group_code(parse_state) == DXF_Code(330))
 	owner := parse_content_string(parse_state)
 
-
-	parse_handle_common(parse_state, nil)
-
-
+*/
 	text := Entity_MText {}
+	parse_entity_header(parse_state, &text)
+
 	done := false
 	for !done {
 		switch peek_group_code(parse_state) {
@@ -933,18 +794,18 @@ parse_entity_mtext :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 
 
 parse_entity_text :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
+	/*
 	assert(parse_group_code(parse_state) == DXF_Code(5))	
 	handle := parse_content_string(parse_state)
 
 
 	assert(parse_group_code(parse_state) == DXF_Code(330))
 	owner := parse_content_string(parse_state)
-
-
-	parse_handle_common(parse_state, nil)
-
+*/
 
 	text := Entity_Text {}
+	parse_entity_header(parse_state, &text)
+
 	done := false
 	for !done {
 		switch peek_group_code(parse_state) {
@@ -1044,41 +905,8 @@ parse_extension :: proc(parse_state: ^DXF_ParseState, consumed_ext_name: Maybe(s
 	
 }
 
-parse_handle_common :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
-
-	unhandled := false
-	for !unhandled {
-		switch peek_group_code(parse_state) {
-			case DXF_Code(100):
-				parse_group_code(parse_state)
-				subclass := parse_content_string(parse_state)
-			case DXF_Code(8):
-				parse_group_code(parse_state)
-				layer_name := parse_content_string(parse_state)
-			case DXF_Code(62): // color
-				parse_group_code(parse_state)
-				color := parse_content_string(parse_state)
-			case DXF_Code(67): // space
-				parse_group_code(parse_state)
-				space := parse_content_string(parse_state) // 0: model space, 1: paper space
-			case DXF_Code(6):
-				parse_group_code(parse_state)
-				linetype := parse_content_string(parse_state)
-			case DXF_Code(48):
-				parse_group_code(parse_state)
-				linetype_scale := parse_content_string(parse_state)
-
-			case DXF_Code(370): // weight
-				parse_group_code(parse_state)
-				line_weight := parse_content_string(parse_state)
-				
-			case:
-				unhandled = true
-		}
-	}
-}
-
 parse_entity_line :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
+	/*
 	assert(parse_group_code(parse_state) == DXF_Code(5))	
 	handle := parse_content_string(parse_state)
 
@@ -1089,8 +917,11 @@ parse_entity_line :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 
 	assert(parse_group_code(parse_state) == DXF_Code(330))
 	owner := parse_content_string(parse_state)
+	*/
 
-	parse_handle_common(parse_state, nil)
+	line := Entity_Line{}
+	
+	parse_entity_header(parse_state, &line)
 	// assert(parse_group_code(parse_state) == DXF_Code(6))
 	// linetype := parse_content_string(parse_state)
 
@@ -1108,23 +939,16 @@ parse_entity_line :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 	assert(parse_group_code(parse_state) == DXF_Code(31))
 	end_z, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
 
-	line := Entity_Line{
-		start = {start_x, start_y, start_z},
-		end = {end_x, end_y, end_z},
-	}
+	line.start = {start_x, start_y, start_z}
+	line.end = {end_x, end_y, end_z}
+	
 	append(&data.lines, line)
 }
 
 
 parse_entity_circle :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
-	assert(parse_group_code(parse_state) == DXF_Code(5))	
-	handle := parse_content_string(parse_state)
-
-
-	assert(parse_group_code(parse_state) == DXF_Code(330))
-	owner := parse_content_string(parse_state)
-
-	parse_handle_common(parse_state, nil)
+	circle := Entity_Circle {}
+	parse_entity_header(parse_state, &circle)
 
 
 	assert(parse_group_code(parse_state) == DXF_Code(10))
@@ -1136,28 +960,16 @@ parse_entity_circle :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 	assert(parse_group_code(parse_state) == DXF_Code(40))
 	radius, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
 
-	circle := Entity_Circle {
-		center = {center_x, center_y, center_z},
-		radius = radius,
-	}
-
+	circle.center = {center_x, center_y, center_z}
+	circle.radius = radius
+	
 	append(&data.circles, circle)
 }
 
 parse_entity_polyline :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
-	assert(parse_group_code(parse_state) == DXF_Code(5))	
-	handle := parse_content_string(parse_state)
 
-	maybe_reactor := peek_group_code(parse_state)
-	if maybe_reactor == DXF_Code(102) {
-		parse_extension(parse_state)
-	}
-
-
-	assert(parse_group_code(parse_state) == DXF_Code(330))
-	owner := parse_content_string(parse_state)
-
-	parse_handle_common(parse_state, nil)
+	polyline := Entity_Polyline {}
+	parse_entity_header(parse_state, &polyline)
 
 	assert(parse_group_code(parse_state) == DXF_Code(90))
 	vertex_count_str := parse_content_string(parse_state)
@@ -1180,7 +992,6 @@ parse_entity_polyline :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 		}
 	}
 
-	polyline := Entity_Polyline {}
 	polyline.points = make([]f64x2, vertex_count)
 	polyline.bulges = make([]f64, vertex_count)
 	
@@ -1214,16 +1025,9 @@ parse_entity_polyline :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 
 
 parse_entity_spline :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
-	assert(parse_group_code(parse_state) == DXF_Code(5))	
-	handle := parse_content_string(parse_state)
 
-
-	assert(parse_group_code(parse_state) == DXF_Code(330))
-	owner := parse_content_string(parse_state)
-
-
-	parse_handle_common(parse_state, nil)
-
+	spline := Entity_Spline {}
+	parse_entity_header(parse_state, &spline)
 
 	assert(parse_group_code(parse_state) == DXF_Code(210))
 	extrusion_x := parse_content_string(parse_state)
@@ -1262,7 +1066,6 @@ parse_entity_spline :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 	assert(parse_group_code(parse_state) == DXF_Code(43))
 	spline_tolerance_controlpoints := parse_content_string(parse_state)
 
-	spline := Entity_Spline {}
 	spline.degree = spline_degree
 	spline.knots = make([]f64, spline_numknots)
 	spline.control_points = make([]f64x3, spline_numcontrolpts)
@@ -1286,108 +1089,5 @@ parse_entity_spline :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 
 	append(&data.splines, spline)
 
-}
-
-
-trim :: proc(value: string) -> string {
-	trim_start := 0
-	for value[trim_start] == ' ' {
-		trim_start += 1
-	}
-	return value[trim_start:]
-}
-
-
-
-
-peek_group_code :: proc(cursor_ptr: ^DXF_ParseState) -> DXF_Code {
-	cursor := cursor_ptr.cursor
-	for cursor^ == ' ' || cursor^ == '\t' {
-		cursor = mem.ptr_offset(cursor, 1)
-	}
-	start := cursor
-	for true {
-		cursor = mem.ptr_offset(cursor, 1)
-		if cursor^ < '0' || cursor^ > '9' {
-			break;
-		}
-	}
-	strlen := mem.ptr_sub(cursor, start) // exclude newline
-	
-	str := string(([^]byte)(start)[:strlen])
-	result, ok := strconv.parse_uint(str)
-	if (!ok) {
-		str2 := string(str)
-		fmt.printf("bad parse uint:'%s'\n", str2)
-		for char in str2 {
-			fmt.printf("%d", char)
-		}
-		fmt.printf("\nbad parse uint:'%s'\n", str)
-	}
-	/*fmt.println("str: ", str)
-	for char in str {
-		fmt.print(char)
-	}
-	fmt.println()
-	*/
-	assert(ok)
-	return DXF_Code(result)
-}
-
-
-
-parse_group_code :: proc(cursor_ptr: ^DXF_ParseState) -> DXF_Code {
-	cursor := cursor_ptr.cursor
-	for cursor^ == ' ' || cursor^ == '\t' {
-		cursor = mem.ptr_offset(cursor, 1)
-	}
-	start := cursor
-	for true {
-		cursor = mem.ptr_offset(cursor, 1)
-		if cursor^ < '0' || cursor^ > '9' {
-			break;
-		}
-	}
-	strlen := mem.ptr_sub(cursor, start) // exclude newline
-
-	for cursor^ != '\n' {
-		cursor = mem.ptr_offset(cursor, 1)
-	}
-	cursor = mem.ptr_offset(cursor, 1)
-	
-	cursor_ptr.cursor = cursor
-
-	str := string(([^]byte)(start)[:strlen])
-	str = trim(str)
-	result, ok := strconv.parse_uint(str)
-	// if (!ok) {
-	// 	str2 := string(str)
-	// 	fmt.printf("bad parse uint:'%s'\n", str2)
-	// 	for char in str2 {
-	// 		fmt.printf("%d", char)
-	// 	}
-	// 	fmt.printf("\nbad parse uint:'%s'\n", str)
-	// }
-	assert(ok)
-	if PARSE_DEBUG { fmt.printf("%d:\t", result) }
-	return DXF_Code(result)
-}
-
-parse_content_string :: proc(cursor_ptr: ^DXF_ParseState) -> string {
-	cursor := cursor_ptr.cursor
-	start := cursor
-	for cursor^ != '\n' && cursor^ != '\r' {
-		cursor = mem.ptr_offset(cursor, 1)
-	}
-	strlen := mem.ptr_sub(cursor, start)
-	for cursor^ == '\n' || cursor^ == '\r' {
-		cursor = mem.ptr_offset(cursor, 1)
-	}
-	cursor_ptr.cursor = cursor
-
-	str := string(([^]byte)(start)[:strlen])
-//	fmt.printf("found '%s'\n", str)
-	if PARSE_DEBUG { fmt.printf("%s\n", str) }
-	return str
 }
 

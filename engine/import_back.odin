@@ -1,7 +1,7 @@
 #+build linux, darwin, windows
 package engine
 
-import "core:runtime"
+import "base:runtime"
 
 import "../vendor/back"
 
