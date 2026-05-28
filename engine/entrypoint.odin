@@ -5,10 +5,10 @@ import SDL "vendor:sdl3"
 
 import "core:strings"
 import "core:log"
+import "core:c"
+import "core:fmt"
 
 import "base:runtime"
-
-import "../vendor/back"
 
 
 ctx: runtime.Context
@@ -19,6 +19,7 @@ ctx: runtime.Context
 when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 
 	main :: proc() {
+		fmt.println("wasm main proc")
 		context.logger = log.create_console_logger()
 		ctx = context
 		log.info("wasm main")
@@ -26,7 +27,9 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 
 	@(export)
 	main_start :: proc "c" () {
-		sdl_app_init(nil, 0, nil)
+		context = runtime.default_context()
+		fmt.println("wasm main_start")
+		
 	}
 
 	@(export)
@@ -128,8 +131,10 @@ AppMetadata :: struct {
 
 app_init :: proc(metadata: Maybe(AppMetadata), handler_init: proc(), handler_iterate: proc(), handler_quit: proc() = nil) {
 
-	back.register_segfault_handler()
-	context.assertion_failure_proc = back.assertion_failure_proc
+when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {} else {
+	back_register_segfault_handler()
+	context.assertion_failure_proc = back_get_assertion_failure_proc()
+}
 
 	if meta, has_meta := metadata.?; has_meta {
 		_ = SDL.SetAppMetadata(meta.name, meta.version, meta.identifier)
@@ -150,9 +155,9 @@ app_init :: proc(metadata: Maybe(AppMetadata), handler_init: proc(), handler_ite
 
 
 	//args := os.args
-	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
+	//when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 		// we don't use this as we call the callbacks directly
-	} else {
+	//} else {
 		SDL.EnterAppMainCallbacks(
 			0,
 			nil,
@@ -161,7 +166,7 @@ app_init :: proc(metadata: Maybe(AppMetadata), handler_init: proc(), handler_ite
 			sdl_event,
 			sdl_quit,
 		)
-	}
+	//}
 }
 
 main_thread: SDL.ThreadID

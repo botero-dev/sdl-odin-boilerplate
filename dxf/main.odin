@@ -28,6 +28,7 @@ main :: proc() {
 
 
 dxf_file: dxf.DXF_Data
+dxf_loaded := false
 
 init :: proc() {
 	log.info("init")
@@ -41,18 +42,18 @@ init :: proc() {
 
 	ui.create_window("Editor", {1280, 720})
 
-	file_size: uint
-	file := ([^]byte)( SDL.LoadFile("content/casa1.dxf", &file_size) )
-	//file := ([^]byte)( SDL.LoadFile("content/casa0.dxf", &file_size) )
-	//file := ([^]byte)( SDL.LoadFile("content/trex.dxf", &file_size) )
-	as_string := cstring(file)
-//	log.info("file:\n", as_string)
-	bytes := file[:file_size]
-	dxf_file = dxf.parse_dxf(bytes)
+	ab.request_data_async("casa1.dxf", nil, dxf_callback)
+
+}
+
+dxf_callback :: proc(result: ab.RequestResult) {
+	dxf_file = dxf.parse_dxf(result.bytes)
 
 	post_import()
+	dxf_loaded = true
 	ab.app_add_event_handler(my_handler)
 }
+
 
 CurveBezierCubic :: struct {
 	points: []f64x3
@@ -219,12 +220,15 @@ view_to_model :: proc (in_coords: [2]f32) -> [2]f32 {
 
 iterate :: proc() {
 
+
 	SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 0)
 	SDL.RenderClear(ab.renderer)
 
 	SDL.SetRenderDrawColorFloat(ab.renderer, 1, 0, 0, 1)
 
 	ab.draw_set_view_basis({scale, 0}, {0, -scale}, origin)
+
+	if (dxf_loaded) {
 
 	for circle in dxf_file.circles {
 		gfx.draw_circle(
@@ -289,6 +293,7 @@ iterate :: proc() {
 
 			}
 		}
+	}
 	}
 
 	ab.draw_present()

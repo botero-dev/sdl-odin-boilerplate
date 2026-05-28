@@ -19,6 +19,7 @@ RequestHandler :: struct {
 
 RequestCallback :: #type proc(result: RequestResult)
 
+
 // On desktop, it loads file relative to executable path
 // on mobile, makes http request for asset relative to current website path
 request_data_async :: proc(url: cstring, user_data: rawptr, callback: RequestCallback) {
@@ -27,14 +28,13 @@ request_data_async :: proc(url: cstring, user_data: rawptr, callback: RequestCal
 	when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 		fetch_attr := emscripten.emscripten_fetch_attr_t{}
 		emscripten.emscripten_fetch_attr_init(&fetch_attr)
-		fetch_attr.onsuccess = fetch_success
-		fetch_attr.onerror = fetch_error
+		fetch_attr.onsuccess = aaa_fetch_success
+		fetch_attr.onerror = aaa_fetch_error
 		fetch_attr.attributes = emscripten.EMSCRIPTEN_FETCH_LOAD_TO_MEMORY
 
 		callback_info := new(RequestHandler)
-		callback_info.user_handler = callback
+		callback_info.callback = callback
 		callback_info.user_data = user_data
-		callback_info.ctx = context
 
 		fetch_attr.userData = callback_info
 		target_url := fmt.ctprintf("content/%s", url)
@@ -84,6 +84,10 @@ idle_process_async :: proc() {
 }
 
 
+aaa_fetch_error :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
+	context = ctx
+	fmt.println("aaaaa")
+}
 fetch_error :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
 	request_handler := (^RequestHandler)(fetch_result.userData)
 	context = ctx
@@ -96,9 +100,12 @@ fetch_error :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
 }
 
 
-fetch_success :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
-	request_handler := (^RequestHandler)(fetch_result.userData)
+aaa_fetch_success :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
 	context = ctx
+	fetch_success(fetch_result)
+}
+fetch_success :: proc (fetch_result: ^emscripten.emscripten_fetch_t) {
+	request_handler := (^RequestHandler)(fetch_result.userData)
 	result := RequestResult {
 		success   = true,
 		user_data = request_handler.user_data,

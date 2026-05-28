@@ -47,7 +47,7 @@ make_cmake_library vendor/SDL_image SDL3_image  \
 ./vendor/sdl_ttf.sh
 make_cmake_library vendor/SDL_ttf SDL3_ttf  \
 	-DSDL3_DIR="$BUILD_CMAKE_PATH/SDL3"         \
-	-DSDLTTF_VENDORED=OFF                  \
+	-DSDLTTF_VENDORED=ON                  \
 	-DSDLTTF_SAMPLES=false
 
 
@@ -130,10 +130,10 @@ elif [[ "$TARGET" = "web" ]]; then
 		emcc \
 		-o "$PACKAGE_PATH/index.html" \
 		"$BUILD_OBJ_PATH/game.wasm.o" \
-		"src/clay-odin/wasm/clay.o" \
-		"$INSTALL_PATH/lib/$SDL_LIBRARY" \
-		"$INSTALL_PATH/lib/$SDLIMG_LIBRARY" \
-		"$INSTALL_PATH/lib/$SDLTTF_LIBRARY" \
+		"engine/clay-odin/wasm/clay.o" \
+		"$INSTALL_PATH/lib/libSDL3.a" \
+		"$INSTALL_PATH/lib/libSDL3_image.a" \
+		"$INSTALL_PATH/lib/libSDL3_ttf.a" \
 		--shell-file "platform/web/index_template.html" \
 		-sERROR_ON_UNDEFINED_SYMBOLS=0 \
 		-sFETCH \

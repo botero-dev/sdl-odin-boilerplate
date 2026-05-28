@@ -16,11 +16,10 @@ set_target() {
 }
 
 source_emsdk() {
-	if [ -z "$EMSDK" ]; then
+	if [ -z "${EMSDK:-}" ]; then
 		echo "Loading emsdk environment"
 		"$REPO_ROOT/vendor/emsdk.sh"
-		source "$REPO_ROOT/vendor/em
-		sdk/emsdk_env.sh"
+		source "$REPO_ROOT/vendor/emsdk/emsdk_env.sh"
 	fi
 }
 export -f source_emsdk
