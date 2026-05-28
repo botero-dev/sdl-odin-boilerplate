@@ -50,67 +50,19 @@ init :: proc() {
 	bytes := file[:file_size]
 	dxf_file = dxf.parse_dxf(bytes)
 
-	convert_curves()
+	post_import()
 	ab.app_add_event_handler(my_handler)
 }
-
-
 
 CurveBezierCubic :: struct {
 	points: []f64x3
 }
 
-curves: [dynamic]CurveBezierCubic
+curves_list: [dynamic]CurveBezierCubic
 
-convert_curves :: proc() {
-	for spline in dxf_file.splines {
-		if len(spline.knots) == (len(spline.control_points) + int(spline.degree) + 1) {
-			segments := (len(spline.control_points) - 1) / int(spline.degree)
-			// can be simplified to bezier curve
-			last_knot := spline.knots[0]
-			multiplicity := 1
-			segment := 0
+post_import :: proc() {
 
-			meets_criteria := true
-
-			for idx in 1..<len(spline.knots) {
-				if spline.knots[idx] == last_knot {
-					multiplicity += 1
-				} else { // new knot, check previous knot validity
-					if multiplicity == 3 {
-						//meets_criteria = true
-					} else if segment == 0 && multiplicity == 4 {
-						// meets_criteria = true
-					} else {
-						meets_criteria = false
-						break;
-					}
-					if !meets_criteria {
-						break
-					}
-					multiplicity = 1
-					last_knot = spline.knots[idx]
-				}
-			}
-
-			if multiplicity != 4 {
-				meets_criteria = false
-			}
-
-			if !meets_criteria {
-				continue
-			}
-
-			bezier := CurveBezierCubic {
-				points = spline.control_points
-			}
-
-			append(&curves, bezier)
-
-		}
-
-	}
-
+	convert_curves(dxf_file, &curves_list)
 
 	minx := f64(0)
 	miny := f64(0)
@@ -150,7 +102,7 @@ convert_curves :: proc() {
 		}
 	}
 
-	for curve in curves {
+	for curve in curves_list {
 		if !started {
 			minx = curve.points[0].x
 			miny = curve.points[0].y
@@ -201,7 +153,7 @@ my_handler :: proc(event: ^ab.Event) {
 	if event.sdl_event.type == .MOUSE_BUTTON_DOWN {
 		mouse_pressed = true
 		mouse_btn_evt := (^SDL.MouseButtonEvent)(event.sdl_event) 
-		mouse_coords := [2]f32{mouse_btn_evt.x, mouse_btn_evt.y}
+		mouse_coords := linalg.round([2]f32{mouse_btn_evt.x, mouse_btn_evt.y})
 
 		model_coords := view_to_model(mouse_coords)
 		grab_coords = model_coords
@@ -211,7 +163,7 @@ my_handler :: proc(event: ^ab.Event) {
 	}
 	if event.sdl_event.type == .MOUSE_MOTION {
 		mouse_motion := (^SDL.MouseMotionEvent)(event.sdl_event) 
-		mouse_coords := [2]f32{mouse_motion.x, mouse_motion.y}
+		mouse_coords := linalg.round([2]f32{mouse_motion.x, mouse_motion.y})
 		model_coords := view_to_model(mouse_coords)
 
 		if mouse_pressed {
@@ -220,7 +172,6 @@ my_handler :: proc(event: ^ab.Event) {
 		}
 	}
 }
-
 
 view_to_model :: proc (in_coords: [2]f32) -> [2]f32 {
 
@@ -268,12 +219,10 @@ view_to_model :: proc (in_coords: [2]f32) -> [2]f32 {
 
 iterate :: proc() {
 
-
 	SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 0)
 	SDL.RenderClear(ab.renderer)
 
 	SDL.SetRenderDrawColorFloat(ab.renderer, 1, 0, 0, 1)
-
 
 	ab.draw_set_view_basis({scale, 0}, {0, -scale}, origin)
 
@@ -285,7 +234,6 @@ iterate :: proc() {
 			}
 		)
 	}
-
 	
 	for line in dxf_file.lines {
 		ab.draw_line(
@@ -312,7 +260,7 @@ iterate :: proc() {
 		
 	}
 	
-	for curve in curves {
+	for curve in curves_list {
 		num_segments := (len(curve.points) - 1) / 3
 		for idx  in 0..<num_segments {
 			a := curve.points[idx * 3 + 0]
@@ -351,7 +299,6 @@ iterate :: proc() {
 
 	}
 }
-
 
 lerp :: proc(a, b: f64x3, t: f64) -> f64x3 {
 	t1 := f64(t)

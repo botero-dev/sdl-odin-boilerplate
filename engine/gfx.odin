@@ -28,6 +28,8 @@ gfx_init :: proc(in_renderer: ^SDL.Renderer, in_window: ^SDL.Window) {
 	
 	renderer = in_renderer
 	window = in_window
+	SDL.SetRenderVSync(renderer, 1)
+
 	text_engine = TTF.CreateRendererTextEngine(renderer)
 
 
@@ -423,7 +425,15 @@ buffer_line :: proc(buffer: ^DrawBuffer, in_start: vec2, in_end: vec2, in_width:
 	start = starta.xy
 	end = enda.xy
 
-
+	if start.x == end.x { 
+		start.x = math.round(start.x)
+		end.x = start.x
+	}
+	if start.y == end.y {
+		start.y = math.round(start.y)
+		end.y = start.y
+	}
+	
 	delta := end - start
 	length := linalg.length(delta)
 	dir := delta / length

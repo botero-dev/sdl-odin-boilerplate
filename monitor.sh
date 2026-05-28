@@ -1,12 +1,26 @@
 
-WATCH_DIR="src"
-ACTION_SCRIPT="TARGET=web build.sh"
+set -euo pipefail
 
-echo "Watching for changes in $WATCH_DIR"
+if [[ "$#" == "0" ]]; then
+    echo "Usage: $0 <folders to watch...>"
+    exit 1
+fi
+
+#: "${ACTION:=TARGET=web build.sh"
+: "${ACTION:=./build.sh dxf}"
+
+args=($@)
+echo "Watching for changes in ${args[@]}"
 
 while true; do
-    inotifywait -r -e modify,create,delete,move "$WATCH_DIR" >/dev/null 2>&1
+    inotifywait -r -e modify,create,delete,move "${args[@]}" >/dev/null 2>&1
 	echo ""
-	echo "Change detected at $(date). Running action script..."
-    bash "$ACTION_SCRIPT"
+	echo "Change detected at $(date). Running '$ACTION'"
+
+    sleep 0.1 # in case many files were saved in batch, 
+
+    if ! eval "${ACTION}"; then
+        echo "${ACTION} exited with code $?"
+    fi
+
 done
