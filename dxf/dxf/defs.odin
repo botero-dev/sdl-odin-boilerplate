@@ -93,14 +93,12 @@ Entity_Text :: struct {
 	using entity: DXF_Entity,
 	content: string,
 	pos: f64x3,
+	height: f64,
 	end: f64x3,
 }
 
 Entity_MText :: struct {
-	using entity: DXF_Entity,
-	content: string,
-	pos: f64x3,
-	end: f64x3,
+	using text: Entity_Text,
 }
 
 Entity_Viewport :: struct {

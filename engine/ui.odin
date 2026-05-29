@@ -142,15 +142,6 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 			text_data := render_command.renderData.text
 			string_slice := text_data.stringContents
 			color := text_data.textColor
-			if print_render_commands {
-				str_to_draw := strings.string_from_ptr(
-					string_slice.chars,
-					int(string_slice.length),
-				)
-				log.info("cmd:", idx, render_command, render_command.renderData.text)
-				log.info("text:", str_to_draw)
-			}
-
 
 			text := get_text_with_font_size(text_data.fontId, text_data.fontSize)
 
@@ -165,10 +156,10 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 				)
 				TTF.SetTextString(text, cstring(string_slice.chars), uint(string_slice.length))
 				TTF.SetTextWrapWidth(text, 0)
-				TTF.DrawRendererText(text, math.round(box.x), math.round(box.y))
+				//TTF.DrawRendererText(text, math.round(box.x), math.round(box.y))
 
 				m := linalg.transpose(draw_state.user_matrix)
-				//TTF.DrawRendererTextTx(text, box.x, box.y, &m[0][0])
+				TTF.DrawRendererTextTx(text, box.x, box.y, &m[0][0])
 			}
 
 		case .Image:
@@ -350,7 +341,6 @@ ui_init :: proc() {
 
 	request_data_async("Play-Regular.ttf", nil, assign_font)
 }
-
 
 
 assign_font :: proc(result: RequestResult) {

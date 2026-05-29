@@ -119,7 +119,7 @@ buffer_circle_outline :: proc(
 	PAD := f32(0.73) // lowest practical number, I guess the optimal thing could be sqrt(3)-1
 
     
-    offset := line_width * 0.5 + PAD
+    offset := (line_width * 0.5 + PAD) * linalg.normalize(scale_mat[0]) + linalg.normalize(scale_mat[1])
 
 	increment := math.TAU / f32(segments)
 	mat_sin, mat_cos := math.sincos(increment)

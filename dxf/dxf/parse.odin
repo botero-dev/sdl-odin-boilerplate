@@ -728,6 +728,8 @@ parse_entity_mtext :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 
 */
 	text := Entity_MText {}
+	text.end = {1, 0, 0}
+
 	parse_entity_header(parse_state, &text)
 
 	done := false
@@ -744,7 +746,7 @@ parse_entity_mtext :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 				text.pos.z, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
 			case DXF_Code(40):
 				parse_group_code(parse_state)
-				text_height, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
+				text.height, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
 
 			case DXF_Code(41):
 				parse_group_code(parse_state)
@@ -771,13 +773,13 @@ parse_entity_mtext :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 
 			case DXF_Code(11):
 				parse_group_code(parse_state)
-				end_x, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
+				text.end.x, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
 			case DXF_Code(21):
 				parse_group_code(parse_state)
-				end_y, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
+				text.end.y, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
 			case DXF_Code(31):
 				parse_group_code(parse_state)
-				end_z, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
+				text.end.z, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
 
 
 			case:
@@ -804,6 +806,7 @@ parse_entity_text :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 */
 
 	text := Entity_Text {}
+	text.end = {1, 0, 0}
 	parse_entity_header(parse_state, &text)
 
 	done := false
@@ -811,7 +814,7 @@ parse_entity_text :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 		switch peek_group_code(parse_state) {
 			case DXF_Code(1):
 				parse_group_code(parse_state)
-				text := parse_content_string(parse_state)
+				text.content = parse_content_string(parse_state)
 
 			case DXF_Code(10):
 				parse_group_code(parse_state)
@@ -824,7 +827,7 @@ parse_entity_text :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 				text.pos.z, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
 			case DXF_Code(40):
 				parse_group_code(parse_state)
-				text_height, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
+				text.height, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
 
 			case DXF_Code(50):
 				parse_group_code(parse_state)
@@ -835,13 +838,14 @@ parse_entity_text :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 
 			case DXF_Code(11):
 				parse_group_code(parse_state)
-				align_x, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
+				text.end.x, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
 			case DXF_Code(21):
 				parse_group_code(parse_state)
-				align_y, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
+				text.end.y, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
 			case DXF_Code(31):
 				parse_group_code(parse_state)
-				align_z, _ := strconv.parse_f64(trim(parse_content_string(parse_state)))
+				text.end.z, _ = strconv.parse_f64(trim(parse_content_string(parse_state)))
+
 			case DXF_Code(100):
 				parse_group_code(parse_state)
 				subclass_text := parse_content_string(parse_state)

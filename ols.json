@@ -3,7 +3,8 @@
     "enable_document_symbols": true,
     "enable_hover": true,
     "enable_snippets": true,
+    "odin_command": "./vendor/odin/odin",
     "collections": [
-        { "name": "engine", "path": "engine"},
+        { "name": "engine", "path": "engine"}
     ]
 }
