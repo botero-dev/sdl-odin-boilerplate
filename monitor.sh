@@ -14,8 +14,8 @@ echo "Watching for changes in ${args[@]}"
 
 while true; do
     inotifywait -r -e modify,create,delete,move "${args[@]}" >/dev/null 2>&1
-	echo ""
-	echo "Change detected at $(date). Running '$ACTION'"
+	clear
+    echo "Change detected at $(date). Running '$ACTION'"
 
     sleep 0.1 # in case many files were saved in batch, 
 

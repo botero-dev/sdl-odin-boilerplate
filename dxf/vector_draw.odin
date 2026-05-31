@@ -3,6 +3,7 @@ package main
 import "dxf"
 
 
+
 convert_curves :: proc(file: dxf.DXF_Data, curves: ^[dynamic]CurveBezierCubic ) {
 	for spline in file.splines {
 		if len(spline.knots) == (len(spline.control_points) + int(spline.degree) + 1) {
