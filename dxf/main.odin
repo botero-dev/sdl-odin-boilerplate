@@ -78,7 +78,7 @@ dxf_callback :: proc(result: ab.RequestResult) {
 	scale := math.min(scale_x, scale_y) * 1.1
 
 	viewport.basis_x = {scale, 0}
-	viewport.basis_y = {0, scale}
+	viewport.basis_y = {0, -scale}
 	viewport.origin = model.center
 
 
@@ -88,7 +88,7 @@ dxf_callback :: proc(result: ab.RequestResult) {
 
 viewport := ViewportState{
 	basis_x = {1, 0},
-	basis_y = {0, 1},
+	basis_y = {0, -1},
 	origin = {0,0},
 }
 
@@ -97,14 +97,21 @@ mouse_pressed := false
 grab_coords := [2]f64{0, 0}
 
 my_handler :: proc(event: ^ab.Event) {
+	vp_size := f64x2 { f64(ab.win_size.x), f64(ab.win_size.y)}
 	if event.sdl_event.type == .MOUSE_WHEEL {
 		wheel_evt := (^SDL.MouseWheelEvent)(event.sdl_event)
 
-		viewport.basis_x *= math.pow(1.05, f64(wheel_evt.y))
-		viewport.basis_y *= math.pow(1.05, f64(wheel_evt.y))
+		scale := math.pow(1.1, f64(wheel_evt.y))
+		viewport.basis_x *= scale
+		viewport.basis_y *= scale
+
+		mouse_coords := linalg.round([2]f32{wheel_evt.mouse_x, wheel_evt.mouse_y})
+		mouse_model_pos := view_to_model(viewport, vp_size, mouse_coords)
+
+		viewport.origin += (viewport.origin - mouse_model_pos) * (1-scale)
+
 	}
 
-	vp_size := f64x2 { f64(ab.win_size.x), f64(ab.win_size.y)}
 
 
 	if event.sdl_event.type == .MOUSE_BUTTON_DOWN {
