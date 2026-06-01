@@ -3,6 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  	<link rel="manifest" href="manifest.json">
 
 	<title>Odin + Raylib on the web</title>
 	<meta name="title" content="Odin + Raylib on the web">
@@ -95,6 +96,9 @@
 				}
 
 				window.requestAnimationFrame(do_main_update);
+
+				load_delayed();
+
 			},
 			print: (function() {
 				var element = document.getElementById("output");
@@ -112,6 +116,69 @@
 				return document.getElementById("canvas");
 			})()
 		};
+
+
+
+// This function will read and process your file
+async function handleCustomFile(fileHandle) {
+  try {
+    // Get the actual file from the handle
+    const file = await fileHandle.getFile();
+    
+    // Check the file extension again for safety
+    if (!file.name.endsWith('.dxf')) {
+      console.error('Wrong file type');
+      return;
+    }
+
+    // Read the file content
+    const fileContent = await file.arrayBuffer();
+
+	const data = new Uint8Array(fileContent);
+	const len = data.length;
+
+	const ptr = Module._js_alloc(len);
+
+	const wasmMemory = new Uint8Array(odinMemoryInterface.exports.memory.buffer, ptr, len);
+	wasmMemory.set(data);
+
+	Module._load_dxf_bytes(ptr, len);
+
+    
+    // --- Integrate with your WASM module here ---
+    // Example: Call your WASM function
+    // wasmModule.process_file(fileContent, file.name);
+    console.log(`Processing file: ${file.name}`, fileContent);
+    
+  } catch (error) {
+    console.error('Error handling file:', error);
+  }
+}
+async function load_delayed() {
+	check_launch_queue();
+	//setTimeout(check_launch_queue, 1000);
+}
+
+async function check_launch_queue() {
+
+	// Check if the LaunchQueue API is supported
+	if ('launchQueue' in window) {
+	console.log('LaunchQueue is supported!');
+	
+	// Set the consumer for when the app is launched with a file
+	launchQueue.setConsumer(async (launchParams) => {
+		// The 'files' array contains the handles of opened files
+		if (launchParams.files && launchParams.files.length) {
+		// For now, handle only the first file
+		await handleCustomFile(launchParams.files[0]);
+		}
+	});
+	} else {
+	console.log('LaunchQueue not supported. File handling will not work.');
+	}
+}
+
+
 	</script>
 
 	<!-- Emscripten injects its javascript here -->

@@ -18,13 +18,6 @@ ctx: runtime.Context
 
 when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 
-	main :: proc() {
-		fmt.println("wasm main proc")
-		context.logger = log.create_console_logger()
-		ctx = context
-		log.info("wasm main")
-	}
-
 	@(export)
 	main_start :: proc "c" () {
 		context = runtime.default_context()

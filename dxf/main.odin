@@ -9,6 +9,8 @@ import "core:mem"
 import "core:strconv"
 import "core:strings"
 
+import "base:runtime"
+
 import ab "engine:."
 import "engine:gfx"
 import "engine:ui"
@@ -49,6 +51,7 @@ init :: proc() {
 	ui.create_window("Editor", {1280, 720})
 	ab.app_add_event_handler(my_handler)
 
+	// TODO: check if called with startup args to avoid loading casa1
 	ab.request_data_async("casa1.dxf", nil, dxf_callback)
 
 	ab.request_data_async("Play-Regular.ttf", nil, assign_font)
@@ -68,6 +71,9 @@ model: Model
 model_loaded: bool = false
 
 dxf_callback :: proc(result: ab.RequestResult) {
+	if model_loaded {
+		return
+	}
 
 	model = model_from_dxf(result.bytes)
 
@@ -83,6 +89,40 @@ dxf_callback :: proc(result: ab.RequestResult) {
 
 
 	model_loaded = true
+}
+
+@(export)
+js_alloc :: proc "c" (size: int) -> ^byte {
+	//ptr := make([]byte, size)
+	//return &ptr[0]
+	return &my_buffer[0]
+}
+
+MY_BUFFER_SIZE :: 64 * 1024 * 1024
+my_buffer: [MY_BUFFER_SIZE]byte
+
+@(export)
+load_dxf_bytes :: proc "c" (ptr: [^]byte, size: int) {
+	context = runtime.default_context()
+	bufff := string(ptr[:size])
+
+	fmt.println(bufff)
+
+	model = model_from_dxf(ptr[:size])
+
+
+	scale_x := f64(ab.win_size.x) / model.size.x
+	scale_y := f64(ab.win_size.y) / model.size.y
+
+	scale := math.min(scale_x, scale_y) * 1.1
+
+	viewport.basis_x = {scale, 0}
+	viewport.basis_y = {0, -scale}
+	viewport.origin = model.center
+
+
+	model_loaded = true
+
 }
 
 

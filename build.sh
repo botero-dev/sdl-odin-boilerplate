@@ -147,6 +147,7 @@ elif [[ "$TARGET" = "web" ]]; then
 	"${link_cmd[@]}"
 
 	cp "platform/web/odin.js" "$PACKAGE_PATH"
+	cp "platform/web/manifest.json" "$PACKAGE_PATH"
 fi
 
 
