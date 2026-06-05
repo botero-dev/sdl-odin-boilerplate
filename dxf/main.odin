@@ -213,6 +213,11 @@ my_handler :: proc(event: ^ab.Event) {
 			use_wheel_to_zoom = false
 		}
 
+		kb_mods := SDL.GetModState()
+		if .LCTRL in kb_mods {
+			use_wheel_to_zoom = true
+		}
+
 		if use_wheel_to_zoom {
 			scale := math.pow(1.1, f64(wheel_evt.y))
 			viewport.basis_x *= scale
@@ -319,7 +324,6 @@ draw_viewport :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.R
 
 	box := render_command.boundingBox
 	viewport.last_draw_rect = transmute(ab.Rect)(box)
-	log.info(viewport.last_draw_rect)
 
 	ab.draw_set_draw_rect(ab.renderer, {i32(box.x), i32(box.y)}, {i32(box.width), i32(box.height)} )
 
