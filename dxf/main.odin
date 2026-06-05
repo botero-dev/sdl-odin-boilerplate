@@ -166,25 +166,78 @@ viewport := ViewportState{
 	basis_x = {1, 0},
 	basis_y = {0, -1},
 	origin = {0,0},
+
+	
 }
 
 
 mouse_pressed := false
 grab_coords := [2]f64{0, 0}
 
-my_handler :: proc(event: ^ab.Event) {
-	vp_size := f64x2 { f64(ab.win_size.x), f64(ab.win_size.y)}
-	if event.sdl_event.type == .MOUSE_WHEEL {
-		wheel_evt := (^SDL.MouseWheelEvent)(event.sdl_event)
+mouse_coords := [2]f32{0, 0}
+current_scale: f32
 
-		scale := math.pow(1.1, f64(wheel_evt.y))
+SCALE_MULTIPLIER :: 2
+
+my_handler :: proc(event: ^ab.Event) {
+	vp_size := f64x2 { f64(viewport.last_draw_rect.w), f64(viewport.last_draw_rect.h)}
+	if event.sdl_event.type == SDL.EventType.PINCH_BEGIN {
+		current_scale = 1
+	}
+	if event.sdl_event.type == SDL.EventType.PINCH_UPDATE {
+		pinch := event.sdl_event.pinch
+		
+		scale := f64(pinch.scale / current_scale)
+		current_scale = pinch.scale
+		
+		scale = (1-scale) * SCALE_MULTIPLIER + 1
+		scale = 1 / scale
+
 		viewport.basis_x *= scale
 		viewport.basis_y *= scale
 
-		mouse_coords := linalg.round([2]f32{wheel_evt.mouse_x, wheel_evt.mouse_y})
 		mouse_model_pos := view_to_model(viewport, vp_size, mouse_coords)
 
 		viewport.origin += (viewport.origin - mouse_model_pos) * (1-scale)
+	}
+	if event.sdl_event.type == SDL.EventType.PINCH_END {
+	}
+	
+	if event.sdl_event.type == .MOUSE_WHEEL {
+		wheel_evt := (^SDL.MouseWheelEvent)(event.sdl_event)
+		fmt.println("wheel", wheel_evt)
+
+		use_wheel_to_zoom := false // true
+		if wheel_evt.which == SDL.TOUCH_MOUSEID {
+			// todo, use this? seems like in linux wont work
+			use_wheel_to_zoom = false
+		}
+
+		if use_wheel_to_zoom {
+			scale := math.pow(1.1, f64(wheel_evt.y))
+			viewport.basis_x *= scale
+			viewport.basis_y *= scale
+
+			mouse_coords := linalg.round([2]f32{wheel_evt.mouse_x, wheel_evt.mouse_y})
+			mouse_model_pos := view_to_model(viewport, vp_size, mouse_coords)
+
+			viewport.origin += (viewport.origin - mouse_model_pos) * (1-scale)
+		} else { // if use_wheel_to_zoom == false
+			
+			PAN_SCALE :: 50 // pixels per scroll unit
+
+			span_x := viewport.basis_x
+			span_y := viewport.basis_y
+			if span_x.x != 0 {span_x.x = 1/ span_x.x}
+			if span_x.y != 0 {span_x.y = 1/ span_x.y}
+			if span_y.x != 0 {span_y.x = 1/ span_y.x}
+			if span_y.y != 0 {span_y.y = 1/ span_y.y}
+			
+
+
+			viewport.origin += f64(wheel_evt.x) * span_x * PAN_SCALE
+			viewport.origin += f64(wheel_evt.y) * span_y * PAN_SCALE * -1
+		}
 
 	}
 
@@ -193,7 +246,7 @@ my_handler :: proc(event: ^ab.Event) {
 	if event.sdl_event.type == .MOUSE_BUTTON_DOWN {
 		mouse_pressed = true
 		mouse_btn_evt := (^SDL.MouseButtonEvent)(event.sdl_event)
-		mouse_coords := linalg.round([2]f32{mouse_btn_evt.x, mouse_btn_evt.y})
+		mouse_coords = linalg.round([2]f32{mouse_btn_evt.x, mouse_btn_evt.y})
 
 		model_coords := view_to_model(viewport, vp_size, mouse_coords)
 		grab_coords = model_coords
@@ -203,7 +256,7 @@ my_handler :: proc(event: ^ab.Event) {
 	}
 	if event.sdl_event.type == .MOUSE_MOTION {
 		mouse_motion := (^SDL.MouseMotionEvent)(event.sdl_event)
-		mouse_coords := linalg.round([2]f32{mouse_motion.x, mouse_motion.y})
+		mouse_coords = linalg.round([2]f32{mouse_motion.x, mouse_motion.y})
 		model_coords := view_to_model(viewport, vp_size, mouse_coords)
 
 		if mouse_pressed {
@@ -265,6 +318,8 @@ layout_viewport :: proc () {
 draw_viewport :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
 
 	box := render_command.boundingBox
+	viewport.last_draw_rect = transmute(ab.Rect)(box)
+	log.info(viewport.last_draw_rect)
 
 	ab.draw_set_draw_rect(ab.renderer, {i32(box.x), i32(box.y)}, {i32(box.width), i32(box.height)} )
 

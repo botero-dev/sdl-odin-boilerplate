@@ -16,10 +16,14 @@ import "dxf"
 //f64x2 :: [2]f64
 
 ViewportState :: struct {
+    // TODO: replace basis_x with span_x?
+    // rationale: when panning its useful to know units/100px instead pixels for unit
     basis_x: f64x2,
     basis_y: f64x2,
     origin:  f64x2,
     data: ^Model,
+
+    last_draw_rect: ab.Rect,
 }
 
 
@@ -195,7 +199,7 @@ view_to_model :: proc(vp: ViewportState, draw_size: f64x2, in_coords: [2]f32) ->
 
 	draw_matrix = scale_mat * draw_matrix
 
-	midpoint := draw_size / 2
+	midpoint := [2]f64{f64(viewport.last_draw_rect.w), f64(viewport.last_draw_rect.h)} / 2
 
 	center := midpoint
 
@@ -208,7 +212,8 @@ view_to_model :: proc(vp: ViewportState, draw_size: f64x2, in_coords: [2]f32) ->
 	model_to_view := draw_matrix
 	view_to_model_mat := linalg.inverse(model_to_view)
 
-	result := view_to_model_mat * f64x3{f64(in_coords.x), f64(in_coords.y), 1}
+    coords := in_coords - [2]f32{viewport.last_draw_rect.x, viewport.last_draw_rect.y}
+	result := view_to_model_mat * f64x3{f64(coords.x), f64(coords.y), 1}
 
 	return {result.x, result.y}
 }

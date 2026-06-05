@@ -255,6 +255,7 @@ update_matrix :: proc() {
 
 			midpoint := draw_size / 2
 
+			midpoint += draw_rect[0]
 			center := [2]f32{f32(midpoint.x), f32(midpoint.y)}
 
 			draw_matrix =  matrix[3,3]f32 {
