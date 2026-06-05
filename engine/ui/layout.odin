@@ -44,7 +44,11 @@ layout_begin :: proc() {
 
 layout_end :: proc() {
 	pop(&layout_stack)
-	assert(len(layout_stack) == 0)
+	if len(layout_stack) != 0 {
+		log.error("layout_stack is not empty when finishing drawing.")
+		log.error(layout_stack)
+	}
+	clear(&layout_stack)
 
 	render_commands = clay.EndLayout()
 
@@ -162,7 +166,6 @@ convert_to_clay_rule :: proc(rule: Sizing) -> clay.SizingAxis {
 }
 
 layout_container :: proc(children_layout: ChildrenLayout, maybe_tag:Maybe(string) = nil) {
-
 	if tag, ok := maybe_tag.?; ok {
 		clay._OpenElementWithId(clay.ID(tag))
 	} else {
@@ -248,10 +251,11 @@ apply_decl :: proc(elem: ^clay.ElementDeclaration, children_layout: ChildrenLayo
 			item_floating.attachment.element = point
 			item_floating.attachment.parent = point
 		
-			case Layout_Linear_Horizontal:
+		case Layout_Linear_Horizontal:
 			rule := LinearChildSizingFixed {}
 			if in_rule, ok := cache_linear.?; ok {
 				rule = in_rule
+				cache_linear = nil
 			}
 			item_sizing.width = convert_to_clay_rule(rule.width)
 			item_sizing.height = convert_to_clay_rule(rule.height)
@@ -260,6 +264,7 @@ apply_decl :: proc(elem: ^clay.ElementDeclaration, children_layout: ChildrenLayo
 			rule := LinearChildSizingFixed {}
 			if in_rule, ok := cache_linear.?; ok {
 				rule = in_rule
+				cache_linear = nil
 			}
 			item_sizing.width = convert_to_clay_rule(rule.width)
 			item_sizing.height = convert_to_clay_rule(rule.height)
@@ -368,7 +373,6 @@ config_box_colored :: proc(style: BoxStyleColored) {
 	clay.ConfigureOpenElement(ab.DPI(elem))
 
 	append(&layout_stack, Layout_Linear_Horizontal{})
-
 }
 
 config_box_textured :: proc(style: BoxStyleTextured) {

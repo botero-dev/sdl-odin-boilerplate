@@ -56,7 +56,61 @@ init :: proc() {
 	ab.request_data_async("casa1.dxf", nil, dxf_callback)
 
 	ab.request_data_async("Play-Regular.ttf", nil, assign_font)
+
+
+	id_menus := ui.panels_register_definition({    callback=panel_menus,     name="menus"})
+	id_toolbox := ui.panels_register_definition({  callback=panel_toolbox,   name="toolbox"})
+	id_viewport := ui.panels_register_definition({ callback=layout_viewport, name="viewport", grow=true, show_tab=true})
+	id_layers := ui.panels_register_definition({   callback=layout_layers,   name="layers",   show_tab=true})
+
+	main_vertical := ui.PanelLayoutGroup { direction = .Vertical }
+
+	append(&main_vertical.items, ui.PanelLayoutRegisteredItem {id_menus})
+	append(&main_vertical.items, ui.PanelLayoutRegisteredItem {id_toolbox})
+
+	main_content := ui.PanelLayoutGroup { direction = .Horizontal, grow = true}
+	append(&main_content.items, ui.PanelLayoutRegisteredItem {id_viewport})
+	append(&main_content.items, ui.PanelLayoutRegisteredItem {id_layers})
+
+	append(&main_vertical.items, main_content)
+
+	panels.root = main_vertical
 }
+
+panels := ui.PanelLayout {}
+
+panel_menus :: proc() {
+
+	ui.layout_container(ui.Layout_Linear_Horizontal {})
+
+	ui.layout_button("File")
+	ui.layout_button("Edit")
+	ui.layout_button("Stuff")
+
+	ui.layout_close()
+}
+
+panel_toolbox :: proc() {
+	
+	ui.layout_container(ui.Layout_Linear_Vertical{})
+	// tabs
+	ui.layout_container(ui.Layout_Linear_Horizontal{})
+	ui.layout_button("Draw")
+	ui.layout_button("Measure")
+	ui.layout_button("Review")
+	ui.layout_close()
+	
+
+	ui.layout_container(ui.Layout_Linear_Horizontal{})
+	ui.layout_button("Line")
+	ui.layout_button("Circle")
+	ui.layout_button("Spline")
+	ui.layout_close()
+	
+	ui.layout_close()
+}
+
+
 
 
 assign_font :: proc(result: ab.RequestResult) {
@@ -166,18 +220,17 @@ iterate :: proc() {
 	SDL.RenderClear(ab.renderer)
 	ab.ui_idle(0.01);
 	ui.layout_begin()
+	/////////////////////////////////////
 
-	//ui.layout_overlay_child({sizing_x = .Fill, sizing_y = .Fill}) TODO CHECK THIS
-	ui.layout_container(ui.Layout_Linear_Horizontal{})
+	// ui.layout_container(ui.Layout_Linear_Horizontal{})
+	// layout_viewport()
+	// layout_layers()
+	// ui.layout_close()
 
-	layout_viewport()
+	
+	ui.panels_present_layout(panels)
 
-	layout_layers()
-
-	// fill := ui.Sizing{type = .Weight, amount = 0.0}
-	// ui.layout_linear_child({fill, fill})
-	ui.layout_close()
-
+	/////////////////////////////////////////
 	ui.layout_end()
 	ab.render_layout(&ui.render_commands)
 
@@ -224,9 +277,8 @@ draw_viewport :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.R
 }
 
 
-
 layout_layers :: proc() {
-	ui.layout_container(ui.Layout_Linear_Vertical{})
+	ui.layout_container(ui.Layout_Linear_Vertical{}, "layers")
 
 	if model_loaded {
 		for layer in model.dxf.layers {
