@@ -92,10 +92,6 @@ print_render_commands: bool
 
 render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 
-	SDL.SetRenderTarget(renderer, nil)
-	SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
-	SDL.RenderClear(renderer)
-
 	for idx in 0 ..< i32(render_commands.length) {
 		render_command := clay.RenderCommandArray_Get(render_commands, idx)
 
@@ -488,7 +484,7 @@ nav_push_scope :: proc(
 	user_data: rawptr = nil,
 ) {
 	prev_scope := navigation_scope
-	if prev_scope == nil {
+	if prev_scope == nil { // if it is root scope, clear nav_items buffer
 		clear(&nav_item_buffer)
 	}
 
@@ -504,6 +500,8 @@ nav_push_scope :: proc(
 
 	append(&navigation_scope_stack, navigation_scope)
 	navigation_scope = in_scope
+	// clean scope contents as they will get populated again
+	clear(&navigation_scope.contents)
 }
 
 nav_pop_scope :: proc() {

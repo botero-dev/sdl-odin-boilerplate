@@ -411,8 +411,7 @@ layout_clock :: proc() {
 	ab.ui_pointer_handler()
 }
 
-draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {}
-draw_clock_old :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
+draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
 	box := render_command.boundingBox
 
 	ab.draw_push_state()
@@ -503,7 +502,9 @@ draw_clock_old :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.
 ui_dirty: bool = true
 
 
-main_nav: ab.NavigationScope
+main_nav := ab.NavigationScope {
+	direction = .Vertical
+}
 
 
 hide_ui_timeout := f32(5)
@@ -545,10 +546,6 @@ create_layout :: proc() {
 	{
 		ab.ui_reset_handler_buffer()
 		ab.ui_pointer_handler(main_handler)
-
-		clear(&main_nav.contents)
-		//navigation_scope.wrap = true
-		main_nav.direction = .Vertical
 
 		ab.nav_scope(&main_nav, main_handler)
 

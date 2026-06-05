@@ -10,7 +10,22 @@ render_commands: clay.ClayArray(clay.RenderCommand)
 
 text_config_default: ^clay.TextElementConfig
 
+layout_stack: [dynamic]ChildrenLayout
+
+
 layout_begin :: proc() {
+
+	if cache_overlay != nil {
+		log.info("overlay layout hint:", cache_overlay.?, "wasn't consumed in previous frame")
+		cache_overlay = nil
+	}
+	
+	if cache_linear != nil {
+		log.info("linear layout hint:", cache_linear.?, "wasn't consumed in previous frame")
+		cache_linear = nil
+	}
+	
+
 	//assert(3 == 2)
 	clay.SetLayoutDimensions({f32(ab.win_size.x), f32(ab.win_size.y)})
 	text_config_default = clay.TextConfig(
@@ -23,10 +38,16 @@ layout_begin :: proc() {
 	)
 	
 	clay.BeginLayout()
+
+	append(&layout_stack, Layout_Overlay{})
 }
 
 layout_end :: proc() {
+	pop(&layout_stack)
+	assert(len(layout_stack) == 0)
+
 	render_commands = clay.EndLayout()
+
 }
 
 layout_draw :: proc() {
@@ -41,6 +62,7 @@ LayoutDirection :: enum {
 Layout_Overlay :: struct {}
 
 Layout_Linear :: struct {
+	// container state
 	separation: f32,
 }
 
@@ -74,10 +96,49 @@ LinearChildSizingFixed :: struct {
 	height: Sizing,
 }
 
-cache: Maybe(LinearChildSizingFixed)
-layout_linear_child :: proc(rule: LinearChildSizingFixed) {
-	cache = rule
+ChildSizingAxis :: enum {
+	Fill = 0,
+	Begin = 1,
+	Middle = 2,
+	End = 3,
 }
+
+OverlayChildSizing :: struct {
+	sizing_x: ChildSizingAxis,
+	sizing_y: ChildSizingAxis,
+}
+
+
+cache_overlay: Maybe(OverlayChildSizing)
+cache_linear: Maybe(LinearChildSizingFixed)
+
+layout_overlay_child :: proc(rule: OverlayChildSizing) {
+	current := layout_stack[len(layout_stack)-1]
+	#partial switch v in current {
+		case Layout_Overlay:
+			break;
+		case:
+			//log.error("bad rule:", rule, " for current parent:", current)
+	}
+
+	cache_overlay = rule
+}
+
+
+layout_linear_child :: proc(rule: LinearChildSizingFixed) {
+	current := layout_stack[len(layout_stack)-1]
+	#partial switch v in current {
+		case Layout_Linear_Horizontal:
+			break;
+		case Layout_Linear_Vertical:
+			break;
+		case:
+			log.error("bad rule:", rule, " for current parent:", current)
+	}
+
+	cache_linear = rule
+}
+
 
 convert_to_clay_rule :: proc(rule: Sizing) -> clay.SizingAxis {
 	r: clay.SizingAxis
@@ -108,6 +169,18 @@ layout_container :: proc(children_layout: ChildrenLayout, maybe_tag:Maybe(string
 		clay._OpenElement()
 	}
 
+	elem := clay.ElementDeclaration{}
+	apply_decl(&elem, children_layout)
+
+	clay.ConfigureOpenElement(elem)
+
+	append(&layout_stack, children_layout)
+}
+
+DEBUG := false
+
+apply_decl :: proc(elem: ^clay.ElementDeclaration, children_layout: ChildrenLayout) {
+
 	direction: clay.LayoutDirection
 	#partial switch c in children_layout {
 		case Layout_Linear_Horizontal:
@@ -115,28 +188,90 @@ layout_container :: proc(children_layout: ChildrenLayout, maybe_tag:Maybe(string
 		case Layout_Linear_Vertical:
 			direction = .TopToBottom
 	}
+	elem.layout.layoutDirection = direction
+
 
 	item_sizing := clay.Sizing {
 		width = clay.SizingGrow(),
 		height = clay.SizingFit(),
 	}
 
-	if rule, ok := cache.?; ok {
-		item_sizing.width = convert_to_clay_rule(rule.width)
-		item_sizing.height = convert_to_clay_rule(rule.height)
-		//log.info(maybe_tag, item_sizing)
-		cache = nil
+	item_floating := clay.FloatingElementConfig {}
+
+	current := layout_stack[len(layout_stack)-1]
+	switch layout in current {
+		case Layout_Overlay:
+			item_floating.attachTo = .Parent
+			rule := OverlayChildSizing {}
+
+			if DEBUG {
+				log.info("overlay rule before:", rule)
+			}
+			
+			if cached_rule, ok := cache_overlay.?; ok {
+				rule = cached_rule
+				cache_overlay = nil // is this really necessary/desired?
+			}
+			if DEBUG {
+				log.info("overlay rule:", rule)
+				log.info("cache:", cache_overlay)
+			}
+		
+			if rule.sizing_x == .Fill {
+				item_sizing.width = {type = .Percent, constraints = {sizePercent = 1}}
+			} else {
+				item_sizing.width = {type = .Fit}
+			}
+			if rule.sizing_y == .Fill {
+				item_sizing.height = {type = .Percent, constraints = {sizePercent = 1}}
+			} else {
+				item_sizing.height = {type = .Fit}
+			}
+			point: clay.FloatingAttachPointType
+			if rule.sizing_x == .Fill && rule.sizing_y == .Begin {  point = .LeftTop }
+			if rule.sizing_x == .Fill && rule.sizing_y == .Fill {   point = .LeftTop }
+			if rule.sizing_x == .Fill && rule.sizing_y == .Middle { point = .LeftCenter }
+			if rule.sizing_x == .Fill && rule.sizing_y == .End {    point = .LeftBottom }
+			if rule.sizing_x == .Begin && rule.sizing_y == .Begin {	 point = .LeftTop }
+			if rule.sizing_x == .Begin && rule.sizing_y == .Fill {   point = .LeftTop }
+			if rule.sizing_x == .Begin && rule.sizing_y == .Middle { point = .LeftCenter }
+			if rule.sizing_x == .Begin && rule.sizing_y == .End {    point = .LeftBottom }
+			if rule.sizing_x == .Middle && rule.sizing_y == .Begin {  point = .CenterTop }
+			if rule.sizing_x == .Middle && rule.sizing_y == .Fill {   point = .CenterTop }
+			if rule.sizing_x == .Middle && rule.sizing_y == .Middle { point = .CenterCenter }
+			if rule.sizing_x == .Middle && rule.sizing_y == .End {    point = .CenterBottom }
+			if rule.sizing_x == .End && rule.sizing_y == .Begin {	 point = .RightTop }
+			if rule.sizing_x == .End && rule.sizing_y == .Fill {	 point = .RightTop }
+			if rule.sizing_x == .End && rule.sizing_y == .Middle { point = .RightCenter }
+			if rule.sizing_x == .End && rule.sizing_y == .End {    point = .RightBottom }
+			
+			item_floating.attachment.element = point
+			item_floating.attachment.parent = point
+		
+			case Layout_Linear_Horizontal:
+			rule := LinearChildSizingFixed {}
+			if in_rule, ok := cache_linear.?; ok {
+				rule = in_rule
+			}
+			item_sizing.width = convert_to_clay_rule(rule.width)
+			item_sizing.height = convert_to_clay_rule(rule.height)
+			//log.info(maybe_tag, item_sizing)
+		case Layout_Linear_Vertical:
+			rule := LinearChildSizingFixed {}
+			if in_rule, ok := cache_linear.?; ok {
+				rule = in_rule
+			}
+			item_sizing.width = convert_to_clay_rule(rule.width)
+			item_sizing.height = convert_to_clay_rule(rule.height)
+			//log.info(maybe_tag, item_sizing)
 	}
 
-	clay.ConfigureOpenElement({
-		layout = {
-			layoutDirection = direction,
-			sizing = item_sizing,
-		}
-	})
+	elem.layout.sizing = item_sizing
+	elem.floating = item_floating
 }
 
 layout_close :: proc() {
+	pop(&layout_stack)
 	clay._CloseElement()
 }
 
@@ -205,46 +340,34 @@ config_box_style :: proc(style: BoxStyle) {
 
 config_box_colored :: proc(style: BoxStyleColored) {
 
-
-	item_sizing := clay.Sizing {
-		width = clay.SizingFit(),
-		height = clay.SizingFit(),
-	}
-
-	if rule, ok := cache.?; ok {
-		item_sizing.width = convert_to_clay_rule(rule.width)
-		item_sizing.height = convert_to_clay_rule(rule.height)
-		//log.info(maybe_tag, item_sizing)
-		cache = nil
-	}
-
-	clay.ConfigureOpenElement(
-		ab.DPI(
-			{
-				layout = {
-					padding = {
-						u16(style.padding.left),
-						u16(style.padding.right),
-						u16(style.padding.top),
-						u16(style.padding.bottom),
-					},
-					sizing = item_sizing,
-				},
-				backgroundColor = style.background,
-				border = {
-					color = style.border_color,
-					width = {
-						u16(style.border_width.left),
-						u16(style.border_width.right),
-						u16(style.border_width.top),
-						u16(style.border_width.bottom),
-						0,
-					}
-				},
-				cornerRadius = transmute(clay.CornerRadius) style.corner_radii,
+	elem := clay.ElementDeclaration {
+		layout = {
+			padding = {
+				u16(style.padding.left),
+				u16(style.padding.right),
+				u16(style.padding.top),
+				u16(style.padding.bottom),
+			},
+		},
+		backgroundColor = style.background,
+		border = {
+			color = style.border_color,
+			width = {
+				u16(style.border_width.left),
+				u16(style.border_width.right),
+				u16(style.border_width.top),
+				u16(style.border_width.bottom),
+				0,
 			}
-		)
-	)
+		},
+		cornerRadius = transmute(clay.CornerRadius) style.corner_radii,
+	}
+
+	apply_decl(&elem, Layout_Linear_Horizontal{})
+
+	clay.ConfigureOpenElement(ab.DPI(elem))
+
+	append(&layout_stack, Layout_Linear_Horizontal{})
 
 }
 

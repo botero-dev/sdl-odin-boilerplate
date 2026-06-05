@@ -16,6 +16,7 @@ import "engine:gfx"
 import "engine:ui"
 
 import SDL "vendor:sdl3"
+import clay "engine:clay-odin"
 
 import "dxf"
 
@@ -74,21 +75,7 @@ dxf_callback :: proc(result: ab.RequestResult) {
 	if model_loaded {
 		return
 	}
-
-	model = model_from_dxf(result.bytes)
-
-
-	scale_x := f64(ab.win_size.x) / model.size.x
-	scale_y := f64(ab.win_size.y) / model.size.y
-
-	scale := math.min(scale_x, scale_y) * 1.1
-
-	viewport.basis_x = {scale, 0}
-	viewport.basis_y = {0, -scale}
-	viewport.origin = model.center
-
-
-	model_loaded = true
+	load_dxf_bytes(&result.bytes[0], len(result.bytes))
 }
 
 @(export)
@@ -106,10 +93,7 @@ load_dxf_bytes :: proc "c" (ptr: [^]byte, size: int) {
 	context = runtime.default_context()
 	bufff := string(ptr[:size])
 
-	fmt.println(bufff)
-
 	model = model_from_dxf(ptr[:size])
-
 
 	scale_x := f64(ab.win_size.x) / model.size.x
 	scale_y := f64(ab.win_size.y) / model.size.y
@@ -120,9 +104,7 @@ load_dxf_bytes :: proc "c" (ptr: [^]byte, size: int) {
 	viewport.basis_y = {0, -scale}
 	viewport.origin = model.center
 
-
 	model_loaded = true
-
 }
 
 
@@ -182,11 +164,22 @@ iterate :: proc() {
 
 	SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 0)
 	SDL.RenderClear(ab.renderer)
+	ab.ui_idle(0.01);
+	ui.layout_begin()
 
-	if model_loaded {
-		viewport.data = &model
-		vp_draw(viewport)
-	}
+	//ui.layout_overlay_child({sizing_x = .Fill, sizing_y = .Fill}) TODO CHECK THIS
+	ui.layout_container(ui.Layout_Linear_Horizontal{})
+
+	layout_viewport()
+
+	layout_layers()
+
+	// fill := ui.Sizing{type = .Weight, amount = 0.0}
+	// ui.layout_linear_child({fill, fill})
+	ui.layout_close()
+
+	ui.layout_end()
+	ab.render_layout(&ui.render_commands)
 
 	ab.draw_present()
 
@@ -196,6 +189,54 @@ iterate :: proc() {
 
 	}
 }
+
+viewport_render_data := ab.CustomRenderData {
+	callback = draw_viewport
+}
+
+layout_viewport :: proc () {
+	clay.UI(clay.ID("clock"))(
+			{
+				layout = {
+					sizing = {
+						width = clay.SizingGrow(),
+						height = clay.SizingGrow(),
+					},
+				},
+				backgroundColor = {1, 1, 1, 1},
+				custom = {&viewport_render_data},
+			},
+	)
+}
+
+draw_viewport :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
+
+	box := render_command.boundingBox
+
+	ab.draw_set_draw_rect(ab.renderer, {i32(box.x), i32(box.y)}, {i32(box.width), i32(box.height)} )
+
+	if model_loaded {
+		viewport.data = &model
+		vp_draw(viewport)
+	}
+
+	ab.draw_clear_draw_rect(ab.renderer)
+}
+
+
+
+layout_layers :: proc() {
+	ui.layout_container(ui.Layout_Linear_Vertical{})
+
+	if model_loaded {
+		for layer in model.dxf.layers {
+			ui.layout_button(layer.name)
+		}
+	}
+
+	ui.layout_close()
+}
+
 
 lerp :: proc(a, b: f64x3, t: f64) -> f64x3 {
 	t1 := f64(t)
