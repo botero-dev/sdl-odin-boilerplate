@@ -2,6 +2,7 @@ package ui
 
 import "core:log"
 
+import clay "../clay-odin"
 
 /*
     panel system lets you specify panel id+callback, and then
@@ -43,8 +44,37 @@ PanelLayout :: struct {
     root: PanelLayoutItem,
 }
 
+panels_inited := false
+
+panel_bgcolor := Color {0.2, 0.2, 0.2, 1}
+
+style_tab_button: StyleClass
+
+init_styles :: proc() {
+    tab_style := ButtonStyle {}
+
+    tab_style.idle_box = BoxStyleColored {
+        padding = {12, 12, 4, 4},
+		//border_width = {0, 0, 0, 0},
+        corner_radii = {4, 4, 0, 0},
+        background = panel_bgcolor,
+    }
+
+    tab_style.hover_box = tab_style.idle_box
+    tab_style.pressed_box = tab_style.idle_box
+
+    style_tab_button = style_class("Button", "tab")
+    push_style(&style_tab_button, tab_style)    
+}
+
+
 
 panels_register_definition :: proc (definition: PanelLayoutDefinition) -> int {
+    if !panels_inited {
+        panels_inited = true
+        init_styles()
+    }
+
     register_retval := append(&panel_layout_definitions, definition)
 
     panel_register_id := len(panel_layout_definitions)-1
@@ -100,11 +130,25 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
     if definition.show_tab {
         layout_container(Layout_Linear_Vertical {})
 
-        layout_button(definition.name)
+        layout_button(definition.name, &style_tab_button)
     }
 
+   	btn_style := get_current_style(&style_tab_button, ButtonStyle)
+
+   	clay._OpenElement()
+    if definition.grow {
+        layout_linear_child({
+            width= {type = .Weight},
+            height= {type = .Weight},
+        })
+    }
+
+    config_box_style(btn_style.idle_box)
 
     definition.callback()
+
+    layout_close()
+
 
     if definition.show_tab {
         layout_close()

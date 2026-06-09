@@ -68,7 +68,7 @@ make_cmake_library() {
 	shift 2
 	local cmake_args=("$@")
 
-	if [ ! -e "$INSTALL_PATH/lib/$lib_filename" ]; then
+	# if [ ! -e "$INSTALL_PATH/lib/$lib_filename" ]; then
 		echo "Generating $INSTALL_PATH/lib/$lib_filename"
 		cmake_build_dir="$BUILD_CMAKE_PATH/$lib_name"
 
@@ -81,6 +81,6 @@ make_cmake_library() {
 		cmake --build "$cmake_build_dir" --config "$BUILD_CONFIG" --parallel
 		cmake --install "$cmake_build_dir" --config "$BUILD_CONFIG"
 
-	fi
+	# fi
 }
 export -f make_cmake_library

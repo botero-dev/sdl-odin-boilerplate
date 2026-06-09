@@ -305,6 +305,7 @@ MouseWheelEvent :: struct {
 	mouse_y:   f32,                  /**< Y coordinate, relative to window */
 	integer_x: i32,                  /**< The amount scrolled horizontally, accumulated to whole scroll "ticks" (added in 3.2.12) */
 	integer_y: i32,                  /**< The amount scrolled vertically, accumulated to whole scroll "ticks" (added in 3.2.12) */
+	source: MouseWheelSource,
 }
 
 JoyAxisEvent :: struct {

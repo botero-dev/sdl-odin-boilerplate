@@ -34,6 +34,14 @@ MouseWheelDirection :: enum c.int {
 	FLIPPED,   /**< The scroll direction is flipped / natural */
 }
 
+MouseWheelSource :: enum c.int {
+	UNSPECIFIED,
+	WHEEL,
+	TOUCH,
+	CONTINUOUS,
+	WHEEL_TILT,
+}
+
 CursorFrameInfo :: struct {
 	surface:  ^Surface,
 	duration: Uint32,

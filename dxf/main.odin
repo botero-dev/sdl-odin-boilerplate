@@ -75,6 +75,10 @@ init :: proc() {
 	append(&main_vertical.items, main_content)
 
 	panels.root = main_vertical
+
+	//r := SDL.SetWindowRelativeMouseMode(ab.window, true)
+
+	//log.info("set relative mous mode:", r)\
 }
 
 panels := ui.PanelLayout {}
@@ -177,21 +181,23 @@ grab_coords := [2]f64{0, 0}
 mouse_coords := [2]f32{0, 0}
 current_scale: f32
 
-SCALE_MULTIPLIER :: 2
+SCALE_POWER :: 2
 
 my_handler :: proc(event: ^ab.Event) {
 	vp_size := f64x2 { f64(viewport.last_draw_rect.w), f64(viewport.last_draw_rect.h)}
 	if event.sdl_event.type == SDL.EventType.PINCH_BEGIN {
 		current_scale = 1
+		pinch := event.sdl_event.pinch
+		fmt.println("pinch begin:", pinch)
 	}
 	if event.sdl_event.type == SDL.EventType.PINCH_UPDATE {
 		pinch := event.sdl_event.pinch
-		
+		fmt.println("pinch update:", pinch)
 		scale := f64(pinch.scale / current_scale)
 		current_scale = pinch.scale
 		
-		scale = (1-scale) * SCALE_MULTIPLIER + 1
-		scale = 1 / scale
+		scale = math.pow(scale, SCALE_POWER)
+		//scale = 1 / scale
 
 		viewport.basis_x *= scale
 		viewport.basis_y *= scale
@@ -201,24 +207,18 @@ my_handler :: proc(event: ^ab.Event) {
 		viewport.origin += (viewport.origin - mouse_model_pos) * (1-scale)
 	}
 	if event.sdl_event.type == SDL.EventType.PINCH_END {
+		current_scale = 1
+		pinch := event.sdl_event.pinch
+		fmt.println("pinch end:", pinch)
 	}
 	
 	if event.sdl_event.type == .MOUSE_WHEEL {
 		wheel_evt := (^SDL.MouseWheelEvent)(event.sdl_event)
-		fmt.println("wheel", wheel_evt)
 
-		use_wheel_to_zoom := false // true
-		if wheel_evt.which == SDL.TOUCH_MOUSEID {
-			// todo, use this? seems like in linux wont work
-			use_wheel_to_zoom = false
-		}
+		fmt.println("wheel which:", wheel_evt.which)
+		fmt.println("wheel source:", wheel_evt.source)
 
-		kb_mods := SDL.GetModState()
-		if .LCTRL in kb_mods {
-			use_wheel_to_zoom = true
-		}
-
-		if use_wheel_to_zoom {
+		if wheel_evt.source != .TOUCH && wheel_evt.source != .CONTINUOUS {
 			scale := math.pow(1.1, f64(wheel_evt.y))
 			viewport.basis_x *= scale
 			viewport.basis_y *= scale
@@ -227,7 +227,7 @@ my_handler :: proc(event: ^ab.Event) {
 			mouse_model_pos := view_to_model(viewport, vp_size, mouse_coords)
 
 			viewport.origin += (viewport.origin - mouse_model_pos) * (1-scale)
-		} else { // if use_wheel_to_zoom == false
+		} else { // wheel_evt.source == .TOUCH
 			
 			PAN_SCALE :: 50 // pixels per scroll unit
 
@@ -237,8 +237,6 @@ my_handler :: proc(event: ^ab.Event) {
 			if span_x.y != 0 {span_x.y = 1/ span_x.y}
 			if span_y.x != 0 {span_y.x = 1/ span_y.x}
 			if span_y.y != 0 {span_y.y = 1/ span_y.y}
-			
-
 
 			viewport.origin += f64(wheel_evt.x) * span_x * PAN_SCALE
 			viewport.origin += f64(wheel_evt.y) * span_y * PAN_SCALE * -1
@@ -326,6 +324,11 @@ draw_viewport :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.R
 	viewport.last_draw_rect = transmute(ab.Rect)(box)
 
 	ab.draw_set_draw_rect(ab.renderer, {i32(box.x), i32(box.y)}, {i32(box.width), i32(box.height)} )
+
+	SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 1)
+
+	rect := transmute(SDL.FRect) box
+	SDL.RenderFillRect(ab.renderer, &rect)
 
 	if model_loaded {
 		viewport.data = &model

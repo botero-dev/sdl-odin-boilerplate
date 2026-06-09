@@ -310,7 +310,11 @@ _handle_proc_simple :: proc(userdata: ^ab.HandlerInfo) {
 
 layout_button_handler :: proc(text: string, variant: ^StyleClass = nil, info: ^ab.HandlerInfo = nil) {
 
-	btn_style := get_current_style(&class_btn, ButtonStyle)
+	style_class := variant
+	if style_class == nil {
+		style_class = &class_btn
+	}
+	btn_style := get_current_style(style_class, ButtonStyle)
 
 	style: ^BoxStyle
 	// switch button state

@@ -138,6 +138,7 @@ push_style :: proc(class: ^StyleClass, style: $T) {
 	if len(style_directory.classes_types) == 0 {
 		 append(&style_directory.classes_types, nil)
 		 append(&style_directory.containers, nil)
+		 setup_directory()
 	}
 	
 	class_type := typeid_of(T)
