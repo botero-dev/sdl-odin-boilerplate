@@ -983,8 +983,7 @@ parse_entity_polyline :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 	for !done {
 		switch peek_group_code(parse_state) {
 			case DXF_Code(70):
-				parse_group_code(parse_state)
-				polyline_flags := parse_content_string(parse_state)
+				polyline.flags = parse_code_int(parse_state) or_continue
 			case DXF_Code(43):
 				parse_group_code(parse_state)
 				polyline_width := parse_content_string(parse_state)

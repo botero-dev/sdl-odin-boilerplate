@@ -76,6 +76,7 @@ Entity_Ellipse :: struct {
 
 Entity_Polyline :: struct {
 	using entity: DXF_Entity,
+	flags: int,
 	points: []f64x2,
 	bulges: []f64,
 }

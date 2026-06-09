@@ -138,6 +138,15 @@ vp_draw :: proc(vp: ViewportState) {
             )
             prev = next
         }
+        if (polyline.flags & 1) != 0 {
+            next := polyline.points[0]
+            ab.draw_line(ab.renderer, 
+                {f32(prev.x), f32(prev.y)},
+                {f32(next.x), f32(next.y)},
+                1.0,
+                style.color,
+            )
+        }
 
     }
 
