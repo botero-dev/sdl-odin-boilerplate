@@ -1,6 +1,7 @@
 package main
 
 import "core:strings"
+import "core:math"
 import "core:math/linalg"
 import "core:math/rand"
 
@@ -112,6 +113,30 @@ vp_draw :: proc(vp: ViewportState) {
         )
     }
 
+    for arc in dxf_file.arcs {
+        /*
+
+Entity_Arc :: struct {
+	using entity: DXF_Entity,
+	center: f64x3,
+	radius: f64,
+	extrusion: f64x3,
+	angle_range: f64x2,
+}
+    */
+        style := entity_style(arc, dxf_file)
+        angle_range := arc.angle_range * math.RAD_PER_DEG
+        if angle_range.y < angle_range.x {
+            angle_range.y += math.TAU
+        }
+        start_angle := angle_range[0]
+        angle_sweep := angle_range[1] - start_angle
+        start_y, start_x := math.sincos(start_angle)
+        delta := [2]f64{start_x, start_y} * arc.radius
+        sweep_point(arc.center.xy, delta, angle_sweep, style)        
+        
+    }
+
     for line in dxf_file.lines {
         style := entity_style(line, dxf_file)
         ab.draw_line(
@@ -127,25 +152,17 @@ vp_draw :: proc(vp: ViewportState) {
     for polyline in dxf_file.polylines {
         style := entity_style(polyline, dxf_file)
         prev := polyline.points[0]
+        bulge := polyline.bulges[0]
         for idx in 1 ..< len(polyline.points) {
             next := polyline.points[idx]
-            ab.draw_line(
-                ab.renderer,
-                {f32(prev.x), f32(prev.y)},
-                {f32(next.x), f32(next.y)},
-                1.0,
-                style.color,
-            )
+            draw_poly_segment(prev, next, bulge, style)
+
             prev = next
+            bulge = polyline.bulges[idx]
         }
         if (polyline.flags & 1) != 0 {
             next := polyline.points[0]
-            ab.draw_line(ab.renderer, 
-                {f32(prev.x), f32(prev.y)},
-                {f32(next.x), f32(next.y)},
-                1.0,
-                style.color,
-            )
+            draw_poly_segment(prev, next, bulge, style)
         }
 
     }
@@ -182,6 +199,72 @@ vp_draw :: proc(vp: ViewportState) {
     }
 
 }
+
+
+draw_poly_segment :: proc(prev: f64x2, next: f64x2, bulge: f64, style: gfx.LineStyleSimple) {
+    
+    if bulge == 0 {
+        ab.draw_line(
+            ab.renderer,
+            {f32(prev.x), f32(prev.y)},
+            {f32(next.x), f32(next.y)},
+            1.0,
+            style.color,
+        )
+    } else {
+        dir := next - prev
+
+        midpoint := prev + (dir * 0.5)
+
+        b := bulge
+        side := [2]f64{-dir.y, dir.x} * (1-(b*b)) / (4 * b)
+
+        center := midpoint + side 
+        angle := 4 * math.atan(bulge)
+
+        steps := int(10) // maybe dynamic based on angle and chord?
+        delta := prev - center
+        rot := linalg.matrix2_rotate(angle / f64(steps))
+        curr := prev
+
+        for jdx in 0..<steps {
+            delta = rot * delta
+            new := center + delta
+            ab.draw_line(
+                ab.renderer,
+                {f32(curr.x), f32(curr.y)},
+                {f32(new.x), f32(new.y)},
+                1.0,
+                style.color,
+            )   
+            curr = new
+        }
+        
+    }
+}
+
+sweep_point :: proc(center: f64x2, in_delta: f64x2, angle: f64, style: gfx.LineStyleSimple) {
+
+    steps := int(10) // maybe dynamic based on angle and chord?
+    rot := linalg.matrix2_rotate(angle / f64(steps))
+    delta := in_delta 
+    curr := center + delta
+
+    for jdx in 0..<steps {
+        delta = rot * delta
+        new := center + delta
+        ab.draw_line(
+            ab.renderer,
+            {f32(curr.x), f32(curr.y)},
+            {f32(new.x), f32(new.y)},
+            1.0,
+            style.color,
+        )   
+        curr = new
+    }
+
+}
+
 
 view_to_model :: proc(vp: ViewportState, draw_size: f64x2, in_coords: [2]f32) -> [2]f64 {
 
