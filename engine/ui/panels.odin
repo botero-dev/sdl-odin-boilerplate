@@ -47,8 +47,14 @@ PanelLayout :: struct {
 panels_inited := false
 
 panel_bgcolor := Color {0.2, 0.2, 0.2, 1}
+inactive_tab_bgcolor := Color {0.1, 0.1, 0.1, 1}
+separator_bgcolor := Color {0.1, 0.1, 0.1, 1}
 
 style_tab_button: StyleClass
+style_tab_bar: StyleClass
+style_panel_bg: StyleClass
+
+style_panel_container: StyleClass
 
 init_styles :: proc() {
     tab_style := ButtonStyle {}
@@ -65,6 +71,24 @@ init_styles :: proc() {
 
     style_tab_button = style_class("Button", "tab")
     push_style(&style_tab_button, tab_style)    
+
+
+
+    panel := BoxStyleColored {
+        padding = {2,2,2,2},
+        corner_radii = {0,0,0,0},
+        background = panel_bgcolor
+    }
+    style_panel_bg = style_class("Box", "panel")
+    push_style(&style_panel_bg, panel)
+
+    tab_bar := BoxStyleColored {
+        background = separator_bgcolor
+    }
+
+    style_tab_bar = style_class("Box", "tab_bar")
+    push_style(&style_tab_bar, tab_bar)    
+
 }
 
 
@@ -128,13 +152,13 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
     }
 
     if definition.show_tab {
-        layout_container(Layout_Linear_Vertical {})
+        layout_container(Layout_Linear_Vertical {}, &style_tab_bar)
 
         layout_button(definition.name, &style_tab_button)
     }
 
-   	btn_style := get_current_style(&style_tab_button, ButtonStyle)
-
+   	
+    // opens acutal content
    	clay._OpenElement()
     if definition.grow {
         layout_linear_child({
@@ -143,7 +167,12 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
         })
     }
 
-    config_box_style(btn_style.idle_box)
+    panel := BoxStyleColored {
+        padding = {2,2,2,2},
+        corner_radii = {0,0,0,0},
+        background = panel_bgcolor
+    }
+    config_box_style(panel)
 
     definition.callback()
 

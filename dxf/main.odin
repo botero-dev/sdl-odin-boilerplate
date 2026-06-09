@@ -340,7 +340,7 @@ draw_viewport :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.R
 
 
 layout_layers :: proc() {
-	ui.layout_container(ui.Layout_Linear_Vertical{}, "layers")
+	ui.layout_container(ui.Layout_Linear_Vertical{}, nil, "layers")
 
 	if model_loaded {
 		for layer in model.dxf.layers {

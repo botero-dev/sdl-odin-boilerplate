@@ -18,8 +18,8 @@ Color :: [4]f32
 CornerRadii :: struct {
 	nw: f32,
 	ne: f32,
-	se: f32,
 	sw: f32,
+	se: f32,
 }
 
 BoxOffsets :: struct {

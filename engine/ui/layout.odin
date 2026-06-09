@@ -165,7 +165,7 @@ convert_to_clay_rule :: proc(rule: Sizing) -> clay.SizingAxis {
 	return r
 }
 
-layout_container :: proc(children_layout: ChildrenLayout, maybe_tag:Maybe(string) = nil) {
+layout_container :: proc(children_layout: ChildrenLayout, style: ^StyleClass = nil,  maybe_tag:Maybe(string) = nil) {
 	if tag, ok := maybe_tag.?; ok {
 		clay._OpenElementWithId(clay.ID(tag))
 	} else {
@@ -174,6 +174,11 @@ layout_container :: proc(children_layout: ChildrenLayout, maybe_tag:Maybe(string
 
 	elem := clay.ElementDeclaration{}
 	apply_decl(&elem, children_layout)
+
+	if style != nil {
+		box_style := get_current_style(&style_tab_bar, BoxStyleColored)
+		apply_style_box_colored(&elem, box_style^)
+	}
 
 	clay.ConfigureOpenElement(elem)
 
@@ -346,6 +351,33 @@ config_box_style :: proc(style: BoxStyle) {
 			config_box_textured(s)
 	}
 }
+
+
+
+apply_style_box_colored :: proc(elem: ^clay.ElementDeclaration, style: BoxStyleColored) {
+
+	elem.layout.padding = {
+		u16(style.padding.left),
+		u16(style.padding.right),
+		u16(style.padding.top),
+		u16(style.padding.bottom),
+	}
+
+	elem.backgroundColor = style.background
+	
+	elem.border = {
+		color = style.border_color,
+		width = {
+			u16(style.border_width.left),
+			u16(style.border_width.right),
+			u16(style.border_width.top),
+			u16(style.border_width.bottom),
+			0,
+		}	
+	}
+	elem.cornerRadius = transmute(clay.CornerRadius) style.corner_radii
+}
+	
 
 config_box_colored :: proc(style: BoxStyleColored) {
 
