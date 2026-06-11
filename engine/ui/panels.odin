@@ -47,10 +47,12 @@ PanelLayout :: struct {
 panels_inited := false
 
 panel_bgcolor := Color {0.2, 0.2, 0.2, 1}
-inactive_tab_bgcolor := Color {0.1, 0.1, 0.1, 1}
+window_bgcolor := Color {0.4, 0.4, 0.4, 1}
+inactive_tab_bgcolor := Color {0.15, 0.15, 0.15, 1}
 separator_bgcolor := Color {0.1, 0.1, 0.1, 1}
 
 style_tab_button: StyleClass
+style_tab_button_inactive: StyleClass
 style_tab_bar: StyleClass
 style_panel_bg: StyleClass
 
@@ -72,7 +74,20 @@ init_styles :: proc() {
     style_tab_button = style_class("Button", "tab")
     push_style(&style_tab_button, tab_style)    
 
+    tab_style_inactive := ButtonStyle {}
+    tab_style_inactive.idle_box = BoxStyleColored {
+        padding = {12, 12, 4, 4},
+		//border_width = {0, 0, 0, 0},
+        corner_radii = {4, 4, 0, 0},
+        background = inactive_tab_bgcolor,
+    }
 
+    tab_style_inactive.hover_box = tab_style_inactive.idle_box
+    tab_style_inactive.pressed_box = tab_style_inactive.idle_box
+    
+    style_tab_button_inactive = style_class("Button", "tab_inactive")
+    push_style(&style_tab_button_inactive, tab_style_inactive)
+    
 
     panel := BoxStyleColored {
         padding = {2,2,2,2},
@@ -107,7 +122,11 @@ panels_register_definition :: proc (definition: PanelLayoutDefinition) -> int {
 }
 
 panels_present_layout :: proc (panel_layout: PanelLayout) {
+
+
     panels_present_item(panel_layout.root)
+
+
 }
 
 panels_present_item :: proc (item: PanelLayoutItem) {
@@ -120,18 +139,28 @@ panels_present_item :: proc (item: PanelLayoutItem) {
 }
 
 panels_present_group :: proc (group: PanelLayoutGroup) {
-    if group.grow {
-        layout_linear_child({
-            width= {type = .Weight},
-            height= {type = .Weight},
-        })
+    current := layout_stack[len(layout_stack)-1]
+    #partial switch layout_type in current {
+        case Layout_Overlay:
+             layout_overlay_child({sizing_x = .Fill, sizing_y = .Fill})
+        case Layout_Linear_Horizontal:
+            layout_linear_child({
+                width= {type = group.grow ? .Weight : .Fit},
+                height= {type = .Weight},
+            })
+        
+        case Layout_Linear_Vertical:
+            layout_linear_child({
+                width= {type = .Weight},
+                height= {type = group.grow ? .Weight : .Fit},
+            })
+    }	
 
-    }
     if group.direction == .Horizontal {
-        layout_container(Layout_Linear_Horizontal{})
+        layout_container(Layout_Linear_Horizontal{separation = 4}) // todo: consider DPI
     }
     if group.direction == .Vertical {
-        layout_container(Layout_Linear_Vertical{})
+        layout_container(Layout_Linear_Vertical{separation = 4})
     }
 
     for item in group.items {
@@ -144,29 +173,46 @@ panels_present_group :: proc (group: PanelLayoutGroup) {
 panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
     definition := panel_layout_definitions[item.definition]
 
-    if definition.grow {
-        layout_linear_child({
-            width= {type = .Weight},
-            height= {type = .Weight},
-        })
-    }
+    current := layout_stack[len(layout_stack)-1]
+    #partial switch layout_type in current {
+        case Layout_Overlay:
+             layout_overlay_child({sizing_x = .Fill, sizing_y = .Fill})
+        case Layout_Linear_Horizontal:
+            layout_linear_child({
+                width= {type = definition.grow ? .Weight : .Fit},
+                height= {type = .Weight},
+            })
+        
+        case Layout_Linear_Vertical:
+            layout_linear_child({
+                width= {type = .Weight},
+                height= {type = definition.grow ? .Weight : .Fit},
+            })
+    }	
+    
 
     if definition.show_tab {
-        layout_container(Layout_Linear_Vertical {}, &style_tab_bar)
+        layout_container(Layout_Linear_Vertical {separation = 0})
 
-        layout_button(definition.name, &style_tab_button)
-    }
+        layout_linear_child({
+            width= {type = .Weight},
+            height= {type = .Fit},
+        })
+        layout_container(Layout_Linear_Horizontal {separation = 4}, &style_tab_bar)
+            layout_button(definition.name, &style_tab_button)
+            layout_button("other", &style_tab_button_inactive)
+        layout_close()
 
-   	
-    // opens acutal content
-   	clay._OpenElement()
-    if definition.grow {
         layout_linear_child({
             width= {type = .Weight},
             height= {type = .Weight},
         })
     }
 
+        
+    // opens acutal content
+   	clay._OpenElement()
+    
     panel := BoxStyleColored {
         padding = {2,2,2,2},
         corner_radii = {0,0,0,0},

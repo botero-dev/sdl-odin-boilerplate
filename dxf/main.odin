@@ -50,7 +50,7 @@ init :: proc() {
 	}
 
 	ui.create_window("Editor", {1280, 720})
-	ab.app_add_event_handler(my_handler)
+	//ab.app_add_event_handler(my_handler)
 
 	// TODO: check if called with startup args to avoid loading casa1
 	ab.request_data_async("casa1.dxf", nil, dxf_callback)
@@ -183,7 +183,7 @@ current_scale: f32
 
 SCALE_POWER :: 2
 
-my_handler :: proc(event: ^ab.Event) {
+my_handler :: proc(event: ^ab.Event, user_data: rawptr) {
 	vp_size := f64x2 { f64(viewport.last_draw_rect.w), f64(viewport.last_draw_rect.h)}
 	if event.sdl_event.type == SDL.EventType.PINCH_BEGIN {
 		current_scale = 1
@@ -304,6 +304,9 @@ viewport_render_data := ab.CustomRenderData {
 }
 
 layout_viewport :: proc () {
+
+	ab.ui_pointer_handler(my_handler)
+
 	clay.UI(clay.ID("clock"))(
 			{
 				layout = {

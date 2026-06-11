@@ -762,6 +762,7 @@ finish_handling_mouse_input :: proc(event: ^Event) {
 
 wheel_delta: [2]f32
 
+coords := vec2{}
 ui_push_pointer_event :: proc(event: ^Event) {
 
 	sdl_event := event.sdl_event
@@ -769,7 +770,6 @@ ui_push_pointer_event :: proc(event: ^Event) {
 	if event.type != .Mouse {
 		return
 	}
-	coords := vec2{}
 	receiver = 0
 
 	pressed: bool = false

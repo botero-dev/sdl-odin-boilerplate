@@ -117,6 +117,10 @@ cache_overlay: Maybe(OverlayChildSizing)
 cache_linear: Maybe(LinearChildSizingFixed)
 
 layout_overlay_child :: proc(rule: OverlayChildSizing) {
+	if cache_linear != nil {
+		log.error("unconsumed layout hint '", cache_linear, "' before pushing '", rule, "'")
+	}
+
 	current := layout_stack[len(layout_stack)-1]
 	#partial switch v in current {
 		case Layout_Overlay:
@@ -130,6 +134,10 @@ layout_overlay_child :: proc(rule: OverlayChildSizing) {
 
 
 layout_linear_child :: proc(rule: LinearChildSizingFixed) {
+	if cache_linear != nil {
+		log.error("unconsumed layout hint '", cache_linear, "' before pushing '", rule, "'")
+	}
+
 	current := layout_stack[len(layout_stack)-1]
 	#partial switch v in current {
 		case Layout_Linear_Horizontal:
@@ -193,8 +201,10 @@ apply_decl :: proc(elem: ^clay.ElementDeclaration, children_layout: ChildrenLayo
 	#partial switch c in children_layout {
 		case Layout_Linear_Horizontal:
 			direction = .LeftToRight
+			elem.layout.childGap = u16(c.separation)
 		case Layout_Linear_Vertical:
 			direction = .TopToBottom
+			elem.layout.childGap = u16(c.separation)
 	}
 	elem.layout.layoutDirection = direction
 

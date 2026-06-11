@@ -173,6 +173,8 @@ app_handle_event :: proc(sdl_event: ^SDL.Event) -> SDL.AppResult {
 		event.type = .Keyboard
 	case .MOUSE_MOTION, .MOUSE_BUTTON_DOWN, .MOUSE_BUTTON_UP, .MOUSE_WHEEL:
 		event.type = .Mouse
+	case .PINCH_BEGIN, .PINCH_UPDATE, .PINCH_END:
+		event.type = .Mouse
 	}
 
 	system_handler(&event)
