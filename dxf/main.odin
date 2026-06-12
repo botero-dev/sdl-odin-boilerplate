@@ -60,7 +60,7 @@ init :: proc() {
 
 	id_menus := ui.panels_register_definition({    callback=panel_menus,     name="menus"})
 	id_toolbox := ui.panels_register_definition({  callback=panel_toolbox,   name="toolbox"})
-	id_viewport := ui.panels_register_definition({ callback=layout_viewport, name="viewport", grow=true, show_tab=true})
+	id_viewport := ui.panels_register_definition({ callback=layout_viewport, name="viewport", grow=true})
 	id_layers := ui.panels_register_definition({   callback=layout_layers,   name="layers",   show_tab=true})
 
 	main_vertical := ui.PanelLayoutGroup { direction = .Vertical }

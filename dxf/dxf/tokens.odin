@@ -16,8 +16,31 @@ parse_code_f64 :: proc(parse_state: ^DXF_ParseState) -> (value: f64, ok: bool) {
 	return
 }
 
+parse_code_checked_f64 :: proc(parse_state: ^DXF_ParseState, in_code: DXF_Code) -> (value: f64, ok: bool) {
+	code := parse_group_code(parse_state)
+	assert(code == in_code)
+	content_string := trim(parse_content_string(parse_state))
+	value, ok = strconv.parse_f64(content_string)
+	if !ok {
+		log.warn("error parsing decimal value", code , content_string)
+	}
+	return
+}
+
+
 parse_code_int :: proc(parse_state: ^DXF_ParseState) -> (value: int, ok: bool) {
 	code := parse_group_code(parse_state)
+	content_string := trim(parse_content_string(parse_state))
+	value, ok = strconv.parse_int(content_string)
+	if !ok {
+		log.warn("error parsing int value", code , content_string)
+	}
+	return
+}
+
+parse_code_checked_int :: proc(parse_state: ^DXF_ParseState, in_code: DXF_Code) -> (value: int, ok: bool) {
+	code := parse_group_code(parse_state)
+	assert(code == in_code)
 	content_string := trim(parse_content_string(parse_state))
 	value, ok = strconv.parse_int(content_string)
 	if !ok {
@@ -123,6 +146,7 @@ parse_group_code :: proc(cursor_ptr: ^DXF_ParseState) -> DXF_Code {
 	// }
 	assert(ok)
 	if PARSE_DEBUG { fmt.printf("%d:\t", result) }
+	cursor_ptr.line += 1
 	return DXF_Code(result)
 }
 
@@ -141,6 +165,7 @@ parse_content_string :: proc(cursor_ptr: ^DXF_ParseState) -> string {
 	str := string(([^]byte)(start)[:strlen])
 //	fmt.printf("found '%s'\n", str)
 	if PARSE_DEBUG { fmt.printf("%s\n", str) }
+	cursor_ptr.line += 1
 	return str
 }
 

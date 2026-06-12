@@ -25,11 +25,17 @@ parse_dxf :: proc(bytes: []byte) -> DXF_Data {
 	for parse_state.cursor < parse_state.end {
 		group_code := parse_group_code(parse_state)
 		content := parse_content_string(parse_state)
-		if content == DXF_SECTION {
-			parse_section(parse_state, data)
+		if group_code == 0 {
+			if content == DXF_SECTION {
+				parse_section(parse_state, data)
+				continue
+			} else if content == DXF_EOF {
+				break
+			}
+			
+		} else if group_code == 999 {
+			// created by dxflib tag
 			continue
-		} else if content == DXF_EOF {
-			break
 		}
 		assert(false, "shouldn't reach this")
 	}
@@ -249,9 +255,11 @@ parse_table_layer :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 				line_weight := parse_code_int(parse_state) or_continue 
 			case 390:
 				plot_style_handle := parse_code_string(parse_state)
+			case 420:
+				true_color := parse_code_string(parse_state)
 			case:
 				value := parse_code_string(parse_state)
-				fmt.println(code, ":", value)
+				fmt.println(parse_state.line, "code:", code, ":", value)
 		}
 	}
 
@@ -312,10 +320,19 @@ parse_section_entities :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 				parse_entity_ellipse(parse_state, data)
 				continue
 			}
+			if content == DXF_POINT {
+				parse_entity_point(parse_state, data)
+				continue
+			}
+			if content == DXF_HATCH {
+				parse_entity_hatch(parse_state, data)
+				continue
+			}
 			
 			fmt.println("unhandled entity:", content)
 		}
-		fmt.println(group_code, ":", content)
+		fmt.println(parse_state.line, "code:", group_code, ":", content)
+		
 	}
 
 	log.info("Finished parsing ENTITIES")
@@ -333,8 +350,11 @@ parse_entity_header :: proc(parse_state: ^DXF_ParseState, entity: ^DXF_Entity) {
 		maybe_ext = peek_group_code(parse_state)
 	}
 
-	assert(parse_group_code(parse_state) == DXF_Code(330))
-	entity.owner = parse_content_string(parse_state)
+	maybe_owner := peek_group_code(parse_state)
+	for maybe_owner == DXF_Code(330) {
+		parse_group_code(parse_state)
+		entity.owner = parse_content_string(parse_state)
+	}
 
 	entity.color = 256 // Color:ByLayer by default
 
@@ -372,6 +392,10 @@ parse_entity_header :: proc(parse_state: ^DXF_ParseState, entity: ^DXF_Entity) {
 			case DXF_Code(370): // weight
 				parse_group_code(parse_state)
 				line_weight := parse_content_string(parse_state)
+
+			case DXF_Code(420): // weight
+				parse_group_code(parse_state)
+				true_color := parse_content_string(parse_state)
 				
 			case:
 				unhandled = true
@@ -379,6 +403,35 @@ parse_entity_header :: proc(parse_state: ^DXF_ParseState, entity: ^DXF_Entity) {
 	}
 }
 // parse entities functions
+
+parse_entity_point :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) -> (ok: bool) {
+	point := Entity_Point {}
+	parse_entity_header(parse_state, &point)
+
+	done := false
+	for !done {
+		next := peek_group_code(parse_state)
+		switch next {
+			case DXF_Code(0):
+				done = true
+			case:
+				log.error("Point Unexpected code:", next)
+				done = true
+
+			case DXF_Code(10):
+				point.x = parse_code_f64(parse_state) or_return
+			case DXF_Code(20):
+				point.y = parse_code_f64(parse_state) or_return
+			case DXF_Code(30):
+				point.z = parse_code_f64(parse_state) or_return
+		}
+	}
+
+	append(&data.points, point)
+	ok = true
+	return
+}
+
 
 parse_entity_ellipse :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) -> (ok: bool) {
 	ellipse := Entity_Ellipse {}
@@ -764,6 +817,11 @@ parse_entity_mtext :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 				parse_group_code(parse_state)
 				text.content = parse_content_string(parse_state)
 
+			case 7:
+				style_name := parse_code_string(parse_state)
+			case 50:
+				angle := parse_code_string(parse_state)
+
 			case DXF_Code(73):
 				parse_group_code(parse_state)
 				space_style := parse_content_string(parse_state) // 1:atleast 2:exact
@@ -832,6 +890,16 @@ parse_entity_text :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 			case DXF_Code(50):
 				parse_group_code(parse_state)
 				angle := parse_content_string(parse_state)
+			
+			case 41:
+				width_factor := parse_code_f64(parse_state) or_continue
+			
+			case 7:
+				style_name := parse_code_string(parse_state)
+			
+			case 71:
+				text_gen_flags := parse_code_string(parse_state)
+
 			case DXF_Code(72):
 				parse_group_code(parse_state)
 				justify_horz := parse_content_string(parse_state)
@@ -969,6 +1037,120 @@ parse_entity_circle :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 	
 	append(&data.circles, circle)
 }
+
+
+parse_entity_hatch :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
+
+	hatch := Entity_Hatch {}
+	parse_entity_header(parse_state, &hatch)
+
+	done := false
+	for !done {
+		switch peek_group_code(parse_state) {
+			case 10:
+				elevation_x := parse_code_f64(parse_state) or_continue
+			case 20:
+				elevation_y := parse_code_f64(parse_state) or_continue
+			case 30:
+				elevation_z := parse_code_f64(parse_state) or_continue
+			case 210:
+				extrusion_x := parse_code_f64(parse_state) or_continue
+			case 220:
+				extrusion_y := parse_code_f64(parse_state) or_continue
+			case 230:
+				extrusion_z := parse_code_f64(parse_state) or_continue
+			case 2:
+				pattern := parse_code_string(parse_state)
+			case 70:
+				solid_fill_flag := parse_code_string(parse_state)
+			case 71:
+				associativity_flag := parse_code_string(parse_state)
+			case:
+				done = true
+		}
+	}
+	
+	bounds_num_paths, ok := parse_code_checked_int(parse_state, 91); assert(ok)
+	Bounds_Path_Type :: enum {
+		Line = 1,
+		Arc = 2,
+		Ellipse = 3,
+		Spline = 4,
+	}
+
+	for path_idx in 0..<bounds_num_paths {
+		bounds_path_type_flags, ok := parse_code_checked_int(parse_state, 92) ; assert(ok)
+		assert(bounds_path_type_flags == 1)
+		bounds_path_edges, ok2 := parse_code_checked_int(parse_state, 93); assert(ok2)
+
+		for edge_idx in 0..<bounds_path_edges {
+			
+			bounds_path_type := Bounds_Path_Type(parse_code_checked_int(parse_state, 72) or_continue)
+			#partial switch bounds_path_type {
+				case .Line:
+					start_x := parse_code_checked_f64(parse_state, 10) or_else 0
+					start_y := parse_code_checked_f64(parse_state, 20) or_else 0
+					end_x := parse_code_checked_f64(parse_state, 11) or_else 0
+					end_y := parse_code_checked_f64(parse_state, 21) or_else 0
+				case .Arc:
+					center_x := parse_code_checked_f64(parse_state, 10) or_else 0
+					center_y := parse_code_checked_f64(parse_state, 20) or_else 0
+					radius := parse_code_checked_f64(parse_state, 40) or_else 0
+					angle_start := parse_code_checked_f64(parse_state, 50) or_else 0
+					angle_end := parse_code_checked_f64(parse_state, 51) or_else 0
+					counterclockwise := parse_code_checked_int(parse_state, 73) or_else 0
+				case:
+					assert(false)
+				
+			}
+		}
+
+		if peek_group_code(parse_state) == 97 {
+			num_codes, ok := parse_code_checked_int(parse_state, 97)
+			for idx_assoc in 0..<num_codes {
+				parse_code_assert_ignore(parse_state, 330, "associate entity id")
+			}
+		}
+	}
+
+	parse_code_optional_ignore(parse_state, 75, "hatch style")
+	parse_code_optional_ignore(parse_state, 76, "hatch pattern type")
+
+	parse_code_optional_ignore(parse_state, 52, "pattern angle")
+	parse_code_optional_ignore(parse_state, 41, "pattern scale")
+	parse_code_optional_ignore(parse_state, 77, "pattern double flag")
+
+	if peek_group_code(parse_state) == 78 {
+		pattern_num_lines, ok := parse_code_int(parse_state); assert(ok)
+
+		for line_idx in 0..<pattern_num_lines {
+			parse_code_assert_ignore(parse_state, 53, "pattern line angle")
+			parse_code_assert_ignore(parse_state, 43, "pattern line base x")
+			parse_code_assert_ignore(parse_state, 44, "pattern line base y")
+			parse_code_assert_ignore(parse_state, 45, "pattern line offset x")
+			parse_code_assert_ignore(parse_state, 46, "pattern line offset y")
+			num_dash_items, ok := parse_code_int(parse_state); assert(ok)
+			for item in 0..<num_dash_items {
+				_ = parse_code_checked_f64(parse_state, 49) or_continue
+			}
+		}
+	}
+
+
+
+	if peek_group_code(parse_state) == 98 {
+		seed_point_count, ok := parse_code_checked_int(parse_state, 98)
+		assert(ok)
+		assert(seed_point_count == 0)
+		
+	}
+	
+	parse_xdata(parse_state)
+
+	append(&data.hatches, hatch)
+
+}
+
 
 parse_entity_polyline :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 

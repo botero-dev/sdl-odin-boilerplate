@@ -16,10 +16,12 @@ DXF_ENDSEC :: DXF_Group("ENDSEC")
 DXF_ENDTAB :: DXF_Group("ENDTAB")
 DXF_ENTITIES :: DXF_Group("ENTITIES")
 DXF_EOF :: DXF_Group("EOF")
+DXF_HATCH :: DXF_Group("HATCH")
 DXF_INSERT :: DXF_Group("INSERT")
 DXF_LINE :: DXF_Group("LINE")
 DXF_LWPOLYLINE :: DXF_Group("LWPOLYLINE")
 DXF_MTEXT :: DXF_Group("MTEXT")
+DXF_POINT :: DXF_Group("POINT")
 DXF_SECTION :: DXF_Group("SECTION")
 DXF_SPLINE :: DXF_Group("SPLINE")
 DXF_TABLES :: DXF_Group("TABLES")
@@ -43,6 +45,7 @@ DXF_ParseState :: struct {
 	cursor: ^byte,
 	cursor_end: ^byte, // when different to cursor, means next line was parsed already in a peek call. TODO: you can call "consume" and cursor will be set directly to cursor_end
 	data: ^DXF_Data,
+	line: int,
 }
 
 DXF_Entity :: struct {
@@ -64,6 +67,14 @@ Entity_Circle :: struct {
 	radius: f64,
 }
 
+Entity_Point :: struct {
+	using entity: DXF_Entity,
+	x: f64,
+	y: f64,
+	z: f64,
+}
+
+
 Entity_Ellipse :: struct {
 	using entity: DXF_Entity,
 	center: f64x3,
@@ -73,6 +84,13 @@ Entity_Ellipse :: struct {
 	arc_range: f64x2,
 }
 
+
+Entity_Hatch :: struct {
+	using entity: DXF_Entity,
+	flags: int,
+	points: []f64x2,
+	bulges: []f64,
+}
 
 Entity_Polyline :: struct {
 	using entity: DXF_Entity,
@@ -138,6 +156,8 @@ Entity_Dimension :: struct {
 DXF_Data :: struct {
 	layers: [dynamic]Table_Layer,
 
+	points: [dynamic]Entity_Point,
+	hatches: [dynamic]Entity_Hatch,
 	polylines: [dynamic]Entity_Polyline,
 	splines: [dynamic]Entity_Spline,
     lines: [dynamic]Entity_Line,
