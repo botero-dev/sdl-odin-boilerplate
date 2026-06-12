@@ -275,7 +275,7 @@ parse_section_entities :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 			if content == DXF_ENDSEC {
 				break
 			}
-			//fmt.println(content)
+			//fmt.println(parse_state.line, content)
 			if content == DXF_SPLINE {
 				parse_entity_spline(parse_state, data)
 				continue
@@ -351,7 +351,7 @@ parse_entity_header :: proc(parse_state: ^DXF_ParseState, entity: ^DXF_Entity) {
 	}
 
 	maybe_owner := peek_group_code(parse_state)
-	for maybe_owner == DXF_Code(330) {
+	if maybe_owner == DXF_Code(330) {
 		parse_group_code(parse_state)
 		entity.owner = parse_content_string(parse_state)
 	}
