@@ -1,9 +1,11 @@
 package main
 
+import "core:strconv"
 import "core:strings"
 import "core:math"
 import "core:math/linalg"
 import "core:math/rand"
+import "core:unicode/utf8"
 
 
 import TTF "vendor:sdl3/ttf"
@@ -28,7 +30,6 @@ ViewportState :: struct {
 }
 
 
-
 draw_text :: proc(text: dxf.Entity_Text, color: Color) {
     in_pos := text.pos
     content := text.content
@@ -36,7 +37,7 @@ draw_text :: proc(text: dxf.Entity_Text, color: Color) {
     pos := [3]f32{f32(in_pos.x), f32(in_pos.y), 1}
     new_pos := ab.draw_matrix * pos
 
-    cstr := strings.clone_to_cstring(content, context.temp_allocator)
+    cstr := cstring(raw_data(content))
 
 
     in_fwd := [3]f32{ f32(text.end.x), f32(text.end.y), f32(text.end.z)}
@@ -86,6 +87,333 @@ draw_text :: proc(text: dxf.Entity_Text, color: Color) {
     }
 }
 
+MText_Command_LineBreak :: struct {
+    substring: string,
+}
+
+MText_Command_DrawText :: struct {
+    substring: string,
+}
+
+MText_Command_DrawFraction :: struct {
+    numerator: string,
+    denominator: string,
+    separator: u8,
+}
+
+// {
+MText_Command_PushState :: struct {}
+
+// }
+MText_Command_PopState :: struct {}
+
+// \C{color-index};
+MText_Command_SetColorIndex :: struct {
+    color: int,
+}
+// \c{rgb-as-decimal};
+MText_Command_SetColorRGB :: struct {
+    color: int,
+}
+
+// \f{font}|b{bold}|i{italic}...;
+MText_Command_SetFont :: struct {
+    font: string,
+    bold: bool,
+    italic: bool,
+}
+
+
+
+MText_Command :: union #no_nil {
+    MText_Command_LineBreak,
+    MText_Command_DrawText,
+    MText_Command_DrawFraction,
+    MText_Command_PushState,
+    MText_Command_PopState,
+    MText_Command_SetColorIndex,
+    MText_Command_SetColorRGB,
+    MText_Command_SetFont,
+}
+
+MText_Parse_State :: struct {
+    commands: [dynamic]MText_Command,
+    buffer: string,
+    cursor: int,
+    substring_start: int,
+}
+
+parse_state_data: MText_Parse_State
+
+compute_mtext_draw :: proc(text: dxf.Entity_MText) -> [dynamic]MText_Command {
+    clear(&parse_state_data.commands)
+
+    parse_state_data.cursor = 0
+    parse_state_data.substring_start = 0
+    parse_state_data.buffer = text.content
+
+    parse_state := &parse_state_data
+
+    close_current_string :: proc(parse_state: ^MText_Parse_State) {
+        if parse_state.substring_start != parse_state.cursor {
+            append(&parse_state.commands, MText_Command_DrawText {
+                    parse_state.buffer[parse_state.substring_start:parse_state.cursor]
+            })
+            parse_state.substring_start = parse_state.cursor
+        }
+    }
+
+    for parse_state.cursor < len(parse_state.buffer) {
+        char := parse_state.buffer[parse_state.cursor]
+        reset_substring := false
+        if char == '{' {
+            close_current_string(parse_state)
+            append(&parse_state.commands, MText_Command_PushState {})
+            parse_state.cursor += 1
+            reset_substring = true
+        } else if char == '}' {
+            close_current_string(parse_state)
+            append(&parse_state.commands, MText_Command_PopState {})
+            parse_state.cursor += 1
+            reset_substring = true
+        } else if char == '\\' {
+            // its good to always close current string because, even if it is a escape character, we
+            // want to create a new substring from after the escape "\" token
+            close_current_string(parse_state)
+                
+            parse_state.cursor += 1
+            char = parse_state.buffer[parse_state.cursor]
+            if char == 'P' { // parse color
+                append(&parse_state.commands, MText_Command_LineBreak {} )
+                parse_state.cursor += 1 
+                reset_substring = true
+            } else if char == 'C' { // parse color
+                color_start := parse_state.cursor + 1
+                color_end := color_start
+                for parse_state.buffer[color_end] != ';' {
+                    color_end += 1
+                }
+                color_substring := parse_state.buffer[color_start:color_end]
+               	color_value, ok := strconv.parse_int(color_substring); assert(ok)
+                append(&parse_state.commands, MText_Command_SetColorIndex {color_value} )
+                parse_state.cursor = color_end + 1
+                reset_substring = true
+            } else if char == 'A' { // parse vertical alignment
+                valign_start := parse_state.cursor + 1
+                valign_end := valign_start
+                for parse_state.buffer[valign_end] != ';' {
+                    valign_end += 1
+                }
+                valign_substring := parse_state.buffer[valign_start:valign_end]
+               	valign_value, ok := strconv.parse_int(valign_substring); assert(ok)
+                //append(&parse_state.commands, MText_Command_SetvalignIndex {valign_value} )
+                parse_state.cursor = valign_end + 1
+                reset_substring = true
+            } else if char == 'H' { // parse height scale
+                hscale_start := parse_state.cursor + 1
+                hscale_end := hscale_start
+                for parse_state.buffer[hscale_end] != ';' {
+                    hscale_end += 1
+                }
+                hscale_relative := false
+                true_hscale_end := hscale_end
+                if parse_state.buffer[hscale_end-1] == 'x' {
+                    hscale_relative = true
+                    hscale_end -= 1
+                }
+                hscale_substring := parse_state.buffer[hscale_start:hscale_end]
+               	hscale_value, ok := strconv.parse_f64(hscale_substring); assert(ok)
+                
+                //append(&parse_state.commands, MText_Command_SethscaleIndex {hscale_value} )
+                parse_state.cursor = true_hscale_end + 1
+                reset_substring = true
+            } else if char == 'S' { // parse stacked texts: '/' means horizontal line, '^' is no line, and '#' is diagonal stack
+                numerator_start := parse_state.cursor + 1
+                numerator_end := numerator_start
+                // todo: investigate how \ and { characters are encoded
+                for parse_state.buffer[numerator_end] != '/' && parse_state.buffer[numerator_end] != '^' && parse_state.buffer[numerator_end] != '#' {
+                    numerator_end += 1
+                }
+                cmd := MText_Command_DrawFraction {}
+                cmd.numerator = parse_state.buffer[numerator_start:numerator_end]
+                cmd.separator = parse_state.buffer[numerator_end]
+                denominator_start := numerator_end + 1
+                denominator_end := denominator_start
+                for parse_state.buffer[denominator_end] != ';' {
+                    denominator_end += 1
+                }
+                cmd.denominator = parse_state.buffer[denominator_start:denominator_end]
+                
+                append(&parse_state.commands, cmd)
+               	parse_state.cursor = denominator_end + 1
+                reset_substring = true
+            } else if char == 'f' { // parse font
+                font_start := parse_state.cursor + 1
+                font_end := font_start
+                for parse_state.buffer[font_end] != ';' && parse_state.buffer[font_end] != '|' {
+                    font_end += 1
+                }
+                font_command := MText_Command_SetFont {}
+
+                font_command.font = parse_state.buffer[font_start:font_end]
+                cursor_flags := font_end
+                for parse_state.buffer[cursor_flags] == '|' {
+                    flag_name_start := cursor_flags + 1
+                    flag_name := parse_state.buffer[flag_name_start]
+                    flag_value_start := flag_name_start + 1
+                    flag_value_end := flag_value_start
+                    for parse_state.buffer[flag_value_end] != ';' && parse_state.buffer[flag_value_end] != '|' {
+                        flag_value_end += 1
+                    }
+                    flag_value_str := parse_state.buffer[flag_value_start:flag_value_end]
+                    flag_value, ok := strconv.parse_int(flag_value_str); assert(ok)
+
+                    if flag_name == 'b' {
+                        font_command.bold = (flag_value != 0)
+                    } else if flag_name == 'i' {
+                        font_command.italic = (flag_value != 0)
+                    }
+                
+                    cursor_flags = flag_value_end
+                }
+                append(&parse_state.commands, font_command )
+                
+                parse_state.cursor = cursor_flags + 1
+                reset_substring = true
+            } else {
+                // character \ was used as escape token, we make a new substring start after "\" token
+                parse_state.substring_start = parse_state.cursor
+                // but we move the cursor one past the start, so \\ or \{ sequences don't try to interpret second character
+                parse_state.cursor += 1
+            }
+        } else {
+            // no special token
+            parse_state.cursor += 1
+        }
+        if reset_substring {
+            parse_state.substring_start = parse_state.cursor
+        }
+    }
+
+    close_current_string(parse_state)
+    return parse_state.commands
+}
+
+draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
+    in_pos := text.pos
+    content := text.content
+    entity := text.entity
+    pos := [3]f32{f32(in_pos.x), f32(in_pos.y), 1}
+    new_pos := ab.draw_matrix * pos
+
+    commands := compute_mtext_draw(text)
+
+
+
+    in_fwd := [3]f32{ f32(text.end.x), f32(text.end.y), f32(text.end.z)}
+    fwd := pos + (in_fwd * f32(text.height))
+    pos_fwd := ab.draw_matrix * fwd
+
+    dir_fwd := pos_fwd - new_pos
+    
+    screen_size := linalg.length(dir_fwd)
+
+    font_size := u16(0)
+    for step in font_steps {
+        if f32(step) >= screen_size {
+            font_size = step
+            break
+        }
+        font_size = step
+    }
+
+    sdl_text := ab.get_text_with_font_size(font_id, font_size)
+
+    dir_fwd /= f32(font_size)
+    dir_up := linalg.cross(dir_fwd, [3]f32{0, 0, -1})
+
+
+    color := entity_style(text, dxf_file).color
+        
+    if sdl_text != nil {
+        
+        tx : matrix[3,3]f32 = 1
+
+        tx[0] = { f32(dir_fwd.x), f32(dir_fwd.y), 0}
+        tx[1] = { f32(dir_up.x), f32(dir_up.y), 0}
+
+        tx[2] = { f32(new_pos.x), f32(new_pos.y), 1}
+
+        tx = linalg.transpose(tx)
+
+        cursor := [2]f32{0, 0}
+
+        for command in commands {
+            #partial switch cmd in command {
+                case MText_Command_SetColorIndex:
+                    new_index := entity_resolve_color_index(text, dxf_file, cmd.color)
+                    color = resolve_color(new_index)
+
+                case MText_Command_LineBreak:
+                    cursor.x = 0
+                    cursor.y += f32(font_size)
+                case MText_Command_DrawText:
+                    cstr := cstring(raw_data(cmd.substring))
+
+                    TTF.SetTextColor(
+                        sdl_text,
+                        u8(color[0] * 255),
+                        u8(color[1] * 255),
+                        u8(color[2] * 255),
+                        u8(color[3] * 255),
+                    )
+                    TTF.SetTextString(sdl_text, cstr, uint(len(cmd.substring)))
+                    TTF.SetTextWrapWidth(sdl_text, 0)
+                    // math.round(new_pos.x), math.round(new_pos.y)
+                    size: [2]i32
+                    TTF.GetTextSize(sdl_text, &size.x, &size.y)
+                    TTF.DrawRendererTextTx(sdl_text, cursor.x, cursor.y, &tx[0][0])
+                    cursor.x += f32(size.x)
+                case MText_Command_DrawFraction:
+                    size_num: [2]i32
+                    size_denom: [2]i32
+                    
+                    cstr := cstring(raw_data(cmd.numerator))
+                    TTF.SetTextString(sdl_text, cstr, uint(len(cmd.numerator)))
+                    TTF.GetTextSize(sdl_text, &size_num.x, &size_num.y)
+                    
+                    cstr = cstring(raw_data(cmd.denominator))
+                    TTF.SetTextString(sdl_text, cstr, uint(len(cmd.denominator)))
+                    TTF.GetTextSize(sdl_text, &size_denom.x, &size_denom.y)
+                    
+                    TTF.SetTextColor(
+                        sdl_text,
+                        u8(color[0] * 255),
+                        u8(color[1] * 255),
+                        u8(color[2] * 255),
+                        u8(color[3] * 255),
+                    )
+                    TTF.SetTextWrapWidth(sdl_text, 0)
+                    // math.round(new_pos.x), math.round(new_pos.y)
+                    
+                    half_height := f32(size_num.y) * 0.5
+
+                    cstr = cstring(raw_data(cmd.numerator))
+                    TTF.SetTextString(sdl_text, cstr, uint(len(cmd.numerator)))
+                    TTF.DrawRendererTextTx(sdl_text, cursor.x, cursor.y - half_height, &tx[0][0])
+                    
+                    cstr = cstring(raw_data(cmd.denominator))
+                    TTF.SetTextString(sdl_text, cstr, uint(len(cmd.denominator)))
+                    TTF.DrawRendererTextTx(sdl_text, cursor.x, cursor.y + half_height, &tx[0][0])
+                    
+                    largest := math.max(size_num.x, size_denom.x)
+                    cursor.x += f32(largest)
+            }
+            
+        }
+    }
+}
+
 
 vp_draw :: proc(vp: ViewportState) {
 	ab.draw_set_view_basis(vconv(vp.basis_x), vconv(vp.basis_y), vconv(vp.origin))
@@ -101,8 +429,7 @@ vp_draw :: proc(vp: ViewportState) {
     }
 
     for text in dxf_file.mtexts {
-        color := entity_style(text, dxf_file).color
-        draw_text(text, color)
+        draw_mtext(text, dxf_file)
     }
 
 
@@ -326,29 +653,40 @@ colors := []Color {
 	{1, 1, 1, 1}, // 7
 }
 
-
-entity_style :: proc(entity: dxf.DXF_Entity, file: dxf.DXF_Data) -> gfx.LineStyleSimple {
-	color := [4]f32{1, 1, 1, 1}
-
-	index := entity.color
-
+entity_resolve_color_index :: proc(entity: dxf.DXF_Entity, file: dxf.DXF_Data, base: int) -> int {
+    index := base
 	if index == 0 {
-		// TODO: resolve block color, which could be bylayer
+        // color: ByBlock
+		// TODO: resolve block color, which could map to bylayer?
 		index = rand.int_range(1, 3)
 	}
 
-	if entity.color == 256 {
+	if index == 256 {
 		// TODO: grab from layer
 		layer := file.layers[entity.layer]
 		index = layer.color
 	}
-	if index == 0 {
+    return index
+}
+
+resolve_color :: proc(index: int) -> Color {
+	color := [4]f32{1, 1, 1, 1}
+    if index == 0 {
 		color = colors[rand.int_range(1, 7)]
 	} else if index < len(colors) {
 		color = colors[index]
 	} else {
 		color = colors[7]
 	}
+    return color
+}
+
+
+entity_style :: proc(entity: dxf.DXF_Entity, file: dxf.DXF_Data) -> gfx.LineStyleSimple {
+
+	index := entity_resolve_color_index(entity, file, entity.color)
+
+    color := resolve_color(index)
 
 	return gfx.LineStyleSimple{width = 1, color = color}
 }

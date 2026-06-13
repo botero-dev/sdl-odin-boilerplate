@@ -215,8 +215,6 @@ my_handler :: proc(event: ^ab.Event, user_data: rawptr) {
 	if event.sdl_event.type == .MOUSE_WHEEL {
 		wheel_evt := (^SDL.MouseWheelEvent)(event.sdl_event)
 
-		fmt.println("wheel which:", wheel_evt.which)
-		fmt.println("wheel source:", wheel_evt.source)
 
 		if wheel_evt.source != .TOUCH && wheel_evt.source != .CONTINUOUS {
 			scale := math.pow(1.1, f64(wheel_evt.y))
