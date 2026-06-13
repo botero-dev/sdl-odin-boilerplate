@@ -335,7 +335,7 @@ ui_init :: proc() {
 	clay.SetMeasureTextFunction(clay_measure_text, nil)
 	clay.SetCullingEnabled(false)
 
-	request_data_async("Play-Regular.ttf", nil, assign_font)
+	request_data_async("ttf/Inter-Regular.ttf", nil, assign_font)
 }
 
 

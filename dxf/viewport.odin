@@ -12,6 +12,7 @@ import TTF "vendor:sdl3/ttf"
 
 import ab "engine:."
 import "engine:gfx"
+import "engine:ui"
 
 import "dxf"
 
@@ -358,7 +359,9 @@ draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
                     cursor.x = 0
                     cursor.y += f32(font_size)
                 case MText_Command_DrawText:
-                    cstr := cstring(raw_data(cmd.substring))
+
+                    utf8_string := ui.cp1252_to_utf8(transmute([]u8)cmd.substring, context.temp_allocator)
+                    cstr := cstring(raw_data(utf8_string))
 
                     TTF.SetTextColor(
                         sdl_text,
@@ -367,7 +370,7 @@ draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
                         u8(color[2] * 255),
                         u8(color[3] * 255),
                     )
-                    TTF.SetTextString(sdl_text, cstr, uint(len(cmd.substring)))
+                    TTF.SetTextString(sdl_text, cstr, uint(len(utf8_string)))
                     TTF.SetTextWrapWidth(sdl_text, 0)
                     // math.round(new_pos.x), math.round(new_pos.y)
                     size: [2]i32
