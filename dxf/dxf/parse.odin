@@ -610,7 +610,7 @@ parse_entity_ellipse :: proc(parse_state: ^DXF_ParseState) -> (ok: bool) {
 parse_entity_insert :: proc(parse_state: ^DXF_ParseState) -> (ok: bool) {
 	insert := Entity_Insert {}
 	insert.scale = {1,1,1}
-	
+
 	parse_entity_header(parse_state, &insert)
 	done := false
 	for !done {
@@ -1028,8 +1028,7 @@ parse_entity_text :: proc(parse_state: ^DXF_ParseState) {
 				text_gen_flags := parse_code_string(parse_state)
 
 			case DXF_Code(72):
-				parse_group_code(parse_state)
-				justify_horz := parse_content_string(parse_state)
+				text.hjustify = Entity_Text_HJustification(parse_code_int(parse_state) or_continue)
 
 			case DXF_Code(11):
 				parse_group_code(parse_state)
@@ -1045,8 +1044,7 @@ parse_entity_text :: proc(parse_state: ^DXF_ParseState) {
 				parse_group_code(parse_state)
 				subclass_text := parse_content_string(parse_state)
 			case DXF_Code(73):
-				parse_group_code(parse_state)
-				justify_vert := parse_content_string(parse_state)
+				text.valign = Entity_Text_VAlign(parse_code_int(parse_state) or_continue)
 
 			case:
 				done = true

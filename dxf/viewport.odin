@@ -38,6 +38,11 @@ draw_text :: proc(text: dxf.Entity_Text, color: Color) {
     content := text.content
     entity := text.entity
     pos := [3]f32{f32(in_pos.x), f32(in_pos.y), 1}
+
+    dbg := f32(100)
+    ab.draw_line(ab.renderer, pos.xy + {-dbg, 0}, pos.xy + {dbg, 0}, 1, {1, 0, 0, 1})
+    ab.draw_line(ab.renderer, pos.xy + {0, -dbg}, pos.xy + {0, dbg}, 1, {1, 0, 0, 1})
+
     new_pos := ab.draw_matrix * pos
 
     cstr := cstring(raw_data(content))
@@ -58,6 +63,15 @@ draw_text :: proc(text: dxf.Entity_Text, color: Color) {
             break
         }
         font_size = step
+    }
+
+    sdl_font := ab.get_font_with_size(font_id, font_size)
+    if sdl_font != nil {
+        wght := TTF.VARIATION("wght", 400)
+        ok := TTF.SetFontVariations(sdl_font, &wght, 1)
+        assert(ok == true)
+
+        //TTF.SetFontLanguage(sdl_font, "ja") // ja, zh
     }
 
     sdl_text := ab.get_text_with_font_size(font_id, font_size)
@@ -86,7 +100,21 @@ draw_text :: proc(text: dxf.Entity_Text, color: Color) {
         TTF.SetTextString(sdl_text, cstr, uint(len(content)))
         TTF.SetTextWrapWidth(sdl_text, 0)
         // math.round(new_pos.x), math.round(new_pos.y)
-        TTF.DrawRendererTextTx(sdl_text, 0, 0, &tx[0][0])
+
+        ypos := i32(0)
+        switch text.valign {
+            case .Top:
+                // do nothing
+            case .Middle:
+                ypos -= TTF.GetFontHeight(sdl_font) / 2
+            case .Baseline:
+                ypos -= TTF.GetFontAscent(sdl_font)
+            case .Bottom:
+                ypos -= TTF.GetFontHeight(sdl_font)
+        }
+
+
+        TTF.DrawRendererTextTx(sdl_text, 0, f32(ypos), &tx[0][0])
     }
 }
 

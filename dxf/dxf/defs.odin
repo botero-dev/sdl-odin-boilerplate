@@ -112,6 +112,21 @@ Entity_Spline :: struct {
 	control_points: []f64x3,
 }
 
+Entity_Text_VAlign :: enum {
+	Baseline,
+	Bottom,
+	Middle,
+	Top,
+}
+
+Entity_Text_HJustification :: enum {
+	Left,
+	Center,
+	Right,
+	Aligned,
+	Middle,
+	Fit,
+}
 
 Entity_Text :: struct {
 	using entity: DXF_Entity,
@@ -119,6 +134,8 @@ Entity_Text :: struct {
 	pos: f64x3,
 	height: f64,
 	end: f64x3,
+	valign: Entity_Text_VAlign,
+	hjustify: Entity_Text_HJustification,
 }
 
 Entity_MText :: struct {
