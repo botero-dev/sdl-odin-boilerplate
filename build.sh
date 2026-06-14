@@ -32,23 +32,26 @@ fi
 
 set_target "$TARGET" # sets environment variables
 
+if [[ "${AB_SKIP_REBUILD_LIBS:-0}" == 0 ]]; then
 
-./vendor/sdl.sh
-make_cmake_library vendor/SDL SDL3  \
-	-DSDL_X11_XTEST=OFF             \
-	-DSDL_TEST_LIBRARY=OFF 
+	./vendor/sdl.sh
+	make_cmake_library vendor/SDL SDL3  \
+		-DSDL_X11_XTEST=OFF             \
+		-DSDL_TEST_LIBRARY=OFF 
 
-./vendor/sdl_image.sh
-make_cmake_library vendor/SDL_image SDL3_image  \
-	-DSDL3_DIR="$BUILD_CMAKE_PATH/SDL3"         \
-	-DSDLIMG_AVIF=OFF 
-	# -DSDLIMAGE_VENDORED=true 
+	./vendor/sdl_image.sh
+	make_cmake_library vendor/SDL_image SDL3_image  \
+		-DSDL3_DIR="$BUILD_CMAKE_PATH/SDL3"         \
+		-DSDLIMG_AVIF=OFF 
+		# -DSDLIMAGE_VENDORED=true 
 
-./vendor/sdl_ttf.sh
-make_cmake_library vendor/SDL_ttf SDL3_ttf  \
-	-DSDL3_DIR="$BUILD_CMAKE_PATH/SDL3"         \
-	-DSDLTTF_VENDORED=ON                  \
-	-DSDLTTF_SAMPLES=false
+	./vendor/sdl_ttf.sh
+	make_cmake_library vendor/SDL_ttf SDL3_ttf  \
+		-DSDL3_DIR="$BUILD_CMAKE_PATH/SDL3"         \
+		-DSDLTTF_VENDORED=ON                  \
+		-DSDLTTF_SAMPLES=false
+
+fi
 
 
 compile_cmd=("$ODIN" build "$PROJECT" "-collection:engine=engine")

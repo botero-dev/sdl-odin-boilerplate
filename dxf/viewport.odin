@@ -432,25 +432,25 @@ vp_draw :: proc(vp: ViewportState) {
 
     free_all(context.temp_allocator)
 
-    for text in dxf_file.texts {
+    for text in dxf_file.entities.texts {
         color := entity_style(text, dxf_file).color
 
         draw_text(text, color)
     }
 
-    for text in dxf_file.mtexts {
+    for text in dxf_file.entities.mtexts {
         draw_mtext(text, dxf_file)
     }
 
 
-    for circle in dxf_file.circles {
+    for circle in dxf_file.entities.circles {
         gfx.draw_circle(
             {{f32(circle.center.x), f32(circle.center.y)}, f32(circle.radius)},
             {line = entity_style(circle, dxf_file)},
         )
     }
 
-    for arc in dxf_file.arcs {
+    for arc in dxf_file.entities.arcs {
         /*
 
 Entity_Arc :: struct {
@@ -474,7 +474,7 @@ Entity_Arc :: struct {
         
     }
 
-    for line in dxf_file.lines {
+    for line in dxf_file.entities.lines {
         style := entity_style(line, dxf_file)
         ab.draw_line(
             ab.renderer,
@@ -486,7 +486,7 @@ Entity_Arc :: struct {
 
     }
 
-    for polyline in dxf_file.polylines {
+    for polyline in dxf_file.entities.polylines {
         style := entity_style(polyline, dxf_file)
         prev := polyline.points[0]
         bulge := polyline.bulges[0]

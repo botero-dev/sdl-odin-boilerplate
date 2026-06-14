@@ -40,7 +40,7 @@ post_import :: proc(model: ^Model) {
 	maxy := f64(0)
 	started := false
 
-	for line in dxf_file.lines {
+	for line in dxf_file.entities.lines {
 		if !started {
 			minx = line.start.x
 			miny = line.start.y
@@ -55,7 +55,7 @@ post_import :: proc(model: ^Model) {
 		maxy = math.max(maxy, line.start.y, line.end.y)
 	}
 
-	for polyline in dxf_file.polylines {
+	for polyline in dxf_file.entities.polylines {
 		if !started {
 			minx = polyline.points[0].x
 			miny = polyline.points[0].y

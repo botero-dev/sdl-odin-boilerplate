@@ -1,4 +1,6 @@
 
+export AB_SKIP_REBUILD_LIBS=1
+
 set -euo pipefail
 
 if [[ "$#" == "0" ]]; then

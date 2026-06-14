@@ -9,6 +9,9 @@ DXF_Code :: distinct u32
 DXF_Group :: string
 
 DXF_ARC :: DXF_Group("ARC")
+DXF_BLOCKS :: DXF_Group("BLOCKS")
+DXF_BLOCK :: DXF_Group("BLOCK")
+DXF_ENDBLK :: DXF_Group("ENDBLK")
 DXF_CIRCLE :: DXF_Group("CIRCLE")
 DXF_DIMENSION :: DXF_Group("DIMENSION")
 DXF_ELLIPSE :: DXF_Group("ELLIPSE")
@@ -46,6 +49,7 @@ DXF_ParseState :: struct {
 	cursor: ^byte,
 	cursor_end: ^byte, // when different to cursor, means next line was parsed already in a peek call. TODO: you can call "consume" and cursor will be set directly to cursor_end
 	data: ^DXF_Data,
+	entities: ^DXF_Entities,
 	line: int,
 }
 
@@ -175,11 +179,7 @@ DXF_Header :: struct {
 	codepage: int,
 }
 
-DXF_Data :: struct {
-	header: DXF_Header,
-
-	layers: [dynamic]Table_Layer,
-
+DXF_Entities :: struct {
 	points: [dynamic]Entity_Point,
 	hatches: [dynamic]Entity_Hatch,
 	polylines: [dynamic]Entity_Polyline,
@@ -192,5 +192,15 @@ DXF_Data :: struct {
     texts: [dynamic]Entity_Text,
     mtexts: [dynamic]Entity_MText,
     dimensions: [dynamic]Entity_Dimension,
+}
+
+DXF_Data :: struct {
+	header: DXF_Header,
+
+	layers: [dynamic]Table_Layer,
+	blocks: [dynamic]Block,
+	
+	entities: DXF_Entities,
+
 }
 

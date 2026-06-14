@@ -53,8 +53,8 @@ init :: proc() {
 	//ab.app_add_event_handler(my_handler)
 
 	// TODO: check if called with startup args to avoid loading casa1
-	//ab.request_data_async("mailbox.dxf", nil, dxf_callback)
-	ab.request_data_async("casa1.dxf", nil, dxf_callback)
+	ab.request_data_async("mailbox.dxf", nil, dxf_callback)
+	//ab.request_data_async("casa1.dxf", nil, dxf_callback)
 
 	ab.request_data_async("NotoSansCJK-VF.otf.ttc", nil, assign_font)
 	//ab.request_data_async("Play-Regular.ttf", nil, assign_font)
@@ -64,6 +64,7 @@ init :: proc() {
 	id_toolbox := ui.panels_register_definition({  callback=panel_toolbox,   name="toolbox"})
 	id_viewport := ui.panels_register_definition({ callback=layout_viewport, name="viewport", grow=true})
 	id_layers := ui.panels_register_definition({   callback=layout_layers,   name="layers",   show_tab=true})
+	id_statusbar := ui.panels_register_definition({   callback=layout_statusbar,   name="statusbar",   show_tab=false})
 
 	main_vertical := ui.PanelLayoutGroup { direction = .Vertical }
 
@@ -75,6 +76,8 @@ init :: proc() {
 	append(&main_content.items, ui.PanelLayoutRegisteredItem {id_layers})
 
 	append(&main_vertical.items, main_content)
+
+	append(&main_vertical.items, ui.PanelLayoutRegisteredItem {id_statusbar})
 
 	panels.root = main_vertical
 
@@ -354,6 +357,14 @@ layout_layers :: proc() {
 			ui.layout_button(layer.name)
 		}
 	}
+
+	ui.layout_close()
+}
+
+layout_statusbar :: proc() {
+	ui.layout_container(ui.Layout_Linear_Horizontal{}, nil, "statusbar")
+
+	ui.layout_button("status bar content")
 
 	ui.layout_close()
 }
