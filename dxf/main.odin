@@ -53,9 +53,12 @@ init :: proc() {
 	//ab.app_add_event_handler(my_handler)
 
 	// TODO: check if called with startup args to avoid loading casa1
+	//ab.request_data_async("mailbox.dxf", nil, dxf_callback)
 	ab.request_data_async("casa1.dxf", nil, dxf_callback)
 
-	ab.request_data_async("ttf/Inter-Regular.ttf", nil, assign_font)
+	//ab.request_data_async("ttf/Interlude-Regular.ttf", nil, assign_font)
+	//ab.request_data_async("InterludeVariable.ttf", nil, assign_font)
+	ab.request_data_async("NotoSansCJK-VF.otf.ttc", nil, assign_font)
 	//ab.request_data_async("Play-Regular.ttf", nil, assign_font)
 
 
@@ -134,7 +137,7 @@ dxf_callback :: proc(result: ab.RequestResult) {
 	if model_loaded {
 		return
 	}
-	load_dxf_bytes(&result.bytes[0], len(result.bytes))
+	load_dxf_bytes_2(&result.bytes[0], len(result.bytes))
 }
 
 @(export)
@@ -149,7 +152,11 @@ my_buffer: [MY_BUFFER_SIZE]byte
 
 @(export)
 load_dxf_bytes :: proc "c" (ptr: [^]byte, size: int) {
-	context = runtime.default_context()
+	context = ab.ctx
+	load_dxf_bytes_2(ptr, size)
+}
+
+load_dxf_bytes_2 :: proc (ptr: [^]byte, size: int) {
 	bufff := string(ptr[:size])
 
 	model = model_from_dxf(ptr[:size])

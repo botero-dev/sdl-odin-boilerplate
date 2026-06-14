@@ -51,7 +51,10 @@ parse_section :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 	log.info("Parsing SECTION:", section_name)
 	defer log.info("Finished SECTION:", section_name)
 
-	if section_name == DXF_ENTITIES {
+	if section_name == DXF_HEADER {
+		parse_section_header(parse_state)
+		return
+	} else if section_name == DXF_ENTITIES {
 		parse_section_entities(parse_state, data)
 		return
 	} else if section_name == DXF_TABLES {
@@ -72,6 +75,65 @@ parse_section :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 		//log.info("code:", group_code, " :", content)
 	}
 
+}
+parse_section_header :: proc(parse_state: ^DXF_ParseState) {
+	for true {
+		group_code := parse_group_code(parse_state)
+		content := parse_content_string(parse_state)
+		if group_code == 0 {
+			assert(content == DXF_ENDSEC)
+			break
+		} else if group_code == 9 {
+			parse_header(parse_state, content)
+		} else {
+			log.error("When parsing HEADER found unexpected:", group_code, content)
+		}	
+	}
+}
+
+current_codes: [dynamic]DXF_Code
+current_values: [dynamic]string
+
+INSUNITS_VALUES := []string {
+	"Unitless",
+	"Inches",
+	"Feet",
+	"Miles",
+	"Millimeters",
+	"Centimeters",
+	"Meters",
+	"Kilometers",
+}
+
+parse_header :: proc(parse_state: ^DXF_ParseState, header_name: string) {
+	switch header_name {
+		case "$ACADVER":
+			acad_ver := parse_code_checked_string(parse_state, 1)
+			log.info("acad version:", acad_ver)
+		case "$DWGCODEPAGE":
+			codepage := parse_code_checked_string(parse_state, 3)
+			assert(codepage[0:5] == "ANSI_")
+			parse_state.data.header.codepage = strconv.parse_int(codepage[5:]) or_break
+		case "$INSUNITS": 
+			units := parse_code_checked_int(parse_state, 70) or_break
+			if units < len(INSUNITS_VALUES) {
+				log.info("Model units:", INSUNITS_VALUES[units])
+			} else {
+				log.info("Model units:", units)
+			}
+		case:
+			//clear(&current_codes)
+			//clear(&current_values)
+			next := peek_group_code(parse_state)
+			for next != 0 && next != 9 {
+				value_code := parse_group_code(parse_state)
+				value_string := parse_content_string(parse_state)
+				//append(&current_codes, value_code)
+				//append(&current_values, value_string)
+				next = peek_group_code(parse_state)
+			}
+			//log.info(header_name, current_codes, current_values[:])
+	}
 }
 
 parse_section_tables :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
@@ -224,6 +286,13 @@ DXF_Object :: struct {
 
 parse_table_layer :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 	layer := Table_Layer {}
+	layer.handle = parse_code_checked_string(parse_state, 5)
+
+	maybe_ext := peek_group_code(parse_state)
+	for maybe_ext == DXF_Code(102) {
+		parse_extension(parse_state)
+		maybe_ext = peek_group_code(parse_state)
+	}
 
 	done := false
 	for !done {
@@ -233,8 +302,6 @@ parse_table_layer :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 				done = true
 			case 2:
 				layer.name = parse_code_string(parse_state)
-			case 5:
-				layer.handle = parse_code_string(parse_state)
 			case 330:
 				layer.owner = parse_code_string(parse_state)
 			case 100:
@@ -257,6 +324,8 @@ parse_table_layer :: proc(parse_state: ^DXF_ParseState, data: ^DXF_Data) {
 				plot_style_handle := parse_code_string(parse_state)
 			case 420:
 				true_color := parse_code_string(parse_state)
+			case 1001:
+				parse_xdata(parse_state)
 			case:
 				value := parse_code_string(parse_state)
 				fmt.println(parse_state.line, "code:", code, ":", value)

@@ -17,6 +17,7 @@ DXF_ENDTAB :: DXF_Group("ENDTAB")
 DXF_ENTITIES :: DXF_Group("ENTITIES")
 DXF_EOF :: DXF_Group("EOF")
 DXF_HATCH :: DXF_Group("HATCH")
+DXF_HEADER :: DXF_Group("HEADER")
 DXF_INSERT :: DXF_Group("INSERT")
 DXF_LINE :: DXF_Group("LINE")
 DXF_LWPOLYLINE :: DXF_Group("LWPOLYLINE")
@@ -151,9 +152,32 @@ Entity_Dimension :: struct {
 	flags: string,
 }
 
+DXF_Codepage :: enum {
+	ANSI_874  = 874,     // Thai
+	ANSI_932  = 932,     // Japanese
+	ANSI_936  = 936,     // UnifiedChinese
+	ANSI_949  = 949,     // Korean
+	ANSI_950  = 950,     // TradChinese
+	ANSI_1250 = 1250,    // CentralEurope
+	ANSI_1251 = 1251,    // Cyrillic
+	ANSI_1252 = 1252,    // WesternEurope
+	ANSI_1253 = 1253,    // Greek
+	ANSI_1254 = 1254,    // Turkish
+	ANSI_1255 = 1255,    // Hebrew
+	ANSI_1256 = 1256,    // Arabic
+	ANSI_1257 = 1257,    // Baltic
+	ANSI_1258 = 1258,    // Vietnam
+}
 
+
+DXF_Header :: struct {
+	acadver: int,
+	codepage: int,
+}
 
 DXF_Data :: struct {
+	header: DXF_Header,
+
 	layers: [dynamic]Table_Layer,
 
 	points: [dynamic]Entity_Point,
