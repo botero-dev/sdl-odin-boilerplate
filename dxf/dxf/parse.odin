@@ -58,7 +58,9 @@ parse_section :: proc(parse_state: ^DXF_ParseState) {
 		parse_section_blocks(parse_state)
 		return
 	} else if section_name == DXF_ENTITIES {
+		parse_state.entities = &parse_state.data.entities
 		parse_section_entities(parse_state)
+		parse_state.entities = nil
 		return
 	} else if section_name == DXF_TABLES {
 		parse_section_tables(parse_state)
@@ -349,7 +351,7 @@ parse_section_blocks :: proc(parse_state: ^DXF_ParseState) {
 		next := parse_code_checked_line(parse_state, 0)
 		if next == DXF_BLOCK {
 			parse_block(parse_state)
-		} else if next == DXF_ENDBLK {
+		} else if next == DXF_ENDSEC {
 			break
 		} else {
 			log.error("unexpected group code when parsing block:", next)
@@ -373,6 +375,7 @@ parse_block :: proc(parse_state: ^DXF_ParseState) {
 	parse_state.entities = &block.entities
 	parse_section_entities(parse_state)
 	parse_state.entities = nil
+	append(&parse_state.data.blocks, block)
 }
 
 parse_endblk :: proc(parse_state: ^DXF_ParseState) {
@@ -381,7 +384,7 @@ parse_endblk :: proc(parse_state: ^DXF_ParseState) {
 }
 
 parse_section_entities :: proc(parse_state: ^DXF_ParseState) {
-	parse_state.entities = &parse_state.data.entities
+	assert(parse_state.entities != nil)
 	for true {
 		group_code := parse_group_code(parse_state)
 		content := parse_content_string(parse_state)
@@ -454,14 +457,13 @@ parse_section_entities :: proc(parse_state: ^DXF_ParseState) {
 	}
 
 	log.info("Finished parsing ENTITIES")
-	parse_state.entities = nil
 }
 
 
 parse_entity_header :: proc(parse_state: ^DXF_ParseState, entity: ^DXF_Entity) {
 	assert(entity != nil)
 	assert(parse_group_code(parse_state) == DXF_Code(5))	
-	entity.handle = parse_content_string(parse_state)
+	entity.handle = parse_line(parse_state)
 
 	maybe_ext := peek_group_code(parse_state)
 	for maybe_ext == DXF_Code(102) {
@@ -472,7 +474,7 @@ parse_entity_header :: proc(parse_state: ^DXF_ParseState, entity: ^DXF_Entity) {
 	maybe_owner := peek_group_code(parse_state)
 	if maybe_owner == DXF_Code(330) {
 		parse_group_code(parse_state)
-		entity.owner = parse_content_string(parse_state)
+		entity.owner = parse_line(parse_state)
 	}
 
 	entity.color = 256 // Color:ByLayer by default
@@ -482,7 +484,7 @@ parse_entity_header :: proc(parse_state: ^DXF_ParseState, entity: ^DXF_Entity) {
 		switch peek_group_code(parse_state) {
 			case DXF_Code(100):
 				parse_group_code(parse_state)
-				subclass := parse_content_string(parse_state)
+				subclass := parse_line(parse_state)
 			case DXF_Code(8):
 				parse_group_code(parse_state)
 				layer_name := parse_content_string(parse_state)
@@ -500,25 +502,25 @@ parse_entity_header :: proc(parse_state: ^DXF_ParseState, entity: ^DXF_Entity) {
 				entity.color = parse_code_int(parse_state) or_continue
 			case DXF_Code(67): // space
 				parse_group_code(parse_state)
-				space := parse_content_string(parse_state) // 0: model space, 1: paper space
+				space := parse_line(parse_state) // 0: model space, 1: paper space
 			case DXF_Code(6):
 				parse_group_code(parse_state)
-				linetype := parse_content_string(parse_state)
+				linetype := parse_line(parse_state)
 			case DXF_Code(48):
 				parse_group_code(parse_state)
-				linetype_scale := parse_content_string(parse_state)
+				linetype_scale := parse_line(parse_state)
 
 			case DXF_Code(370): // weight
 				parse_group_code(parse_state)
-				line_weight := parse_content_string(parse_state)
+				line_weight := parse_line(parse_state)
 
 			case DXF_Code(420):
 				parse_group_code(parse_state)
-				true_color := parse_content_string(parse_state)
+				true_color := parse_line(parse_state)
 				
 			case DXF_Code(440):
 				parse_group_code(parse_state)
-				transparency := parse_content_string(parse_state)
+				transparency := parse_line(parse_state)
 				
 			case:
 				unhandled = true
@@ -607,13 +609,15 @@ parse_entity_ellipse :: proc(parse_state: ^DXF_ParseState) -> (ok: bool) {
 
 parse_entity_insert :: proc(parse_state: ^DXF_ParseState) -> (ok: bool) {
 	insert := Entity_Insert {}
+	insert.scale = {1,1,1}
+	
 	parse_entity_header(parse_state, &insert)
 	done := false
 	for !done {
 		next := peek_group_code(parse_state)
 		switch next {
 			case DXF_Code(2):
-				insert.component_name = parse_code_string(parse_state)
+				insert.block_name = parse_code_string(parse_state)
 			case DXF_Code(10):
 				insert.center.x = parse_code_f64(parse_state) or_return
 			case DXF_Code(20):

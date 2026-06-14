@@ -4,8 +4,8 @@ import "dxf"
 
 
 
-convert_curves :: proc(file: dxf.DXF_Data, curves: ^[dynamic]CurveBezierCubic ) {
-	for spline in file.entities.splines {
+convert_curves :: proc(splines: []dxf.Entity_Spline, curves: ^[dynamic]CurveBezierCubic ) {
+	for spline in splines {
 		if len(spline.knots) == (len(spline.control_points) + int(spline.degree) + 1) {
 			segments := (len(spline.control_points) - 1) / int(spline.degree)
 			// can be simplified to bezier curve
@@ -44,7 +44,8 @@ convert_curves :: proc(file: dxf.DXF_Data, curves: ^[dynamic]CurveBezierCubic ) 
 			}
 
 			bezier := CurveBezierCubic {
-				points = spline.control_points
+				handle = spline.handle,
+				points = spline.control_points,
 			}
 			append(curves, bezier)
 		}

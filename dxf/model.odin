@@ -12,6 +12,7 @@ Model :: struct {
 }
 
 CurveBezierCubic :: struct {
+	handle: string,
 	points: []f64x3,
 }
 
@@ -30,7 +31,10 @@ model_from_dxf :: proc(bytes: []byte) -> Model {
 
 post_import :: proc(model: ^Model) {
 
-	convert_curves(model.dxf, &model.curves_list)
+	convert_curves(model.dxf.entities.splines[:], &model.curves_list)
+	for block in model.dxf.blocks {
+		convert_curves(block.entities.splines[:], &model.curves_list)
+	}
 
 	dxf_file := model.dxf
 

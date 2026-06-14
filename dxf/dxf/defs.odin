@@ -133,7 +133,7 @@ Entity_Viewport :: struct {
 
 Entity_Insert :: struct {
 	using entity: DXF_Entity,
-	component_name: string,
+	block_name: string,
 	center: f64x3,
 	scale: f64x3,
 	rotation: f64,

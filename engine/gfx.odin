@@ -263,6 +263,8 @@ update_matrix :: proc() {
 				0, 1, center.y,
 				0, 0, 1,
 			} * draw_matrix
+
+			draw_matrix = draw_matrix * draw_state.user_matrix
 	}
 }
 

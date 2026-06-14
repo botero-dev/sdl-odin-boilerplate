@@ -1,5 +1,7 @@
 package main
 
+import "core:log"
+import "core:c"
 import "core:strconv"
 import "core:strings"
 import "core:math"
@@ -424,43 +426,38 @@ draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
     }
 }
 
+current_block_color := 0
 
 vp_draw :: proc(vp: ViewportState) {
 	ab.draw_set_view_basis(vconv(vp.basis_x), vconv(vp.basis_y), vconv(vp.origin))
 
-    dxf_file := vp.data.dxf
-
     free_all(context.temp_allocator)
 
-    for text in dxf_file.entities.texts {
+    draw_entities(vp.data.dxf.entities, vp.data)
+}
+
+draw_entities :: proc (entities: dxf.DXF_Entities, model: ^Model) {
+    dxf_file := model.dxf
+
+    for text in entities.texts {
         color := entity_style(text, dxf_file).color
 
         draw_text(text, color)
     }
 
-    for text in dxf_file.entities.mtexts {
+    for text in entities.mtexts {
         draw_mtext(text, dxf_file)
     }
 
 
-    for circle in dxf_file.entities.circles {
+    for circle in entities.circles {
         gfx.draw_circle(
             {{f32(circle.center.x), f32(circle.center.y)}, f32(circle.radius)},
             {line = entity_style(circle, dxf_file)},
         )
     }
 
-    for arc in dxf_file.entities.arcs {
-        /*
-
-Entity_Arc :: struct {
-	using entity: DXF_Entity,
-	center: f64x3,
-	radius: f64,
-	extrusion: f64x3,
-	angle_range: f64x2,
-}
-    */
+    for arc in entities.arcs {
         style := entity_style(arc, dxf_file)
         angle_range := arc.angle_range * math.RAD_PER_DEG
         if angle_range.y < angle_range.x {
@@ -474,7 +471,7 @@ Entity_Arc :: struct {
         
     }
 
-    for line in dxf_file.entities.lines {
+    for line in entities.lines {
         style := entity_style(line, dxf_file)
         ab.draw_line(
             ab.renderer,
@@ -486,7 +483,7 @@ Entity_Arc :: struct {
 
     }
 
-    for polyline in dxf_file.entities.polylines {
+    for polyline in entities.polylines {
         style := entity_style(polyline, dxf_file)
         prev := polyline.points[0]
         bulge := polyline.bulges[0]
@@ -504,7 +501,16 @@ Entity_Arc :: struct {
 
     }
 
-    for curve in vp.data.curves_list {
+    for spline in entities.splines {
+        maybe_curve: Maybe(CurveBezierCubic)
+        for c in model.curves_list {
+            if c.handle == spline.handle {
+                maybe_curve = c
+            }
+        }
+
+        curve := maybe_curve.(CurveBezierCubic) or_continue
+
         num_segments := (len(curve.points) - 1) / 3
         for idx in 0 ..< num_segments {
             a := curve.points[idx * 3 + 0]
@@ -533,6 +539,51 @@ Entity_Arc :: struct {
 
             }
         }
+    }
+
+    for insert in entities.inserts {
+        ab.draw_push_state()
+        defer ab.draw_pop_state()
+
+        prev_color := current_block_color
+        current_block_color = insert.color
+        defer current_block_color = prev_color
+
+        user_matrix: matrix[3,3]f32 = 1
+        
+        translation: matrix[3,3]f32 = 1
+
+        translation[2] = { f32(insert.center.x), f32(insert.center.y), 1 }
+        
+        user_matrix *= translation
+
+
+        scale: matrix[3,3]f32 = 1
+        scale[0] = {f32(insert.scale.x), 0, 0}
+        scale[1] = {0, f32(insert.scale.y), 0}
+        user_matrix *= scale
+
+        rotate := linalg.matrix3_rotate(f32(insert.rotation) * math.RAD_PER_DEG, f32x3{0,0,1})
+        user_matrix *= rotate
+
+        ab.draw_set_matrix(user_matrix)
+
+        maybe_block: Maybe(dxf.Block)
+
+        for block in dxf_file.blocks {
+            if block.name == insert.block_name {
+                maybe_block = block
+                break
+            }
+        }
+
+        if maybe_block == nil {
+            log.warn("unable to find block", insert.block_name)
+        }
+
+        block_to_draw := maybe_block.(dxf.Block) or_continue
+        draw_entities(block_to_draw.entities, model)
+
     }
 
 }
@@ -668,7 +719,7 @@ entity_resolve_color_index :: proc(entity: dxf.DXF_Entity, file: dxf.DXF_Data, b
 	if index == 0 {
         // color: ByBlock
 		// TODO: resolve block color, which could map to bylayer?
-		index = rand.int_range(1, 3)
+		index = current_block_color
 	}
 
 	if index == 256 {
