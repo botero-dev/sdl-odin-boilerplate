@@ -56,8 +56,6 @@ init :: proc() {
 	//ab.request_data_async("mailbox.dxf", nil, dxf_callback)
 	ab.request_data_async("casa1.dxf", nil, dxf_callback)
 
-	//ab.request_data_async("ttf/Interlude-Regular.ttf", nil, assign_font)
-	//ab.request_data_async("InterludeVariable.ttf", nil, assign_font)
 	ab.request_data_async("NotoSansCJK-VF.otf.ttc", nil, assign_font)
 	//ab.request_data_async("Play-Regular.ttf", nil, assign_font)
 

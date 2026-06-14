@@ -328,6 +328,14 @@ draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
         font_size = step
     }
 
+    font := ab.get_font_with_size(font_id, font_size)
+    if font != nil {
+        wght := TTF.VARIATION("wght", 400)
+        ok := TTF.SetFontVariations(font, &wght, 1)
+        assert(ok == true)
+    }
+
+
     sdl_text := ab.get_text_with_font_size(font_id, font_size)
 
     dir_fwd /= f32(font_size)

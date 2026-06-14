@@ -126,6 +126,18 @@ SubString :: struct {
 	rect:                      SDL.Rect,
 }
 
+Variation :: struct {
+    tag: u32,      /**< The variation axis specified */
+    value: f32,    /**< The value of the variation axis */
+}
+
+VARIATION :: proc($key: string, value: f32)  -> Variation where len(key) == 4 {
+	key_bytes := (transmute(^[4]u8)raw_data(key))^
+	key_swizzled := transmute(u32)key_bytes.wzyx
+	return Variation{ key_swizzled, value }
+}
+
+
 @(default_calling_convention="c", link_prefix="TTF_", require_results)
 foreign lib {
 	Version :: proc() -> c.int ---
@@ -245,6 +257,9 @@ foreign lib {
 	SetFontScript :: proc(font: ^Font, script: u32) -> bool ---
 
 	SetFontLanguage :: proc(font: ^Font, language_bcp47: cstring) -> bool ---
+
+	GetFontVariations :: proc(font: ^Font, count: ^c.size_t) -> [^]Variation ---
+	SetFontVariations :: proc(font: ^Font, variations: [^]Variation, count: c.size_t) -> bool ---
 
 	GetGlyphMetrics :: proc(font: ^Font, ch: u32, minx, maxx, miny, maxy, advance: ^c.int) -> bool ---
 	GetGlyphKerning :: proc(font: ^Font, previous_ch: u32, ch: u32, kerning: ^c.int) -> bool ---
