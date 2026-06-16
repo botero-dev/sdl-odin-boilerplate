@@ -181,7 +181,7 @@ parse_table :: proc(parse_state: ^DXF_ParseState) {
 	if len(table_callbacks) == 0 {
 		table_callbacks[DXF_LTYPE] = parse_table_ltype
 		table_callbacks[DXF_LAYER] = parse_table_layer
-		//table_callbacks[DXF_DIMSTYLE] = parse_table_dimstyle
+		table_callbacks[DXF_DIMSTYLE] = parse_table_dimstyle
 	}
 
 	assert(parse_group_code(parse_state) == 2)
@@ -358,14 +358,28 @@ parse_table_layer :: proc(parse_state: ^DXF_ParseState) {
 
 Table_DimStyle :: struct {
 	using object: DXF_Object,
+	dimblk: string,
 	name: string,
-	color: int,
+	txt_size: f64,
+	color_dim: int,
+	color_ext: int,
+	color_txt: int,
 }
 
 parse_table_dimstyle :: proc(parse_state: ^DXF_ParseState) {
 	dimstyle := Table_DimStyle {}
-	dimstyle.handle = parse_code_checked_string(parse_state, 5)
-
+	dimstyle.color_dim = -1
+	dimstyle.color_ext = -1
+	dimstyle.color_txt = -1
+	next := peek_group_code(parse_state)
+	if next == 5 {
+		dimstyle.dimblk = parse_code_checked_string(parse_state, 5)
+		next = peek_group_code(parse_state)
+	}
+	if next == 105 {
+		dimstyle.handle = parse_code_checked_string(parse_state, 105)
+	}
+	
 	maybe_ext := peek_group_code(parse_state)
 	for maybe_ext == DXF_Code(102) {
 		parse_extension(parse_state)
@@ -385,23 +399,77 @@ parse_table_dimstyle :: proc(parse_state: ^DXF_ParseState) {
 			case 100:
 				_ = parse_code_string(parse_state)
 			case 70:
-				layer_flags := parse_code_string(parse_state) // 1:frozen 4:locked
-			case 62:
-				dimstyle.color = parse_code_int(parse_state) or_continue
-			
-			case 6:
-				line_type := parse_code_string(parse_state)
-			case 290:
-				plot_flag := parse_code_string(parse_state)
-			
-			case 370:
-				// positive values are hundredths of mm: 50:0.5mm
-				// -1:bylayer -2:byblock -3:default
-				line_weight := parse_code_int(parse_state) or_continue 
-			case 390:
-				plot_style_handle := parse_code_string(parse_state)
-			case 420:
-				true_color := parse_code_string(parse_state)
+				flags := parse_code_string(parse_state)
+
+			case 41:
+				dimasz := parse_code_f64(parse_state) or_continue
+			case 42:
+				dimexo := parse_code_f64(parse_state) or_continue
+			case 43:
+				dimdli := parse_code_f64(parse_state) or_continue
+			case 44:
+				dimexe := parse_code_f64(parse_state) or_continue
+			case 46:
+				dimdle := parse_code_f64(parse_state) or_continue
+			case 47:
+				dimtp := parse_code_f64(parse_state) or_continue
+			case 48:
+				dimtm := parse_code_f64(parse_state) or_continue
+
+			case 73:
+				dimtih := parse_code_int(parse_state) or_continue
+			case 74:
+				dimtoh := parse_code_int(parse_state) or_continue
+			case 77:
+				dimtad := parse_code_int(parse_state) or_continue
+			case 78:
+				dimzin := parse_code_int(parse_state) or_continue
+			case 79:
+				dimazin := parse_code_int(parse_state) or_continue
+
+			case 140:
+				dimstyle.txt_size = parse_code_f64(parse_state) or_continue
+			case 141:
+				dimcen := parse_code_f64(parse_state) or_continue
+			case 143:
+				dimgap := parse_code_f64(parse_state) or_continue
+			case 147:
+				dimtp := parse_code_f64(parse_state) or_continue
+
+			case 171:
+				dimtol := parse_code_int(parse_state) or_continue
+			case 172:
+				dimlim := parse_code_int(parse_state) or_continue
+			case 174:
+				dimtih := parse_code_int(parse_state) or_continue
+			case 176:
+				dimstyle.color_dim = parse_code_int(parse_state) or_continue
+			case 177:
+				dimstyle.color_ext = parse_code_int(parse_state) or_continue
+			case 178:
+				dimstyle.color_txt = parse_code_int(parse_state) or_continue
+
+			case 271:
+				dimdec := parse_code_int(parse_state) or_continue
+			case 272:
+				dimtdec := parse_code_int(parse_state) or_continue
+			case 274:
+				dimaltu := parse_code_int(parse_state) or_continue
+			case 283:
+				dimsd1 := parse_code_int(parse_state) or_continue
+			case 284:
+				dimsd2 := parse_code_int(parse_state) or_continue
+
+			case 340:
+				dimtxsty := parse_code_line(parse_state)
+			case 341:
+				dimldrblk := parse_code_line(parse_state)
+			case 342:
+				dimblk := parse_code_line(parse_state)
+
+			case 371:
+				dimlwd := parse_code_int(parse_state) or_continue
+
 			case 1001:
 				parse_xdata(parse_state)
 			case:
@@ -529,7 +597,7 @@ parse_section_entities :: proc(parse_state: ^DXF_ParseState) {
 		fmt.println(parse_state.line, "code:", group_code, ":", content)
 	}
 
-	log.info("Finished parsing ENTITIES")
+	//log.info("Finished parsing ENTITIES")
 }
 
 

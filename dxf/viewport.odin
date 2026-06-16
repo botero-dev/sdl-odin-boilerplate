@@ -627,7 +627,42 @@ draw_entities :: proc (entities: dxf.DXF_Entities, model: ^Model) {
     for dim in entities.dimensions {
         #partial switch d in dim {
             case dxf.Entity_Dimension_Aligned: {
-                style := entity_style(d.entity, dxf_file)
+                ent_style := entity_style(d, dxf_file)
+
+                color_dim := ent_style.color
+                color_ext := ent_style.color
+                color_txt := ent_style.color
+
+                dim_style: dxf.Table_DimStyle
+
+                found := false
+                for s in dxf_file.dimstyles {
+                    if d.style_name == s.name {
+                        dim_style = s
+                        found = true
+                        break
+                    }
+                }
+                
+                txt_size := f64(0)
+
+                if found {
+                    if dim_style.color_dim != -1 {
+                        color_dim = resolve_color(dim_style.color_dim)
+                    }
+                    if dim_style.color_ext != -1 {
+                        color_ext = resolve_color(dim_style.color_ext)
+                    }
+                    if dim_style.color_txt == 0 {
+                        
+                    } else if dim_style.color_txt != -1 {
+                        color_txt = resolve_color(dim_style.color_txt)
+                    }
+
+                    txt_size = dim_style.txt_size
+                }
+
+                //style := entity_style(d.entity, dxf_file)
         
                 // ab.draw_line(
                 //     ab.renderer,
@@ -652,21 +687,21 @@ draw_entities :: proc (entities: dxf.DXF_Entities, model: ^Model) {
                     {f32(d.pos_def.x), f32(d.pos_def.y)},
                     {f32(d.def_point_b.x), f32(d.def_point_b.y)},
                     1.0,
-                    style.color,
+                    color_ext,
                 )
                 ab.draw_line(
                     ab.renderer,
                     {f32(pos_end.x), f32(pos_end.y)},
                     {f32(d.def_point_a.x), f32(d.def_point_a.y)},
                     1.0,
-                    style.color,
+                    color_ext,
                 )
                 ab.draw_line(
                     ab.renderer,
                     {f32(d.pos_def.x), f32(d.pos_def.y)},
                     {f32(pos_end.x), f32(pos_end.y)},
                     1.0,
-                    style.color,
+                    color_dim,
                 )
 
                 text_to_draw: string = d.text_override
@@ -674,16 +709,19 @@ draw_entities :: proc (entities: dxf.DXF_Entities, model: ^Model) {
                     text_to_draw = fmt.tprintf("%f", d.measurement)
                 }
 
+                rot_mat := linalg.matrix3_rotate(d.angle * math.RAD_PER_DEG, f64x3{0, 0, -1})
+                txt_end := f64x3 {1, 0, 0} * rot_mat
+
                 text := dxf.Entity_Text {
                     content = text_to_draw,
                     pos = d.pos_text,
-                    end = {1, 0, 0},
-                    height = 0.1,
+                    end = txt_end,
+                    height = txt_size,
                     valign = .Middle,
                     hjustify = .Center
                 }
 
-                draw_text(text, style.color)
+                draw_text(text, color_txt)
 
             }
         }

@@ -56,6 +56,11 @@ parse_code_string :: proc(parse_state: ^DXF_ParseState) -> string {
 	return parse_content_string(parse_state)
 }
 
+parse_code_line :: proc(parse_state: ^DXF_ParseState) -> string {
+	_ = parse_group_code(parse_state)
+	return parse_line(parse_state)
+}
+
 parse_code_checked_string :: proc(parse_state: ^DXF_ParseState, in_code: DXF_Code) -> string {
 	code := parse_group_code(parse_state)
 	assert(code == in_code)
