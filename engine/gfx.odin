@@ -107,6 +107,7 @@ draw_pop_state :: proc() {
 	}
 
 	draw_state = reverting_draw_state
+	update_matrix()
 }
 
 draw_present :: proc() {

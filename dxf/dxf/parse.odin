@@ -99,16 +99,35 @@ parse_section_header :: proc(parse_state: ^DXF_ParseState) {
 current_codes: [dynamic]DXF_Code
 current_values: [dynamic]string
 
-INSUNITS_VALUES := []string {
-	"Unitless",
-	"Inches",
-	"Feet",
-	"Miles",
-	"Millimeters",
-	"Centimeters",
-	"Meters",
-	"Kilometers",
+DXF_Units :: enum {
+	Unitless,
+	Inches,
+	Feet,
+	Miles,
+	Millimeters,
+	Centimeters,
+	Meters,
+	Kilometers,
+	Microinches,
+	Mils,
+	Yards,
+	Angstroms,
+	Nanometers,
+	Microns,
+	Decimeters,
+	Decameters,
+	Hectometers,
+	Gigameters,
+	AstronomicalUnits,
+	LightYears,
+	Parsecs,
+	USSurveyFeet,
+	USSurveyInch,
+	USSurveyYard,
+	USSurveyMile,
 }
+
+
 
 parse_header :: proc(parse_state: ^DXF_ParseState, header_name: string) {
 	switch header_name {
@@ -120,12 +139,8 @@ parse_header :: proc(parse_state: ^DXF_ParseState, header_name: string) {
 			assert(codepage[0:5] == "ANSI_")
 			parse_state.data.header.codepage = strconv.parse_int(codepage[5:]) or_break
 		case "$INSUNITS": 
-			units := parse_code_checked_int(parse_state, 70) or_break
-			if units < len(INSUNITS_VALUES) {
-				log.info("Model units:", INSUNITS_VALUES[units])
-			} else {
-				log.info("Model units:", units)
-			}
+			units := DXF_Units(parse_code_checked_int(parse_state, 70) or_break)
+			log.info("Model units:", units)
 		case:
 			//clear(&current_codes)
 			//clear(&current_values)
@@ -166,6 +181,7 @@ parse_table :: proc(parse_state: ^DXF_ParseState) {
 	if len(table_callbacks) == 0 {
 		table_callbacks[DXF_LTYPE] = parse_table_ltype
 		table_callbacks[DXF_LAYER] = parse_table_layer
+		//table_callbacks[DXF_DIMSTYLE] = parse_table_dimstyle
 	}
 
 	assert(parse_group_code(parse_state) == 2)
@@ -338,6 +354,63 @@ parse_table_layer :: proc(parse_state: ^DXF_ParseState) {
 	}
 
 	append(&parse_state.data.layers, layer)
+}
+
+Table_DimStyle :: struct {
+	using object: DXF_Object,
+	name: string,
+	color: int,
+}
+
+parse_table_dimstyle :: proc(parse_state: ^DXF_ParseState) {
+	dimstyle := Table_DimStyle {}
+	dimstyle.handle = parse_code_checked_string(parse_state, 5)
+
+	maybe_ext := peek_group_code(parse_state)
+	for maybe_ext == DXF_Code(102) {
+		parse_extension(parse_state)
+		maybe_ext = peek_group_code(parse_state)
+	}
+
+	done := false
+	for !done {
+		code := peek_group_code(parse_state)
+		switch code {
+			case 0:
+				done = true
+			case 2:
+				dimstyle.name = parse_code_string(parse_state)
+			case 330:
+				dimstyle.owner = parse_code_string(parse_state)
+			case 100:
+				_ = parse_code_string(parse_state)
+			case 70:
+				layer_flags := parse_code_string(parse_state) // 1:frozen 4:locked
+			case 62:
+				dimstyle.color = parse_code_int(parse_state) or_continue
+			
+			case 6:
+				line_type := parse_code_string(parse_state)
+			case 290:
+				plot_flag := parse_code_string(parse_state)
+			
+			case 370:
+				// positive values are hundredths of mm: 50:0.5mm
+				// -1:bylayer -2:byblock -3:default
+				line_weight := parse_code_int(parse_state) or_continue 
+			case 390:
+				plot_style_handle := parse_code_string(parse_state)
+			case 420:
+				true_color := parse_code_string(parse_state)
+			case 1001:
+				parse_xdata(parse_state)
+			case:
+				value := parse_code_string(parse_state)
+				fmt.println(parse_state.line, "code:", code, ":", value)
+		}
+	}
+
+	append(&parse_state.data.dimstyles, dimstyle)
 }
 
 Block :: struct {
@@ -688,7 +761,7 @@ parse_entity_arc :: proc(parse_state: ^DXF_ParseState) -> (ok: bool) {
 }
 
 parse_entity_dimension :: proc(parse_state: ^DXF_ParseState) -> (ok: bool) {
-	dim := Entity_Dimension {}
+	dim := Entity_Dimension_Base {}
 	parse_entity_header(parse_state, &dim)
 
 	done := false
@@ -696,61 +769,80 @@ parse_entity_dimension :: proc(parse_state: ^DXF_ParseState) -> (ok: bool) {
 		next := peek_group_code(parse_state)
 		switch next {
 			case DXF_Code(2):
-				dim_block := parse_code_string(parse_state)
+				dim.block = parse_code_string(parse_state)
 	
 			case DXF_Code(10):
-				dim.def.x = parse_code_f64(parse_state) or_return
+				dim.pos_def.x = parse_code_f64(parse_state) or_return
 			case DXF_Code(20):
-				dim.def.y = parse_code_f64(parse_state) or_return
+				dim.pos_def.y = parse_code_f64(parse_state) or_return
 			case DXF_Code(30):
-				dim.def.z = parse_code_f64(parse_state) or_return
+				dim.pos_def.z = parse_code_f64(parse_state) or_return
 
 			case DXF_Code(11):
-				dim.text.x = parse_code_f64(parse_state) or_return
+				dim.pos_text.x = parse_code_f64(parse_state) or_return
 			case DXF_Code(21):
-				dim.text.y = parse_code_f64(parse_state) or_return
+				dim.pos_text.y = parse_code_f64(parse_state) or_return
 			case DXF_Code(31):
-				dim.text.z = parse_code_f64(parse_state) or_return
+				dim.pos_text.z = parse_code_f64(parse_state) or_return
 
 			case DXF_Code(70):
-				dim_flags := parse_code_string(parse_state)
+				dim.dim_type = Entity_Dimension_Type(parse_code_int(parse_state) or_continue)
 
 			case DXF_Code(1):
-				override_text := parse_code_string(parse_state)
+				dim.text_override = parse_code_string(parse_state)
 			case DXF_Code(71):
-				text_attachment := parse_code_string(parse_state)
+				dim.attach_point = Entity_Dimension_AttachPoint(parse_code_int(parse_state) or_continue)
 			case DXF_Code(42):
-				measurement := parse_code_string(parse_state)
+				dim.measurement = parse_code_f64(parse_state) or_continue
 
 			case DXF_Code(3):
-				dim_style := parse_code_string(parse_state)
+				dim.style_name = parse_code_string(parse_state)
+			
+			case:
+				done = true
+		}
+	}
 
-			case DXF_Code(100):
-				subclass := parse_code_string(parse_state)
+	subclass := parse_code_checked_line(parse_state, 100)
+	assert(subclass == "AcDbAlignedDimension")
 
+	dim_result: Entity_Dimension
+
+	dim_aligned := Entity_Dimension_Aligned { dim_base = dim }
+	done = false
+	for !done {
+		next := peek_group_code(parse_state)
+		switch next {
 			case DXF_Code(13):
-				line1_x := parse_code_string(parse_state)
+				dim_aligned.def_point_a.x = parse_code_f64(parse_state) or_continue
 			case DXF_Code(23):
-				line1_y := parse_code_string(parse_state)
+				dim_aligned.def_point_a.y = parse_code_f64(parse_state) or_continue
 			case DXF_Code(33):
-				line1_z := parse_code_string(parse_state)
+				dim_aligned.def_point_a.z = parse_code_f64(parse_state) or_continue
 
 			case DXF_Code(14):
-				line2_x := parse_code_string(parse_state)
+				dim_aligned.def_point_b.x = parse_code_f64(parse_state) or_continue
 			case DXF_Code(24):
-				line2_y := parse_code_string(parse_state)
+				dim_aligned.def_point_b.y = parse_code_f64(parse_state) or_continue
 			case DXF_Code(34):
-				line2_z := parse_code_string(parse_state)
+				dim_aligned.def_point_b.z = parse_code_f64(parse_state) or_continue
 
 			case DXF_Code(50):
-				rotation := parse_code_string(parse_state)
+				dim_aligned.angle = parse_code_f64(parse_state) or_continue
 
 			case:
 				done = true
 		}
 	}
 
+	parse_code_optional_ignore(parse_state, 100, "other_dimension")
+
 	parse_xdata(parse_state)
+
+	dim_result = dim_aligned
+
+	append(&parse_state.entities.dimensions, dim_result)
+
 	ok = true
 	return
 }

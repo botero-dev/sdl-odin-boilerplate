@@ -1,5 +1,6 @@
 package main
 
+import "core:fmt"
 import "core:log"
 import "core:c"
 import "core:strconv"
@@ -36,12 +37,11 @@ ViewportState :: struct {
 draw_text :: proc(text: dxf.Entity_Text, color: Color) {
     in_pos := text.pos
     content := text.content
-    entity := text.entity
     pos := [3]f32{f32(in_pos.x), f32(in_pos.y), 1}
 
-    dbg := f32(100)
-    ab.draw_line(ab.renderer, pos.xy + {-dbg, 0}, pos.xy + {dbg, 0}, 1, {1, 0, 0, 1})
-    ab.draw_line(ab.renderer, pos.xy + {0, -dbg}, pos.xy + {0, dbg}, 1, {1, 0, 0, 1})
+    // dbg := f32(1)
+    // ab.draw_line(ab.renderer, pos.xy + {-dbg, 0}, pos.xy + {dbg, 0}, 1, {1, 0, 0, 1})
+    // ab.draw_line(ab.renderer, pos.xy + {0, -dbg}, pos.xy + {0, dbg}, 1, {1, 0, 0, 1})
 
     new_pos := ab.draw_matrix * pos
 
@@ -112,9 +112,20 @@ draw_text :: proc(text: dxf.Entity_Text, color: Color) {
             case .Bottom:
                 ypos -= TTF.GetFontHeight(sdl_font)
         }
+        w, h: i32
+        font_size := TTF.GetStringSize(sdl_font, cstr, uint(len(content)),&w, &h)
+        xpos := i32(0)
+        #partial switch text.hjustify {
+            case .Left:
+                //nothing
+            case .Center:
+                xpos -= w / 2
+            case .Right:
+                xpos -= w
+        }
 
 
-        TTF.DrawRendererTextTx(sdl_text, 0, f32(ypos), &tx[0][0])
+        TTF.DrawRendererTextTx(sdl_text, f32(xpos), f32(ypos), &tx[0][0])
     }
 }
 
@@ -613,6 +624,72 @@ draw_entities :: proc (entities: dxf.DXF_Entities, model: ^Model) {
         draw_entities(block_to_draw.entities, model)
 
     }
+    for dim in entities.dimensions {
+        #partial switch d in dim {
+            case dxf.Entity_Dimension_Aligned: {
+                style := entity_style(d.entity, dxf_file)
+        
+                // ab.draw_line(
+                //     ab.renderer,
+                //     {f32(d.pos_text.x), f32(d.pos_text.y)},
+                //     {f32(d.def_point_b.x), f32(d.def_point_b.y)},
+                //     1.0,
+                //     style.color,
+                // )
+
+                delta_linestart_to_startpoint := d.def_point_b - d.pos_def
+                ds := delta_linestart_to_startpoint
+                line_dir := f64x3{ds.y, -ds.x, 0}
+
+                delta_linestart_to_endpoint := d.def_point_a - d.pos_def
+
+                line_end_relative := linalg.projection(delta_linestart_to_endpoint, line_dir)
+
+                pos_end := d.pos_def + line_end_relative
+
+                ab.draw_line(
+                    ab.renderer,
+                    {f32(d.pos_def.x), f32(d.pos_def.y)},
+                    {f32(d.def_point_b.x), f32(d.def_point_b.y)},
+                    1.0,
+                    style.color,
+                )
+                ab.draw_line(
+                    ab.renderer,
+                    {f32(pos_end.x), f32(pos_end.y)},
+                    {f32(d.def_point_a.x), f32(d.def_point_a.y)},
+                    1.0,
+                    style.color,
+                )
+                ab.draw_line(
+                    ab.renderer,
+                    {f32(d.pos_def.x), f32(d.pos_def.y)},
+                    {f32(pos_end.x), f32(pos_end.y)},
+                    1.0,
+                    style.color,
+                )
+
+                text_to_draw: string = d.text_override
+                if text_to_draw == "" {
+                    text_to_draw = fmt.tprintf("%f", d.measurement)
+                }
+
+                text := dxf.Entity_Text {
+                    content = text_to_draw,
+                    pos = d.pos_text,
+                    end = {1, 0, 0},
+                    height = 0.1,
+                    valign = .Middle,
+                    hjustify = .Center
+                }
+
+                draw_text(text, style.color)
+
+            }
+        }
+    }
+
+
 
 }
 

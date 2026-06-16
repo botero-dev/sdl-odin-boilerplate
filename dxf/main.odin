@@ -52,11 +52,11 @@ init :: proc() {
 	ui.create_window("Editor", {1280, 720})
 	//ab.app_add_event_handler(my_handler)
 
-	// TODO: check if called with startup args to avoid loading casa1
-	ab.request_data_async("mailbox.dxf", nil, dxf_callback)
+	// TODO: check if called with startup args to avoid loading `casa`1
+	//ab.request_data_async("mailbox.dxf", nil, dxf_callback)
 	//ab.request_data_async("bogota.dxf", nil, dxf_callback)
 	//ab.request_data_async("casa0.dxf", nil, dxf_callback)
-	//ab.request_data_async("casa1.dxf", nil, dxf_callback)
+	ab.request_data_async("casa1.dxf", nil, dxf_callback)
 	//ab.request_data_async("trex.dxf", nil, dxf_callback)
 
 	ab.request_data_async("NotoSansCJK-VF.otf.ttc", nil, assign_font)

@@ -164,14 +164,59 @@ Entity_Arc :: struct {
 	angle_range: f64x2,
 }
 
+Entity_Dimension_Type :: enum {
+	Default,
+	Aligned,
+	Angular,
+	Diameter,
+	Radius,
+	Angular3Point,
+	Ordinate,
+}
+Entity_Dimension_AttachPoint :: enum {
+	TopLeft = 1,
+	TopCenter,
+	TopRight,
+	MiddleLeft,
+	MiddleCenter,
+	MiddleRight,
+	BottomLeft,
+	BottomCenter,
+	BottomRight,
+}
 
-Entity_Dimension :: struct {
+Entity_Dimension_Base :: struct {
 	using entity: DXF_Entity,
 	block: string,
-	def: f64x3,
-	text: f64x3,
-	flags: string,
+	pos_def: f64x3,
+	pos_text: f64x3,
+	text_override: string,
+	dim_type: Entity_Dimension_Type,
+	attach_point: Entity_Dimension_AttachPoint,
+	measurement: f64,
+	style_name: string,
 }
+
+Entity_Dimension_Aligned :: struct {
+	using dim_base: Entity_Dimension_Base,
+	def_point_a: f64x3,
+	def_point_b: f64x3,
+	angle: f64
+}
+
+Entity_Dimension_Angular :: struct {
+	using dim_base: Entity_Dimension_Base,
+	// def_point_a: f64x3,
+	// def_point_b: f64x3,
+}
+
+Entity_Dimension :: union #no_nil {
+	Entity_Dimension_Aligned,
+	Entity_Dimension_Angular,
+}
+
+
+
 
 DXF_Codepage :: enum {
 	ANSI_874  = 874,     // Thai
@@ -215,6 +260,7 @@ DXF_Data :: struct {
 	header: DXF_Header,
 
 	layers: [dynamic]Table_Layer,
+	dimstyles: [dynamic]Table_DimStyle,
 	blocks: [dynamic]Block,
 	
 	entities: DXF_Entities,
