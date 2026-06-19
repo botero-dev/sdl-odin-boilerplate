@@ -767,9 +767,13 @@ ui_push_pointer_event :: proc(event: ^Event) {
 
 	sdl_event := event.sdl_event
 
-	if event.type != .Mouse {
-		return
+	#partial switch event.type {
+		case .Mouse, .Touch, .Pen:
+			break;
+		case:
+			return
 	}
+
 	receiver = 0
 
 	pressed: bool = false
@@ -794,7 +798,20 @@ ui_push_pointer_event :: proc(event: ^Event) {
 		wheel_data := sdl_event.wheel
 		wheel_delta += {wheel_data.x, wheel_data.y}
 		coords = {wheel_data.mouse_x, wheel_data.mouse_y}
+	
+	case .PEN_MOTION:
+		pen_data := sdl_event.pmotion
+		//coords = {pen_data.x, pen_data.y}
+	case .PEN_DOWN:
+		pen_data := sdl_event.ptouch
+		//coords = {}
+
+	case .PEN_PROXIMITY_IN:
+		pen_data := sdl_event.pproximity
+		//coords = {pen_data.x, pen_data.y}
+
 	}
+
 	clay.SetPointerState({coords.x, coords.y}, pressed)
 
 	finish_handling_mouse_input(event)

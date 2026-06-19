@@ -353,13 +353,23 @@ draw_viewport :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.R
 
 
 layout_layers :: proc() {
-	ui.layout_container(ui.Layout_Linear_Vertical{}, nil, "layers")
+	ui.layout_scrollview()
+	ui.layout_container(ui.Layout_Linear_Vertical{2}, nil, "layers")
 
 	if model_loaded {
 		for layer in model.dxf.layers {
-			ui.layout_button(layer.name)
+			ui.layout_container(ui.Layout_Linear_Horizontal{})
+				ui.layout_button("X")
+
+				ui.layout_linear_child(ui.LinearChildSizingFixed{width = {type = .Weight}, height={type=.Fit}})
+				ui.layout_container(ui.Layout_Extend{})
+					ui.layout_text(layer.name)
+				ui.layout_close()
+				ui.layout_button("")
+			ui.layout_close()
 		}
 	}
+	ui.layout_close()
 
 	ui.layout_close()
 }

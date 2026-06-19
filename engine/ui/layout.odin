@@ -1,5 +1,6 @@
 package ui
 
+import "engine:ui"
 import "core:log"
 
 import clay "../clay-odin"
@@ -15,14 +16,9 @@ layout_stack: [dynamic]ChildrenLayout
 
 layout_begin :: proc() {
 
-	if cache_overlay != nil {
-		log.info("overlay layout hint:", cache_overlay.?, "wasn't consumed in previous frame")
-		cache_overlay = nil
-	}
-	
-	if cache_linear != nil {
-		log.info("linear layout hint:", cache_linear.?, "wasn't consumed in previous frame")
-		cache_linear = nil
+	if layout_hint != nil {
+		log.info("layout hint:", layout_hint, "wasn't consumed in previous frame")
+		layout_hint = nil
 	}
 	
 
@@ -39,7 +35,7 @@ layout_begin :: proc() {
 	
 	clay.BeginLayout()
 
-	append(&layout_stack, Layout_Overlay{})
+	append(&layout_stack, Layout_Overlay_Float{})
 }
 
 layout_end :: proc() {
@@ -63,7 +59,8 @@ LayoutDirection :: enum {
 	Vertical,
 }
 
-Layout_Overlay :: struct {}
+Layout_Extend :: struct {}
+Layout_Overlay_Float :: struct {}
 
 Layout_Linear :: struct {
 	// container state
@@ -74,7 +71,8 @@ Layout_Linear_Horizontal :: distinct Layout_Linear
 Layout_Linear_Vertical :: distinct Layout_Linear
 
 ChildrenLayout :: union #no_nil {
-	Layout_Overlay,
+	Layout_Extend,
+	Layout_Overlay_Float,
 	Layout_Linear_Horizontal,
 	Layout_Linear_Vertical,
 }
@@ -112,30 +110,35 @@ OverlayChildSizing :: struct {
 	sizing_y: ChildSizingAxis,
 }
 
+LayoutHint :: union {
+	OverlayChildSizing,
+	LinearChildSizingFixed,
+}
 
-cache_overlay: Maybe(OverlayChildSizing)
-cache_linear: Maybe(LinearChildSizingFixed)
+layout_hint: LayoutHint
 
 layout_overlay_child :: proc(rule: OverlayChildSizing) {
-	if cache_linear != nil {
-		log.error("unconsumed layout hint '", cache_linear, "' before pushing '", rule, "'")
+	if layout_hint != nil {
+		log.error("unconsumed layout hint '", layout_hint, "' before pushing '", rule, "'")
 	}
 
 	current := layout_stack[len(layout_stack)-1]
 	#partial switch v in current {
-		case Layout_Overlay:
+		case Layout_Overlay_Float:
+			break;
+		case Layout_Extend:
 			break;
 		case:
-			//log.error("bad rule:", rule, " for current parent:", current)
+			log.error("bad rule:", rule, " for current parent:", current)
 	}
 
-	cache_overlay = rule
+	layout_hint = rule
 }
 
 
 layout_linear_child :: proc(rule: LinearChildSizingFixed) {
-	if cache_linear != nil {
-		log.error("unconsumed layout hint '", cache_linear, "' before pushing '", rule, "'")
+	if layout_hint != nil {
+		log.error("unconsumed layout hint '", layout_hint, "' before pushing '", rule, "'")
 	}
 
 	current := layout_stack[len(layout_stack)-1]
@@ -148,7 +151,7 @@ layout_linear_child :: proc(rule: LinearChildSizingFixed) {
 			log.error("bad rule:", rule, " for current parent:", current)
 	}
 
-	cache_linear = rule
+	layout_hint = rule
 }
 
 
@@ -173,6 +176,28 @@ convert_to_clay_rule :: proc(rule: Sizing) -> clay.SizingAxis {
 	return r
 }
 
+layout_scrollview :: proc(maybe_tag:Maybe(string) = nil) {
+	if tag, ok := maybe_tag.?; ok {
+		clay._OpenElementWithId(clay.ID(tag))
+	} else {
+		clay._OpenElement()
+	}
+
+	content_layout := ui.Layout_Extend {}
+
+	elem := clay.ElementDeclaration{}
+	apply_decl(&elem, content_layout)
+	elem.clip = {
+		vertical = true,
+		childOffset = clay.GetScrollOffset(),
+	}
+
+	clay.ConfigureOpenElement(elem)
+
+	append(&layout_stack, content_layout)
+
+}
+
 layout_container :: proc(children_layout: ChildrenLayout, style: ^StyleClass = nil,  maybe_tag:Maybe(string) = nil) {
 	if tag, ok := maybe_tag.?; ok {
 		clay._OpenElementWithId(clay.ID(tag))
@@ -187,6 +212,8 @@ layout_container :: proc(children_layout: ChildrenLayout, style: ^StyleClass = n
 		box_style := get_current_style(&style_tab_bar, BoxStyleColored)
 		apply_style_box_colored(&elem, box_style^)
 	}
+
+	elem = ab.DPI(elem)
 
 	clay.ConfigureOpenElement(elem)
 
@@ -209,30 +236,19 @@ apply_decl :: proc(elem: ^clay.ElementDeclaration, children_layout: ChildrenLayo
 	elem.layout.layoutDirection = direction
 
 
-	item_sizing := clay.Sizing {
-		width = clay.SizingGrow(),
-		height = clay.SizingFit(),
-	}
+	item_sizing := clay.Sizing {}
 
 	item_floating := clay.FloatingElementConfig {}
 
 	current := layout_stack[len(layout_stack)-1]
 	switch layout in current {
-		case Layout_Overlay:
+		case Layout_Overlay_Float:
 			item_floating.attachTo = .Parent
 			rule := OverlayChildSizing {}
 
-			if DEBUG {
-				log.info("overlay rule before:", rule)
-			}
-			
-			if cached_rule, ok := cache_overlay.?; ok {
+			if cached_rule, ok := layout_hint.(OverlayChildSizing); ok {
 				rule = cached_rule
-				cache_overlay = nil // is this really necessary/desired?
-			}
-			if DEBUG {
-				log.info("overlay rule:", rule)
-				log.info("cache:", cache_overlay)
+				layout_hint = nil // is this really necessary/desired?
 			}
 		
 			if rule.sizing_x == .Fill {
@@ -265,21 +281,47 @@ apply_decl :: proc(elem: ^clay.ElementDeclaration, children_layout: ChildrenLayo
 			
 			item_floating.attachment.element = point
 			item_floating.attachment.parent = point
+
+		case Layout_Extend:
+			// we shouldn't need this, but clay can't do overlay layout without 
+			// using "floating". but then the children won't affect parents during layout.
+			//
+			// So for now, we have layout_extend which is like overlay, but demands using only one child
+
+			rule := OverlayChildSizing {}
+			
+			if cached_rule, ok := layout_hint.(OverlayChildSizing); ok {
+				rule = cached_rule
+				layout_hint = nil // is this really necessary/desired?
+			}
+		
+			if rule.sizing_x == .Fill {
+				item_sizing.width = {type = .Grow}
+			} else {
+				item_sizing.width = {type = .Fit}
+			}
+			if rule.sizing_y == .Fill {
+				item_sizing.height = {type = .Grow}
+			} else {
+				item_sizing.height = {type = .Fit}
+			}
 		
 		case Layout_Linear_Horizontal:
 			rule := LinearChildSizingFixed {}
-			if in_rule, ok := cache_linear.?; ok {
+			rule.height = {type = .Weight} // in horizontal containers, elements fill vertically by default
+			if in_rule, ok := layout_hint.(LinearChildSizingFixed); ok {
 				rule = in_rule
-				cache_linear = nil
+				layout_hint = nil
 			}
 			item_sizing.width = convert_to_clay_rule(rule.width)
 			item_sizing.height = convert_to_clay_rule(rule.height)
 			//log.info(maybe_tag, item_sizing)
 		case Layout_Linear_Vertical:
 			rule := LinearChildSizingFixed {}
-			if in_rule, ok := cache_linear.?; ok {
+			rule.width = {type = .Weight} // in vertical containers, elements fill horizontally by default
+			if in_rule, ok := layout_hint.(LinearChildSizingFixed); ok {
 				rule = in_rule
-				cache_linear = nil
+				layout_hint = nil
 			}
 			item_sizing.width = convert_to_clay_rule(rule.width)
 			item_sizing.height = convert_to_clay_rule(rule.height)
@@ -342,7 +384,13 @@ layout_button_handler :: proc(text: string, variant: ^StyleClass = nil, info: ^a
 		style = &btn_style.hover_box
 	}
 
-	config_box_style(style^)
+	elem := clay.ElementDeclaration {}
+
+	child_layout := Layout_Extend{}
+	apply_decl(&elem, child_layout)
+	config_box_style(&elem, style^)
+	clay.ConfigureOpenElement(ab.DPI(elem))
+	append(&layout_stack, child_layout)
 	
 	text_style: ^TextStyle
 	text_style = &btn_style.idle_text
@@ -352,11 +400,11 @@ layout_button_handler :: proc(text: string, variant: ^StyleClass = nil, info: ^a
 	layout_close() // box
 }
 
-config_box_style :: proc(style: BoxStyle) {
-
+config_box_style :: proc(elem: ^clay.ElementDeclaration, style: BoxStyle) {
+	
 	switch s in style {
 		case BoxStyleColored:
-			config_box_colored(s)
+			config_box_colored(elem, s)
 		case BoxStyleTextured:
 			config_box_textured(s)
 	}
@@ -389,19 +437,16 @@ apply_style_box_colored :: proc(elem: ^clay.ElementDeclaration, style: BoxStyleC
 }
 	
 
-config_box_colored :: proc(style: BoxStyleColored) {
+config_box_colored :: proc(elem: ^clay.ElementDeclaration, style: BoxStyleColored) {
 
-	elem := clay.ElementDeclaration {
-		layout = {
-			padding = {
+	elem.layout.padding = {
 				u16(style.padding.left),
 				u16(style.padding.right),
 				u16(style.padding.top),
 				u16(style.padding.bottom),
-			},
-		},
-		backgroundColor = style.background,
-		border = {
+			}
+	elem.backgroundColor = style.background
+	elem.border = {
 			color = style.border_color,
 			width = {
 				u16(style.border_width.left),
@@ -410,15 +455,9 @@ config_box_colored :: proc(style: BoxStyleColored) {
 				u16(style.border_width.bottom),
 				0,
 			}
-		},
-		cornerRadius = transmute(clay.CornerRadius) style.corner_radii,
-	}
+		}
+	elem.cornerRadius = transmute(clay.CornerRadius) style.corner_radii
 
-	apply_decl(&elem, Layout_Linear_Horizontal{})
-
-	clay.ConfigureOpenElement(ab.DPI(elem))
-
-	append(&layout_stack, Layout_Linear_Horizontal{})
 }
 
 config_box_textured :: proc(style: BoxStyleTextured) {
@@ -462,7 +501,12 @@ layout_textbox :: proc(text: string, variant: ^StyleClass = nil, info: ^ab.Handl
 		style = &box_style.hover_box
 	}
 
-	config_box_style(style^)
+	elem := clay.ElementDeclaration{}
+    child_layout := Layout_Linear_Horizontal{}
+	apply_decl(&elem, child_layout)
+	config_box_style(&elem, style^)
+	clay.ConfigureOpenElement(ab.DPI(elem))
+	append(&layout_stack, child_layout)
 	
 	text_style: ^TextStyle
 	text_style = &box_style.idle_text

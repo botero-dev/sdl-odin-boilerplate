@@ -23,7 +23,9 @@ MappingIndex :: u32
 EventType :: enum {
 	Unknown,
 	Keyboard,
-	Mouse,
+	Mouse, // would cover both mouse and touchpads
+	Touch,
+	Pen,
 	Gamepad,
 }
 
@@ -175,6 +177,9 @@ app_handle_event :: proc(sdl_event: ^SDL.Event) -> SDL.AppResult {
 		event.type = .Mouse
 	case .PINCH_BEGIN, .PINCH_UPDATE, .PINCH_END:
 		event.type = .Mouse
+	case .PEN_PROXIMITY_IN, .PEN_PROXIMITY_OUT, .PEN_BUTTON_UP, .PEN_BUTTON_DOWN,
+		.PEN_DOWN, .PEN_UP, .PEN_MOTION, .PEN_AXIS:
+		event.type = .Pen
 	}
 
 	system_handler(&event)

@@ -1,6 +1,7 @@
 package ui
 
 import "core:log"
+import ab "engine:."
 
 import clay "../clay-odin"
 
@@ -141,7 +142,9 @@ panels_present_item :: proc (item: PanelLayoutItem) {
 panels_present_group :: proc (group: PanelLayoutGroup) {
     current := layout_stack[len(layout_stack)-1]
     #partial switch layout_type in current {
-        case Layout_Overlay:
+        case Layout_Extend:
+             layout_overlay_child({sizing_x = .Fill, sizing_y = .Fill})
+        case Layout_Overlay_Float:
              layout_overlay_child({sizing_x = .Fill, sizing_y = .Fill})
         case Layout_Linear_Horizontal:
             layout_linear_child({
@@ -157,7 +160,7 @@ panels_present_group :: proc (group: PanelLayoutGroup) {
     }	
 
     if group.direction == .Horizontal {
-        layout_container(Layout_Linear_Horizontal{separation = 4}) // todo: consider DPI
+        layout_container(Layout_Linear_Horizontal{separation = 4}) 
     }
     if group.direction == .Vertical {
         layout_container(Layout_Linear_Vertical{separation = 4})
@@ -175,7 +178,9 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
 
     current := layout_stack[len(layout_stack)-1]
     #partial switch layout_type in current {
-        case Layout_Overlay:
+        case Layout_Extend:
+             layout_overlay_child({sizing_x = .Fill, sizing_y = .Fill})
+        case Layout_Overlay_Float:
              layout_overlay_child({sizing_x = .Fill, sizing_y = .Fill})
         case Layout_Linear_Horizontal:
             layout_linear_child({
@@ -194,14 +199,14 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
     if definition.show_tab {
         layout_container(Layout_Linear_Vertical {separation = 0})
 
-        layout_linear_child({
-            width= {type = .Weight},
-            height= {type = .Fit},
-        })
-        layout_container(Layout_Linear_Horizontal {separation = 4}, &style_tab_bar)
-            layout_button(definition.name, &style_tab_button)
-            layout_button("other", &style_tab_button_inactive)
-        layout_close()
+            layout_linear_child({
+                width= {type = .Weight},
+                height= {type = .Fit},
+            })
+            layout_container(Layout_Linear_Horizontal {separation = 4}, &style_tab_bar)
+                layout_button(definition.name, &style_tab_button)
+                layout_button("other", &style_tab_button_inactive)
+            layout_close()
 
         layout_linear_child({
             width= {type = .Weight},
@@ -209,8 +214,9 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
         })
     }
 
-        
-    // opens acutal content
+    //layout_container(Layout_Overlay{}) // content container
+
+    // opens actual content
    	clay._OpenElement()
     
     panel := BoxStyleColored {
@@ -218,11 +224,22 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
         corner_radii = {0,0,0,0},
         background = panel_bgcolor
     }
-    config_box_style(panel)
+
+
+    elem := clay.ElementDeclaration {}
+    child_layout := Layout_Linear_Horizontal{}
+	apply_decl(&elem, child_layout)
+	config_box_style(&elem, panel)
+	clay.ConfigureOpenElement(ab.DPI(elem))
+	
+    // I want children to grow to fill the space, but I don't want to send this to apply_decl because it will set floating flag, which means they don't affect parent sizing
+    //append(&layout_stack, child_layout)
+    append(&layout_stack, Layout_Extend{}) 
+    
 
     definition.callback()
 
-    layout_close()
+    layout_close() // content container
 
 
     if definition.show_tab {
