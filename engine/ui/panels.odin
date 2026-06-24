@@ -1,7 +1,6 @@
 package ui
 
 import "core:log"
-import ab "engine:."
 
 import clay "../clay-odin"
 
@@ -217,25 +216,19 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
     //layout_container(Layout_Overlay{}) // content container
 
     // opens actual content
-   	clay._OpenElement()
     
+    _layout_create(Layout_Extend{})
+   	
+
     panel := BoxStyleColored {
         padding = {2,2,2,2},
         corner_radii = {0,0,0,0},
         background = panel_bgcolor
     }
 
-
-    elem := clay.ElementDeclaration {}
-    child_layout := Layout_Linear_Horizontal{}
-	apply_decl(&elem, child_layout)
-	config_box_style(&elem, panel)
-	clay.ConfigureOpenElement(ab.DPI(elem))
+    config_box_style(&clay_elem, panel)
 	
-    // I want children to grow to fill the space, but I don't want to send this to apply_decl because it will set floating flag, which means they don't affect parent sizing
-    //append(&layout_stack, child_layout)
-    append(&layout_stack, Layout_Extend{}) 
-    
+    _layout_open()
 
     definition.callback()
 

@@ -68,19 +68,19 @@ make_cmake_library() {
 	shift 2
 	local cmake_args=("$@")
 
-	# if [ ! -e "$INSTALL_PATH/lib/$lib_filename" ]; then
-		echo "Generating $INSTALL_PATH/lib/$lib_filename"
-		cmake_build_dir="$BUILD_CMAKE_PATH/$lib_name"
+	cmake_build_dir="$BUILD_CMAKE_PATH/$lib_name"
+	if [ ! -e "$cmake_build_dir" ]; then
+		echo "Generating cmake project: $cmake_build_dir"
 
 		cmake_cmd \
 			-S "$lib_source" \
 			-B "$cmake_build_dir" \
 			-DCMAKE_INSTALL_PREFIX="$INSTALL_PATH" \
 			"${cmake_args[@]}"
-		
-		cmake --build "$cmake_build_dir" --config "$BUILD_CONFIG" --parallel
-		cmake --install "$cmake_build_dir" --config "$BUILD_CONFIG"
-
-	# fi
+	fi
+	echo cmake --build "$cmake_build_dir" --config "$BUILD_CONFIG" --parallel
+	cmake --build "$cmake_build_dir" --config "$BUILD_CONFIG" --parallel > /dev/null
+	echo cmake --install "$cmake_build_dir" --config "$BUILD_CONFIG"
+	cmake --install "$cmake_build_dir" --config "$BUILD_CONFIG" > /dev/null
 }
 export -f make_cmake_library

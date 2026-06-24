@@ -1,9 +1,11 @@
 
 package engine
 
+import "engine:ui"
 import SDL "vendor:sdl3"
 
 import clay "clay-odin"
+import evt "events"
 
 
 event_retval: SDL.AppResult
@@ -17,88 +19,14 @@ app_terminate :: proc() {
 }
 
 
-MappingIndex :: u32
 
 
-EventType :: enum {
-	Unknown,
-	Keyboard,
-	Mouse, // would cover both mouse and touchpads
-	Touch,
-	Pen,
-	Gamepad,
-}
 
-// Inspired on HTML
-EventPhase :: enum {
-	Capturing,
-	Bubbling,
-	// no Target event as events get always triggered.
-}
-
-EventMapping :: struct {
-	type: EventType,
-	data: EventMappingKeyboard,
-}
-
-EventMappingKeyboard :: struct {
-	scancode: SDL.Scancode,
-}
-
-Event :: struct {
-	type:      EventType,
-	phase:     EventPhase,
-	handled:   bool,
-	sdl_event: ^SDL.Event,
-}
-
-
-action_map: [dynamic]EventMapping
-
-EventHandler :: #type proc(event: ^Event)
+Event :: evt.Event
+MappingIndex :: evt.MappingIndex
+EventHandler :: evt.EventHandler
 
 event_handler_stack: [dynamic]EventHandler
-
-
-create_keyboard_mapping :: proc(scancode: SDL.Scancode) -> MappingIndex {
-	if action_map == nil {
-		// create empty mapping at index 0
-		append(&action_map, EventMapping{})
-	}
-	new_mapping := EventMapping {
-		type = .Keyboard,
-		data = {scancode},
-	}
-	index := u32(len(action_map))
-	append(&action_map, new_mapping)
-	return index
-}
-
-
-match_mapping_button_ptr :: proc(event: ^Event, mapping_idx: u32) -> (state: bool, matches: bool) {
-	return match_mapping_button_val(event^, mapping_idx)
-}
-
-match_mapping_button_val :: proc(event: Event, mapping_idx: u32) -> (state: bool, matches: bool) {
-	mapping := action_map[mapping_idx]
-	if event.type != mapping.type {
-		return false, false
-	}
-	if event.type == .Keyboard {
-		key := event.sdl_event.key
-		if key.scancode == mapping.data.scancode {
-			return key.down, true
-		}
-	}
-
-	return false, false
-}
-
-match_mapping_button :: proc {
-	match_mapping_button_val,
-	match_mapping_button_ptr,
-}
-
 
 input_fullscreen: MappingIndex
 input_quit: MappingIndex
@@ -106,13 +34,13 @@ input_inspector: MappingIndex
 
 app_event_init :: proc() {
 
-	input_fullscreen = create_keyboard_mapping(.F11)
-	input_quit = create_keyboard_mapping(.ESCAPE)
-	input_inspector = create_keyboard_mapping(.F8)
+	input_fullscreen = evt.create_keyboard_mapping(.F11)
+	input_quit = evt.create_keyboard_mapping(.ESCAPE)
+	input_inspector = evt.create_keyboard_mapping(.F8)
 
 	app_add_event_handler(system_handler)
-	app_add_event_handler(nav_handle_input)
-	app_add_event_handler(ui_push_pointer_event)
+	app_add_event_handler(ui.nav_handle_input)
+	app_add_event_handler(ui.ui_push_pointer_event)
 }
 
 app_add_event_handler :: proc(in_handler: EventHandler) {
@@ -145,18 +73,18 @@ system_handler :: proc(event: ^Event) {
 		//ui_dirty = true
 	}
 
-	if pressed, matches := match_mapping_button(event, input_fullscreen); matches && pressed {
+	if pressed, matches := evt.match_mapping_button(event, input_fullscreen); matches && pressed {
 		event.handled = true
 		current_fullscreen := (SDL.GetWindowFlags(window) & SDL.WINDOW_FULLSCREEN) != {}
 		SDL.SetWindowFullscreen(window, !current_fullscreen)
 	}
 
-	if pressed, matches := match_mapping_button(event, input_quit); matches && pressed {
+	if pressed, matches := evt.match_mapping_button(event, input_quit); matches && pressed {
 		event.handled = true
 		app_quit()
 	}
 
-	if pressed, matches := match_mapping_button(event, input_inspector); matches && pressed {
+	if pressed, matches := evt.match_mapping_button(event, input_inspector); matches && pressed {
 		event.handled = true
 		clay.SetDebugModeEnabled(true)
 	}

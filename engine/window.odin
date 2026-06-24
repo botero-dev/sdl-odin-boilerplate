@@ -1,11 +1,10 @@
-package ui
+package engine
 
 import "core:strings"
 
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
 
-import ab ".."
 
 create_window :: proc(name: string, size: [2]i32) -> bool {
 
@@ -29,8 +28,8 @@ create_window :: proc(name: string, size: [2]i32) -> bool {
 	)
     if ! success { return false }
 
-   	ab.ui_init()
-	ab.gfx_init(renderer, window)
+   	ui_init()
+	gfx_init(renderer, window)
 	
     return success;
 }

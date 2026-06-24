@@ -49,7 +49,7 @@ init :: proc() {
 		log.info("found driver:", driver)
 	}
 
-	ui.create_window("Editor", {1280, 720})
+	ab.create_window("Editor", {1280, 720})
 	//ab.app_add_event_handler(my_handler)
 
 	// TODO: check if called with startup args to avoid loading `casa`1
@@ -284,8 +284,8 @@ iterate :: proc() {
 
 	SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 0)
 	SDL.RenderClear(ab.renderer)
-	ab.ui_idle(0.01);
-	ui.layout_begin()
+	ui.ui_idle(0.01);
+	ui.layout_begin({f32(ab.win_size.x), f32(ab.win_size.y)}, ab.dpi)
 	/////////////////////////////////////
 
 	// ui.layout_container(ui.Layout_Linear_Horizontal{})
@@ -315,7 +315,7 @@ viewport_render_data := ab.CustomRenderData {
 
 layout_viewport :: proc () {
 
-	ab.ui_pointer_handler(my_handler)
+	ui.ui_pointer_handler(my_handler)
 
 	clay.UI(clay.ID("clock"))(
 			{
