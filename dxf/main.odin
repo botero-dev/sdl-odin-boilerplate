@@ -16,6 +16,7 @@ import "engine:gfx"
 import "engine:ui"
 
 import SDL "vendor:sdl3"
+import TTF "vendor:sdl3/ttf"
 import clay "engine:clay-odin"
 
 import "dxf"
@@ -131,7 +132,7 @@ assign_font :: proc(result: ab.RequestResult) {
 	assert(len(bytes) != 0)
 	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
 
-	font_id = ab.load_font_io(io)
+	font_id = ui.load_font_io(io)
 }
 
 model: Model
@@ -293,12 +294,13 @@ iterate :: proc() {
 	// layout_layers()
 	// ui.layout_close()
 
-	
 	ui.panels_present_layout(panels)
 
 	/////////////////////////////////////////
 	ui.layout_end()
 	ab.render_layout(&ui.render_commands)
+
+	//layout_draw()
 
 	ab.draw_present()
 
@@ -306,6 +308,24 @@ iterate :: proc() {
 	if (err != nil && len(err) != 0) {
 		fmt.println(err)
 
+	}
+}
+
+layout_draw :: proc() {
+	corners := ab.CornerRadii {}
+	num_items := len(ui.layout_state.items_tree)
+	for idx in 0..<num_items {
+		decl := ui.layout_state.items_decl[idx]
+		item := ui.layout_state.items_tree[idx]
+		if item.color.a != 0 {
+			ab.draw_box_filled(transmute(ab.Rect)item.layout_rect, corners, item.color)
+		}
+		if decl.is_text {
+			cstr := cstring(raw_data(decl.text))
+		    sdl_text := ui.get_text_with_font_size(decl.text_font, decl.text_size)
+			TTF.SetTextString(sdl_text, cstr, uint(len(decl.text)))
+			TTF.DrawRendererText(sdl_text, f32(item.layout_rect.x), f32(item.layout_rect.y))
+		}
 	}
 }
 

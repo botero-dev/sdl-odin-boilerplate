@@ -9,10 +9,11 @@ import "core:log"
 import "core:math"
 import "core:math/linalg"
 
+import "ui"
+
 helper: ^SDL.Texture
 
 renderer: ^SDL.Renderer
-text_engine: ^TTF.TextEngine
 window: ^SDL.Window
 
 TEX_SIZE :: 2
@@ -30,7 +31,7 @@ gfx_init :: proc(in_renderer: ^SDL.Renderer, in_window: ^SDL.Window) {
 	window = in_window
 	SDL.SetRenderVSync(renderer, 1)
 
-	text_engine = TTF.CreateRendererTextEngine(renderer)
+	ui.text_engine = TTF.CreateRendererTextEngine(renderer)
 
 
 	helper = SDL.CreateTexture(renderer, .RGBA32, .TARGET, 2, 2)

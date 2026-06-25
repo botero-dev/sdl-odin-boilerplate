@@ -83,7 +83,7 @@ render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
 			string_slice := text_data.stringContents
 			color := text_data.textColor
 
-			text := get_text_with_font_size(text_data.fontId, text_data.fontSize)
+			text := ui.get_text_with_font_size(text_data.fontId, text_data.fontSize)
 
 			if text != nil {
 				color *= draw_state.modulate
@@ -152,25 +152,6 @@ CustomRenderData :: struct {
 }
 
 
-FontData :: struct {
-	font_io: ^SDL.IOStream,
-	sizes:   map[u16]^TTF.Font,
-}
-
-loaded_fonts: u16 = 0 // we reserve fontid=0 for null font
-fonts: [dynamic]FontData
-
-load_font_io :: proc(io: ^SDL.IOStream) -> u16 {
-	new_font := FontData {
-		font_io = io,
-	}
-	loaded_font_id := loaded_fonts
-	log.info("set font io:", loaded_font_id)
-	append(&fonts, new_font)
-	loaded_fonts += 1
-	return loaded_font_id
-}
-
 // TextElementConfig :: struct {
 // 	userData:           rawptr,
 // 	textColor:          Color,
@@ -189,59 +170,6 @@ load_font_io :: proc(io: ^SDL.IOStream) -> u16 {
 // }
 
 
-clay_measure_text :: proc "c" (
-	text: clay.StringSlice,
-	config: ^clay.TextElementConfig,
-	userData: rawptr,
-) -> clay.Dimensions {
-	context = ctx
-	font := get_font_with_size(config.fontId, config.fontSize)
-	if font == nil {
-		log.info("unable to calculate font size")
-		return {}
-	}
-	size := [2]c.int{}
-	TTF.GetStringSize(font, cstring(text.chars), uint(text.length), &size.x, &size.y)
-	return {width = f32(size.x), height = f32(size.y)}
-}
-
-NIL_FONT :: ~u16(0)
-
-get_font_with_size :: proc(font_id: u16, size: u16) -> ^TTF.Font {
-	if font_id == NIL_FONT {
-		return nil
-	}
-	if int(font_id) >= len(fonts) {
-		log.info("invalid font id, for null font use NIL_FONT")
-		return nil
-	}
-	font := &fonts[font_id]
-	font_size, ok := font.sizes[size]
-	if !ok {
-		font_size = TTF.OpenFontIO(font.font_io, false, f32(size))
-		font.sizes[size] = font_size
-	}
-	return font_size
-}
-
-
-// single text object gets reused
-single_text: ^TTF.Text
-
-get_text_with_font_size :: proc(font_id: u16, size: u16) -> ^TTF.Text {
-	//log.info("get_text_with_size")
-	font := get_font_with_size(font_id, size)
-	if font == nil {
-		return nil
-	}
-	if single_text == nil {
-		single_text = TTF.CreateText(text_engine, font, "My Text", 0)
-	}
-	TTF.SetTextFont(single_text, font)
-	return single_text
-}
-
-
 clay_memory: []byte
 
 ui_init :: proc() {
@@ -251,7 +179,7 @@ ui_init :: proc() {
 	clay_memory = make([]byte, min_size)
 	clay_arena := clay.CreateArenaWithCapacityAndMemory(uint(min_size), &clay_memory[0])
 	clay.Initialize(clay_arena, {}, {handler = clay_error_handler})
-	clay.SetMeasureTextFunction(clay_measure_text, nil)
+	clay.SetMeasureTextFunction(ui.clay_measure_text, nil)
 	clay.SetCullingEnabled(false)
 
 	request_data_async("InterVariable.ttf", nil, assign_font)
@@ -264,11 +192,11 @@ assign_font :: proc(result: RequestResult) {
 	assert(len(bytes) != 0)
 	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
 
-	default_font_id = load_font_io(io)
+	default_font_id = ui.load_font_io(io)
 }
 
 
-default_font_id: u16 = NIL_FONT
+default_font_id: u16 = ui.NIL_FONT
 
 
 

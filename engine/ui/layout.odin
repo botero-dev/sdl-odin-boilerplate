@@ -292,6 +292,7 @@ layout_text_dynamic :: proc(text: string, in_config: ^clay.TextElementConfig = n
 		config = text_config_default
 	}
 	clay.TextDynamic(text, config)
+	_layout_text(text, config.fontSize, config.fontId)
 }
 
 layout_text :: proc {

@@ -65,7 +65,7 @@ draw_text :: proc(text: dxf.Entity_Text, color: Color) {
         font_size = step
     }
 
-    sdl_font := ab.get_font_with_size(font_id, font_size)
+    sdl_font := ui.get_font_with_size(font_id, font_size)
     if sdl_font != nil {
         wght := TTF.VARIATION("wght", 400)
         ok := TTF.SetFontVariations(sdl_font, &wght, 1)
@@ -74,7 +74,7 @@ draw_text :: proc(text: dxf.Entity_Text, color: Color) {
         //TTF.SetFontLanguage(sdl_font, "ja") // ja, zh
     }
 
-    sdl_text := ab.get_text_with_font_size(font_id, font_size)
+    sdl_text := ui.get_text_with_font_size(font_id, font_size)
 
     dir_fwd /= f32(font_size)
     dir_up := linalg.cross(dir_fwd, [3]f32{0, 0, -1})
@@ -369,7 +369,7 @@ draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
         font_size = step
     }
 
-    font := ab.get_font_with_size(font_id, font_size)
+    font := ui.get_font_with_size(font_id, font_size)
     if font != nil {
         wght := TTF.VARIATION("wght", 400)
         ok := TTF.SetFontVariations(font, &wght, 1)
@@ -377,7 +377,7 @@ draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
     }
 
 
-    sdl_text := ab.get_text_with_font_size(font_id, font_size)
+    sdl_text := ui.get_text_with_font_size(font_id, font_size)
 
     dir_fwd /= f32(font_size)
     dir_up := linalg.cross(dir_fwd, [3]f32{0, 0, -1})
@@ -897,7 +897,7 @@ entity_style :: proc(entity: dxf.DXF_Entity, file: dxf.DXF_Data) -> gfx.LineStyl
 
 
 
-font_id := ab.NIL_FONT
+font_id := ui.NIL_FONT
 font_steps := []u16 {
 	8,
 	10,

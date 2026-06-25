@@ -1,5 +1,7 @@
 package ui
 
+import "core:strings"
+import "core:mem"
 import "core:fmt"
 import clay "../clay-odin"
 
@@ -36,7 +38,11 @@ _layout_set_default_config :: proc() {
 
 }
 
+text_arena_mem : [1024*1024]u8
+text_arena: mem.Arena
+
 _layout_begin :: proc(in_scale_factor: f32) {
+	mem.arena_init(&text_arena, text_arena_mem[:])
     scale_factor = in_scale_factor
    	clay.BeginLayout()
 	clear(&layout_state.items_decl)	
@@ -78,17 +84,20 @@ _layout_create :: proc(in_child_layout: ChildrenLayout) {
 	append(&layout_stack, child_layout)
 }
 
-_layout_open :: proc() {
+_layout_open :: proc(comment: string = "") {
     clay.ConfigureOpenElement(DPI(clay_elem))
 	item_decl := &layout_state.items_decl[new_item_idx]
 	item_decl.children_layout = child_layout
 	item_decl.parent_idx = container_idx
 
-	item_decl.padding = {4,4,4,4}
+	p := clay_elem.layout.padding
+	item_decl.padding = {f32(p.left), f32(p.right), f32(p.top), f32(p.bottom)}
+
+	item_decl.color = clay_elem.backgroundColor
+	item_decl.comment = comment
 	
 	
 	container_idx = new_item_idx
-	
 }
 
 _layout_close :: proc() {
@@ -97,13 +106,42 @@ _layout_close :: proc() {
 	container_idx = layout_state.items_decl[container_idx].parent_idx
 }
 
+_layout_text :: proc(text: string, size: u16, font: u16) -> int {
+	allocator := mem.arena_allocator(&text_arena)
+
+	new_string := strings.clone(text, allocator)
+
+	if container_idx != -1 {
+		layout_state.items_decl[container_idx].num_children += 1
+	}
+
+	new_item_idx = len(layout_state.items_decl)
+	append(&layout_state.items_decl, LayoutItemDeclaration {})
+	item_decl := &layout_state.items_decl[new_item_idx]
+	item_decl.layout_hint = layout_hint
+
+	item_decl.is_text = true
+	item_decl.text = new_string
+	item_decl.text_font = font
+	item_decl.text_size = size
+	return new_item_idx
+}
+
+
+
 LayoutItemDeclaration :: struct {
 	children_layout: ChildrenLayout,
 	slot_config: int,
 	parent_idx: int,
 	num_children: int,
 	padding: BoxOffsets,
+	color: Color,
 	layout_hint: LayoutHint, // hint to layout within parent
+	is_text: bool,
+	text: string,
+	text_font: u16,
+	text_size: u16,
+	comment: string,
 }
 
 LayoutItemResult :: struct {
@@ -111,6 +149,7 @@ LayoutItemResult :: struct {
 	weight_sum: f32,
     layout_rect: Rect,
 	pointer_rect: Rect,
+	color: Color,
 }
 
 // will hold last computed layout state. It will also hold data needed to resolve mouse events.
@@ -127,9 +166,6 @@ LayoutState :: struct {
 layout_state: LayoutState
 
 _layout_compute :: proc() {
-	fmt.println()
-	fmt.println()
-	fmt.println()
 	// fitting pass: goes over everything to tell what are the minimum sizes desired for things
 	layout_cursor = 0
 	_layout_item()
@@ -140,17 +176,25 @@ _layout_compute :: proc() {
 	_layout_filling()
 
 	layout_cursor = 0
-	print_layout_result()
+	//print_layout_result()
 }
 
 indent: int = 0
 print_layout_result :: proc() {
+	fmt.println()
+	fmt.println()
+	fmt.println()
 	item_base := layout_state.items_decl[layout_cursor]
 	item_result := layout_state.items_tree[layout_cursor]
 	for idx in 0..<indent {
 		fmt.print(" | ")
 	}
 	fmt.print(" +-")
+
+	if len(item_base.comment) != 0 {
+		fmt.printf("(%s) ", item_base.comment)
+	}
+
 	fmt.println(item_base)
 	for idx in 0..<indent {
 		fmt.print(" | ")
@@ -165,8 +209,6 @@ print_layout_result :: proc() {
 	indent -= 1
 }
 
-
-
 layout_cursor := 0
 _layout_item :: proc() -> int {
 	index := layout_cursor
@@ -175,43 +217,52 @@ _layout_item :: proc() -> int {
 	layout_state.layout_idx_current = index
 	
 	append(&layout_state.items_tree, LayoutItemResult {})
-	
+
+	layout_state.items_tree[index].color = layout_state.items_decl[index].color
+
 	item := layout_state.items_decl[index]
+
+	fit_size: f32x2
+	weight_sum: f32
+
+	if item.comment == "layers" {
+		//fmt.printf("", i32(2))
+	}
 
 	for idx in 0..<item.num_children {
 		created_item_idx :=_layout_item()
 		child_item := layout_state.items_decl[created_item_idx]
 		child_result := layout_state.items_tree[created_item_idx]
-		layout_result := &layout_state.items_tree[index]
 		switch children_layout in item.children_layout {
 			case Layout_Extend:
-					layout_result.fit_size.x = max(layout_result.fit_size.x, child_result.fit_size.x)
-					layout_result.fit_size.y = max(layout_result.fit_size.y, child_result.fit_size.y)
+					fit_size.x = max(fit_size.x, child_result.fit_size.x)
+					fit_size.y = max(fit_size.y, child_result.fit_size.y)
 			case Layout_Overlay_Float:
-					layout_result.fit_size.x = max(layout_result.fit_size.x, child_result.fit_size.x)
-					layout_result.fit_size.y = max(layout_result.fit_size.y, child_result.fit_size.y)
+					fit_size.x = max(fit_size.x, child_result.fit_size.x)
+					fit_size.y = max(fit_size.y, child_result.fit_size.y)
 			case Layout_Linear_Horizontal:
-					layout_result.fit_size.y = max(layout_result.fit_size.y, child_result.fit_size.y)
-					if hint, ok := child_item.layout_hint.(LinearChildSizingFixed); ok {
-						if hint.width.type == .Weight {
-							layout_result.weight_sum += hint.width.amount
-						}
+					fit_size.y = max(fit_size.y, child_result.fit_size.y)
+					hint, ok := child_item.layout_hint.(LinearChildSizingFixed)
+					if ok && hint.width.type == .Weight {
+						weight_sum += hint.width.amount
 					} else {
-						layout_result.fit_size.x += child_result.fit_size.x
+						fit_size.x += child_result.fit_size.x
 					}
 			case Layout_Linear_Vertical:
-					layout_result.fit_size.x = max(layout_result.fit_size.x, child_result.fit_size.x)
-					if hint, ok := child_item.layout_hint.(LinearChildSizingFixed); ok {
-						if hint.height.type == .Weight {
-							layout_result.weight_sum += hint.height.amount
-						}
+					fit_size.x = max(fit_size.x, child_result.fit_size.x)
+					hint, ok := child_item.layout_hint.(LinearChildSizingFixed)
+					if ok && hint.height.type == .Weight {
+						weight_sum += hint.height.amount
 					} else {
-						layout_result.fit_size.y += child_result.fit_size.y
+						fit_size.y += child_result.fit_size.y
 					}
 		}
 	}
 
 	layout_result := &layout_state.items_tree[index]
+	layout_result.fit_size = fit_size
+	layout_result.weight_sum = weight_sum
+
 	#partial switch children_layout in item.children_layout {
 
 		case Layout_Linear_Horizontal:
@@ -227,7 +278,20 @@ _layout_item :: proc() -> int {
 	//calc_fit_size()
 	layout_result.fit_size.x += item.padding.left + item.padding.right
 	layout_result.fit_size.y += item.padding.top + item.padding.bottom
-	assert(layout_result.fit_size.x != 0)
+
+	if item.is_text {
+		text_calc_size := measure_text(item.text, item.text_font, item.text_size)
+		layout_result.fit_size.x += text_calc_size.x
+		layout_result.fit_size.y += text_calc_size.y
+	}
+
+
+	if item.comment == "layers" {
+		//fmt.printf("", i32(2))
+	}
+
+
+	
 	return index
 }
 
@@ -246,20 +310,22 @@ _layout_filling :: proc() {
 
 	size_to_spread: f32
 	separation: f32
+	cursor_along: f32
 
 	#partial switch layout in item_decl.children_layout {
 		case Layout_Linear_Horizontal:
 			size_to_spread = available_size.w - item_tree.fit_size.x
 			separation = layout.separation
+			cursor_along = available_size.x
 		case Layout_Linear_Vertical:
 			size_to_spread = available_size.h - item_tree.fit_size.y
 			separation = layout.separation
+			cursor_along = available_size.y
 	}
 	if item_tree.weight_sum != 0 {
 		size_to_spread = size_to_spread / item_tree.weight_sum
 	}
 
-	cursor_along: f32 = available_size.x
 
 
 	for idx in 0..<item_decl.num_children {
@@ -375,6 +441,11 @@ _layout_filling :: proc() {
 		
 		_layout_filling()
 	}
+
+	if item_decl.comment == "layers" {
+		//fmt.printf("", i32(2))
+	}
+
 	
 }
 

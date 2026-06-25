@@ -183,14 +183,14 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
              layout_overlay_child({sizing_x = .Fill, sizing_y = .Fill})
         case Layout_Linear_Horizontal:
             layout_linear_child({
-                width= {type = definition.grow ? .Weight : .Fit},
-                height= {type = .Weight},
+                width= definition.grow ? {type = .Weight, amount=1} : {type=.Fit},
+                height= {type = .Weight, amount = 1},
             })
         
         case Layout_Linear_Vertical:
             layout_linear_child({
-                width= {type = .Weight},
-                height= {type = definition.grow ? .Weight : .Fit},
+                width= {type = .Weight, amount = 1},
+                height= definition.grow ? {type = .Weight, amount = 1} : {type =.Fit},
             })
     }	
     
@@ -228,7 +228,7 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
 
     config_box_style(&clay_elem, panel)
 	
-    _layout_open()
+    _layout_open(definition.name)
 
     definition.callback()
 

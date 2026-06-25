@@ -1,0 +1,97 @@
+package ui
+
+import "base:runtime"
+import "core:c"
+import "core:log"
+
+import SDL "vendor:sdl3"
+import TTF "vendor:sdl3/ttf"
+
+import clay "../clay-odin"
+
+NIL_FONT :: ~u16(0)
+
+FontData :: struct {
+	font_io: ^SDL.IOStream,
+	sizes:   map[u16]^TTF.Font,
+}
+
+loaded_fonts: u16 = 0
+fonts: [dynamic]FontData
+text_engine: ^TTF.TextEngine
+
+
+load_font_io :: proc(io: ^SDL.IOStream) -> u16 {
+	new_font := FontData {
+		font_io = io,
+	}
+	loaded_font_id := loaded_fonts
+	log.info("set font io:", loaded_font_id)
+	append(&fonts, new_font)
+	loaded_fonts += 1
+	return loaded_font_id
+}
+
+
+get_font_with_size :: proc(font_id: u16, size: u16) -> ^TTF.Font {
+	if font_id == NIL_FONT {
+		return nil
+	}
+	if int(font_id) >= len(fonts) {
+		log.info("invalid font id, for null font use NIL_FONT")
+		return nil
+	}
+	font := &fonts[font_id]
+	font_size, ok := font.sizes[size]
+	if !ok {
+		font_size = TTF.OpenFontIO(font.font_io, false, f32(size))
+		font.sizes[size] = font_size
+	}
+	return font_size
+}
+
+
+// single text object gets reused
+single_text: ^TTF.Text
+
+get_text_with_font_size :: proc(font_id: u16, size: u16) -> ^TTF.Text {
+	//log.info("get_text_with_size")
+	font := get_font_with_size(font_id, size)
+	if font == nil {
+		return nil
+	}
+	if single_text == nil {
+		single_text = TTF.CreateText(text_engine, font, "My Text", 0)
+	}
+	TTF.SetTextFont(single_text, font)
+	return single_text
+}
+
+
+measure_text :: proc(text: string, font_id: u16, font_size: u16) -> f32x2 {
+	font := get_font_with_size(font_id, font_size)
+	if font == nil {
+		log.info("unable to calculate font size")
+		return {}
+	}
+	size := [2]c.int{}
+	TTF.GetStringSize(font, cstring(raw_data(text)), len(text), &size.x, &size.y)
+	return {f32(size.x), f32(size.y)}
+}
+
+
+clay_measure_text :: proc "c" (
+	text: clay.StringSlice,
+	config: ^clay.TextElementConfig,
+	userData: rawptr,
+) -> clay.Dimensions {
+	context = runtime.default_context()
+	font := get_font_with_size(config.fontId, config.fontSize)
+	if font == nil {
+		log.info("unable to calculate font size")
+		return {}
+	}
+	size := [2]c.int{}
+	TTF.GetStringSize(font, cstring(text.chars), uint(text.length), &size.x, &size.y)
+	return {width = f32(size.x), height = f32(size.y)}
+}
