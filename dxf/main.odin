@@ -361,7 +361,7 @@ layout_layers :: proc() {
 			ui.layout_container(ui.Layout_Linear_Horizontal{})
 				ui.layout_button("X")
 
-				ui.layout_linear_child(ui.LinearChildSizingFixed{width = {type = .Weight}, height={type=.Fit}})
+				ui.layout_linear_child(ui.LinearChildSizingFixed{width = {type = .Weight, amount=2}, height={type=.Fit}})
 				ui.layout_container(ui.Layout_Extend{})
 					ui.layout_text(layer.name)
 				ui.layout_close()

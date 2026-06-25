@@ -1,5 +1,6 @@
 package ui
 
+import "core:fmt"
 import clay "../clay-odin"
 
 f32x2 :: [2]f32
@@ -38,23 +39,40 @@ _layout_set_default_config :: proc() {
 _layout_begin :: proc(in_scale_factor: f32) {
     scale_factor = in_scale_factor
    	clay.BeginLayout()
-
+	clear(&layout_state.items_decl)	
+	clear(&layout_state.items_tree)
+	layout_state = {}
+	container_idx = -1
 }
 
 
 _layout_end :: proc() {
+	_layout_compute()
 	render_commands = clay.EndLayout()
 }
 
 
 clay_elem: clay.ElementDeclaration
-LayoutItem :: struct {
-    
-}
+child_layout: ChildrenLayout
+container_idx: int
 
-_layout_create :: proc(child_layout: ChildrenLayout) {
+
+new_item_idx: int
+
+_layout_create :: proc(in_child_layout: ChildrenLayout) {
+	if container_idx != -1 {
+		layout_state.items_decl[container_idx].num_children += 1
+	}
+
+	child_layout = in_child_layout
    	clay._OpenElement()
 	clay_elem = {}
+
+	new_item_idx = len(layout_state.items_decl)
+	append(&layout_state.items_decl, LayoutItemDeclaration {})
+	item_decl := &layout_state.items_decl[new_item_idx]
+	item_decl.layout_hint = layout_hint
+
 
     apply_decl(&clay_elem, child_layout)
 	append(&layout_stack, child_layout)
@@ -62,24 +80,303 @@ _layout_create :: proc(child_layout: ChildrenLayout) {
 
 _layout_open :: proc() {
     clay.ConfigureOpenElement(DPI(clay_elem))
+	item_decl := &layout_state.items_decl[new_item_idx]
+	item_decl.children_layout = child_layout
+	item_decl.parent_idx = container_idx
+
+	item_decl.padding = {4,4,4,4}
+	
+	
+	container_idx = new_item_idx
+	
 }
 
 _layout_close :: proc() {
 	pop(&layout_stack)
 	clay._CloseElement()
+	container_idx = layout_state.items_decl[container_idx].parent_idx
 }
 
-LayoutStateItem :: struct {
-    computed_rect: Rect
+LayoutItemDeclaration :: struct {
+	children_layout: ChildrenLayout,
+	slot_config: int,
+	parent_idx: int,
+	num_children: int,
+	padding: BoxOffsets,
+	layout_hint: LayoutHint, // hint to layout within parent
+}
+
+LayoutItemResult :: struct {
+	fit_size: f32x2,
+	weight_sum: f32,
+    layout_rect: Rect,
+	pointer_rect: Rect,
 }
 
 // will hold last computed layout state. It will also hold data needed to resolve mouse events.
 // It will take into account themes data like padding as it matters to layout. but other things like colors will be kept as pointers to point to them when drawing
 
 LayoutState :: struct {
-    rect: Rect
+    rect: Rect,
+	items_decl: [dynamic]LayoutItemDeclaration,
+	items_tree: [dynamic]LayoutItemResult,
+	layout_idx_current: int,
+	layout_idx_parent: int,
 }
 
+layout_state: LayoutState
+
+_layout_compute :: proc() {
+	fmt.println()
+	fmt.println()
+	fmt.println()
+	// fitting pass: goes over everything to tell what are the minimum sizes desired for things
+	layout_cursor = 0
+	_layout_item()
+
+	layout_state.items_tree[0].layout_rect = {0, 0, current_layout_dimensions.x, current_layout_dimensions.y}
+	// filling pass: distributes available space in children, evaluates weights and aligns items
+	layout_cursor = 0
+	_layout_filling()
+
+	layout_cursor = 0
+	print_layout_result()
+}
+
+indent: int = 0
+print_layout_result :: proc() {
+	item_base := layout_state.items_decl[layout_cursor]
+	item_result := layout_state.items_tree[layout_cursor]
+	for idx in 0..<indent {
+		fmt.print(" | ")
+	}
+	fmt.print(" +-")
+	fmt.println(item_base)
+	for idx in 0..<indent {
+		fmt.print(" | ")
+	}
+	fmt.print(" | ")
+	fmt.println(item_result)
+	layout_cursor += 1
+	indent += 1
+	for idx in 0..<item_base.num_children {
+		print_layout_result()
+	}
+	indent -= 1
+}
+
+
+
+layout_cursor := 0
+_layout_item :: proc() -> int {
+	index := layout_cursor
+	layout_cursor += 1
+	assert(index == len(layout_state.items_tree))
+	layout_state.layout_idx_current = index
+	
+	append(&layout_state.items_tree, LayoutItemResult {})
+	
+	item := layout_state.items_decl[index]
+
+	for idx in 0..<item.num_children {
+		created_item_idx :=_layout_item()
+		child_item := layout_state.items_decl[created_item_idx]
+		child_result := layout_state.items_tree[created_item_idx]
+		layout_result := &layout_state.items_tree[index]
+		switch children_layout in item.children_layout {
+			case Layout_Extend:
+					layout_result.fit_size.x = max(layout_result.fit_size.x, child_result.fit_size.x)
+					layout_result.fit_size.y = max(layout_result.fit_size.y, child_result.fit_size.y)
+			case Layout_Overlay_Float:
+					layout_result.fit_size.x = max(layout_result.fit_size.x, child_result.fit_size.x)
+					layout_result.fit_size.y = max(layout_result.fit_size.y, child_result.fit_size.y)
+			case Layout_Linear_Horizontal:
+					layout_result.fit_size.y = max(layout_result.fit_size.y, child_result.fit_size.y)
+					if hint, ok := child_item.layout_hint.(LinearChildSizingFixed); ok {
+						if hint.width.type == .Weight {
+							layout_result.weight_sum += hint.width.amount
+						}
+					} else {
+						layout_result.fit_size.x += child_result.fit_size.x
+					}
+			case Layout_Linear_Vertical:
+					layout_result.fit_size.x = max(layout_result.fit_size.x, child_result.fit_size.x)
+					if hint, ok := child_item.layout_hint.(LinearChildSizingFixed); ok {
+						if hint.height.type == .Weight {
+							layout_result.weight_sum += hint.height.amount
+						}
+					} else {
+						layout_result.fit_size.y += child_result.fit_size.y
+					}
+		}
+	}
+
+	layout_result := &layout_state.items_tree[index]
+	#partial switch children_layout in item.children_layout {
+
+		case Layout_Linear_Horizontal:
+			if item.num_children > 1 {
+				layout_result.fit_size.x += children_layout.separation * f32(item.num_children - 1)
+			}
+		case Layout_Linear_Vertical:
+			if item.num_children > 1 {
+				layout_result.fit_size.y += children_layout.separation * f32(item.num_children - 1)
+			}
+	}
+
+	//calc_fit_size()
+	layout_result.fit_size.x += item.padding.left + item.padding.right
+	layout_result.fit_size.y += item.padding.top + item.padding.bottom
+	assert(layout_result.fit_size.x != 0)
+	return index
+}
+
+_layout_filling :: proc() {
+	index := layout_cursor
+	layout_cursor += 1
+
+	item_decl := layout_state.items_decl[index]
+	item_tree := layout_state.items_tree[index]
+
+	available_size := item_tree.layout_rect
+	available_size.x += item_decl.padding.left
+	available_size.w -= (item_decl.padding.left + item_decl.padding.right)
+	available_size.y += item_decl.padding.top
+	available_size.h -= (item_decl.padding.top + item_decl.padding.bottom)
+
+	size_to_spread: f32
+	separation: f32
+
+	#partial switch layout in item_decl.children_layout {
+		case Layout_Linear_Horizontal:
+			size_to_spread = available_size.w - item_tree.fit_size.x
+			separation = layout.separation
+		case Layout_Linear_Vertical:
+			size_to_spread = available_size.h - item_tree.fit_size.y
+			separation = layout.separation
+	}
+	if item_tree.weight_sum != 0 {
+		size_to_spread = size_to_spread / item_tree.weight_sum
+	}
+
+	cursor_along: f32 = available_size.x
+
+
+	for idx in 0..<item_decl.num_children {
+		child_decl := layout_state.items_decl[layout_cursor]
+		child_tree := &layout_state.items_tree[layout_cursor]
+		#partial switch layout in item_decl.children_layout {
+			case Layout_Linear_Horizontal:
+				child_tree.layout_rect.x = cursor_along
+				child_width: f32 = -1
+				sizing_across := SizingAcross.Fill
+				if layout_hint, ok := child_decl.layout_hint.(LinearChildSizingFixed); ok {
+					sizing_across = layout_hint.across
+					if layout_hint.width.type == .Weight {
+						child_width = size_to_spread * layout_hint.width.amount
+					}
+				}
+				if child_width == -1 { // fallback to .Fit
+					child_width = child_tree.fit_size.x
+				}
+
+				child_tree.layout_rect.w = child_width
+				child_tree.layout_rect.x = cursor_along
+				cursor_along += child_width
+				
+				switch sizing_across {
+					case .Fill:
+						child_tree.layout_rect.y = available_size.y
+						child_tree.layout_rect.h = available_size.h
+					case .Begin:
+						child_tree.layout_rect.y = available_size.y
+						child_tree.layout_rect.h = child_tree.fit_size.y
+					case .Center:
+						child_tree.layout_rect.y = available_size.y + (available_size.h - child_tree.fit_size.y) * 0.5
+						child_tree.layout_rect.h = child_tree.fit_size.y
+					case .End:
+						child_tree.layout_rect.y = available_size.y + available_size.h - child_tree.fit_size.y
+						child_tree.layout_rect.h = child_tree.fit_size.y
+				}
+				
+			case Layout_Linear_Vertical:
+				child_tree.layout_rect.y = cursor_along
+				child_height: f32 = -1
+				sizing_across := SizingAcross.Fill
+				if layout_hint, ok := child_decl.layout_hint.(LinearChildSizingFixed); ok {
+					sizing_across = layout_hint.across
+					if layout_hint.height.type == .Weight {
+						child_height = size_to_spread * layout_hint.height.amount
+					}
+				}
+				if child_height == -1 { // fallback to .Fit
+					child_height = child_tree.fit_size.y
+				}
+
+				child_tree.layout_rect.h = child_height
+				child_tree.layout_rect.y = cursor_along
+				cursor_along += child_height
+				
+				switch sizing_across {
+					case .Fill:
+						child_tree.layout_rect.x = available_size.x
+						child_tree.layout_rect.w = available_size.w
+					case .Begin:
+						child_tree.layout_rect.x = available_size.x
+						child_tree.layout_rect.w = child_tree.fit_size.x
+					case .Center:
+						child_tree.layout_rect.x = available_size.x + (available_size.w - child_tree.fit_size.x) * 0.5
+						child_tree.layout_rect.w = child_tree.fit_size.x
+					case .End:
+						child_tree.layout_rect.x = available_size.x + available_size.w - child_tree.fit_size.x
+						child_tree.layout_rect.w = child_tree.fit_size.x
+				}
+			case Layout_Extend, Layout_Overlay_Float:
+				sizing_x := ChildSizingAxis.Fill
+				sizing_y := ChildSizingAxis.Fill
+				if layout_hint, ok := child_decl.layout_hint.(OverlayChildSizing); ok {
+					sizing_x = layout_hint.sizing_x
+					sizing_y = layout_hint.sizing_y
+				}
+
+				switch sizing_x {
+					case .Fill:
+						child_tree.layout_rect.x = available_size.x
+						child_tree.layout_rect.w = available_size.w
+					case .Begin:
+						child_tree.layout_rect.x = available_size.x
+						child_tree.layout_rect.w = child_tree.fit_size.x
+					case .Middle:
+						child_tree.layout_rect.x = available_size.x + (available_size.w - child_tree.fit_size.x) * 0.5
+						child_tree.layout_rect.w = child_tree.fit_size.x
+					case .End:
+						child_tree.layout_rect.x = available_size.x + available_size.w - child_tree.fit_size.x
+						child_tree.layout_rect.w = child_tree.fit_size.x
+				}
+
+				switch sizing_y {
+					case .Fill:
+						child_tree.layout_rect.y = available_size.y
+						child_tree.layout_rect.h = available_size.h
+					case .Begin:
+						child_tree.layout_rect.y = available_size.y
+						child_tree.layout_rect.h = child_tree.fit_size.y
+					case .Middle:
+						child_tree.layout_rect.y = available_size.y + (available_size.h - child_tree.fit_size.y) * 0.5
+						child_tree.layout_rect.h = child_tree.fit_size.y
+					case .End:
+						child_tree.layout_rect.y = available_size.y + available_size.h - child_tree.fit_size.y
+						child_tree.layout_rect.h = child_tree.fit_size.y
+				}
+				
+
+		}
+		cursor_along += separation
+		
+		_layout_filling()
+	}
+	
+}
 
 
 

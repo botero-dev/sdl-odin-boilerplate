@@ -147,14 +147,14 @@ panels_present_group :: proc (group: PanelLayoutGroup) {
              layout_overlay_child({sizing_x = .Fill, sizing_y = .Fill})
         case Layout_Linear_Horizontal:
             layout_linear_child({
-                width= {type = group.grow ? .Weight : .Fit},
+                width= group.grow ? {type = .Weight, amount = 1} : {type = .Fit},
                 height= {type = .Weight},
             })
         
         case Layout_Linear_Vertical:
             layout_linear_child({
                 width= {type = .Weight},
-                height= {type = group.grow ? .Weight : .Fit},
+                height= group.grow ? {type = .Weight, amount = 1} : {type = .Fit},
             })
     }	
 

@@ -75,11 +75,27 @@ Sizing :: struct {
 	amount: f32,
 }
 
+SizingAlong :: struct {
+	// maybe come up with interesting rules like:
+	//  * use weight but never below fit size
+	//  * use ratio over remaining space or over full space
+	type: SizingType,
+	amount: f32,
+}
+
+SizingAcross :: enum {
+	Fill,   // fill
+	Begin,  // align to beggining (top, left)
+	Center, // align to center
+	End,    // align to end (bottom, right)
+}
+
 LinearChildSizingFixed :: struct {
 	// along: Sizing,
 	// across: Sizing,
 	width: Sizing,
 	height: Sizing,
+	across: SizingAcross,
 }
 
 ChildSizingAxis :: enum {
@@ -154,7 +170,7 @@ convert_to_clay_rule :: proc(rule: Sizing) -> clay.SizingAxis {
 			v := rule.amount
 			r = {type = .Percent, constraints = {sizeMinMax = {v, v}}}
 		case .Weight:
-			v := rule.amount
+			v := f32(0) //rule.amount
 			r = {type = .Grow, constraints = {sizeMinMax = {v, v}}}
 	}
 	return r
