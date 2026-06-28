@@ -1,5 +1,6 @@
 package ui
 
+import "engine:gfx"
 import clay "../clay-odin"
 
 Style :: struct {
@@ -15,12 +16,8 @@ StyleClass :: struct {
 
 Color :: [4]f32
 
-CornerRadii :: struct {
-	nw: f32,
-	ne: f32,
-	sw: f32,
-	se: f32,
-}
+CornerRadii :: gfx.CornerRadii
+BorderWidths :: gfx.BorderWidths
 
 BoxOffsets :: struct {
 	left: f32,
@@ -29,19 +26,19 @@ BoxOffsets :: struct {
 	bottom: f32,
 }
 
-RectStyle :: struct {
+RectStyleCommon :: struct {
 	padding: BoxOffsets,
 }
 
 
 ContainerStyle :: struct {
-	using base_rect: RectStyle,
+	using base_rect: RectStyleCommon,
 	separation: f32,
 }
 
 
 BoxStyleBase :: struct {
-	using base_rect: RectStyle,
+	using base_rect: RectStyleCommon,
 	draw_offset: BoxOffsets,
 }
 
@@ -66,7 +63,7 @@ BoxStyleColored :: struct {
 	using base: BoxStyleBase,
 	background: Color,
 	border_color: Color,
-	border_width: BoxOffsets,
+	border_width: BorderWidths,
 	corner_radii: CornerRadii,
 	// blendmode?
 }

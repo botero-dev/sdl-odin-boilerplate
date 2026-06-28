@@ -1,336 +1,27 @@
+package gfx
 
-package engine
+import "core:math"
 
 import SDL "vendor:sdl3"
-import TTF "vendor:sdl3/ttf"
 
+import abmath "../math"
 
-import "core:log"
-import "core:math"
-import "core:math/linalg"
-
-import m "math"
-
-import "gfx"
-import "ui"
-
-DrawBuffer :: gfx.DrawBuffer
-Rect :: m.Rect
-
-helper: ^SDL.Texture
-
-renderer: ^SDL.Renderer
-window: ^SDL.Window
-
-TEX_SIZE :: 2
-ZERO_PIX_CLAMP := vec2{0.5, 1.5} / TEX_SIZE
-PIXEL_X := vec2{1, 0} / TEX_SIZE
-PIXEL_Y := vec2{1, 0} / TEX_SIZE
-
-win_size: [2]i32 = {1280, 720}
-
-
-
-gfx_init :: proc(in_renderer: ^SDL.Renderer, in_window: ^SDL.Window) {
-	
-	renderer = in_renderer
-	window = in_window
-	SDL.SetRenderVSync(renderer, 1)
-
-	ui.text_engine = TTF.CreateRendererTextEngine(renderer)
-
-
-	helper = SDL.CreateTexture(renderer, .RGBA32, .TARGET, 2, 2)
-	SDL.SetRenderTarget(renderer, helper)
-	SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
-	SDL.RenderClear(renderer)
-
-	SDL.SetRenderDrawColorFloat(renderer, 1, 1, 1, 0)
-	SDL.RenderPoint(renderer, 0, 0)
-	SDL.RenderPoint(renderer, 0, 1)
-	SDL.RenderPoint(renderer, 1, 0)
-
-	SDL.SetRenderDrawColorFloat(renderer, 1, 1, 1, 1)
-	SDL.RenderPoint(renderer, 1, 1)
-
-	SDL.SetRenderTarget(renderer, nil)
-
-
-	// for drawing cheap lines
-	SDL.SetTextureScaleMode(helper, .PIXELART)
-	//SDL.SetTextureScaleMode(helper, .LINEAR)
-	SDL.SetTextureBlendMode(helper, {.BLEND})
-
-	gfx.renderer = renderer
-	gfx.init()
-}
-
-helper_uv :: gfx.helper_uv
-
-DrawState :: struct {
-	line_scale:  f32,
-	mat_scale:   [2]f32,
-	mat_offset:  [2]f32,
-	draw_rect:   [2][2]i32, // encoded as x,y  w,h
-	view_mode:   View_Mode,
-	user_matrix: matrix[3, 3]f32,
-	modulate:    [4]f32,
-}
-
-draw_state_stack: [dynamic]DrawState
-
-draw_state_initial := DrawState {
-	line_scale  = 0,
-	mat_scale   = {1, 1},
-	mat_offset  = {0, 0},
-	draw_rect   = {},
-	view_mode   = {},
-	user_matrix = 1,
-	modulate    = {1, 1, 1, 1},
-}
-
-draw_state := draw_state_initial
-draw_matrix: matrix[3, 3]f32 = 1
-
-draw_push_state :: proc() {
-	append(&draw_state_stack, draw_state)
-}
-
-draw_pop_state :: proc() {
-	reverting_draw_state := pop(&draw_state_stack)
-
-	if reverting_draw_state.draw_rect != draw_state.draw_rect {
-		rect_size := reverting_draw_state.draw_rect[1]
-		if rect_size == {} {
-			SDL.SetRenderClipRect(renderer, nil)
-		} else {
-			rect_pos := reverting_draw_state.draw_rect[0]
-			clip_rect := SDL.Rect {
-				x = rect_pos.x,
-				y = rect_pos.y,
-				w = rect_size.x,
-				h = rect_size.y,
-			}
-			SDL.SetRenderClipRect(renderer, &clip_rect)
-		}
-	}
-
-	draw_state = reverting_draw_state
-	update_matrix()
-}
-
-draw_present :: proc() {
-	if len(draw_state_stack) != 0 {
-		log.warn("Draw State Stack should be empty when presenting.")
-	}
-
-	last_error := SDL.GetError()
-	if last_error != nil {
-		data := ([^]byte) ( rawptr(last_error))
-		if data[0] != 0 {
-			log.error(last_error)
-		}
-		
-	}
-
-	SDL.RenderPresent(renderer)
+CornerRadii :: struct {
+	nw: f32,
+	ne: f32,
+	sw: f32,
+	se: f32,
 }
 
 
-
-draw_set_matrix :: proc(in_user_matrix: matrix[3, 3]f32) {
-	draw_state.user_matrix = in_user_matrix
-	draw_state.user_matrix[0][2] = 0
-	draw_state.user_matrix[1][2] = 0
-	draw_state.user_matrix[2][2] = 1
-	update_matrix()
+BorderWidths :: struct {
+	w: f32,
+	e: f32,
+	n: f32,
+	s: f32,
 }
 
-draw_clear_matrix :: proc() {
-	draw_state.user_matrix = 1
-	update_matrix()
-}
-
-// if set to zero, line width means physical pixels, otherwise it means a unit relative to the view rect
-draw_set_line_scale :: proc(scale: f32) {
-	draw_state.line_scale = scale
-}
-
-draw_set_draw_rect :: proc(renderer: ^SDL.Renderer, position: [2]i32, size: [2]i32) {
-
-	draw_state.draw_rect = {position, size}
-	clip_rect := SDL.Rect {
-		x = (position.x),
-		y = (position.y),
-		w = (size.x),
-		h = (size.y),
-	}
-	SDL.SetRenderClipRect(renderer, &clip_rect)
-	update_matrix()
-}
-
-draw_clear_draw_rect :: proc(renderer: ^SDL.Renderer) {
-	draw_state.draw_rect = {}
-	SDL.SetRenderClipRect(renderer, nil)
-	update_matrix()
-}
-
-draw_clear_view_rect :: proc() {
-	draw_state.view_mode = {}
-	draw_state.mat_scale = {1, 1}
-	draw_state.mat_offset = {0, 0}
-}
-
-
-
-View_Scaling :: enum {
-	Stretch,
-	Fit,
-	Fill,
-}
-
-View_Mode_Rect :: struct {
-	scaling: View_Scaling,
-	topleft: vec2,
-	botright: vec2,
-}
-
-View_Mode_Basis :: struct {
-	centerpoint: vec2,
-	right: vec2,
-	up: vec2,
-}
-
-View_Mode :: union {
-	View_Mode_Rect,
-	View_Mode_Basis,
-}
-
-draw_set_view_rect :: proc(view_topleft: vec2, view_botright: vec2, scaling: View_Scaling = .Stretch) {
-	draw_state.view_mode = View_Mode_Rect{scaling, view_topleft, view_botright}
-	update_matrix()
-}
-
-// absolute projection, vectors are interpreted as pixels:
-// so {100, 20) would make a unit be displaced that amount in pixels
-draw_set_view_basis :: proc(right: vec2, up: vec2, centerpoint: vec2) {
-	draw_state.view_mode = View_Mode_Basis{centerpoint, right, up}
-	update_matrix()
-}
-
-update_matrix :: proc() {
-	draw_rect := draw_state.draw_rect
-	draw_size := draw_rect[1]
-	if draw_size == {0, 0} {
-		// TODO: maybe find current framebuffer size before?
-		draw_size = {win_size.x, win_size.y}
-	}
-	
-	switch view_mode in draw_state.view_mode {
-		case View_Mode_Rect:
-			view_rect := view_mode
-			view_topleft := view_rect.topleft
-			view_botright := view_rect.botright
-			if view_topleft == {} && view_botright == {} {
-				draw_state.mat_scale = {1, 1}
-				draw_state.mat_offset = {0, 0}
-				return
-			}
-
-			view_range := view_botright - view_topleft
-
-			draw_pos := vec2{f32(draw_rect[0].x), f32(draw_rect[0].y)}
-			draw_state.mat_scale = vec2{f32(draw_size.x), f32(draw_size.y)} / view_range
-			draw_state.mat_offset = draw_pos - (view_topleft * draw_state.mat_scale)
-
-			draw_matrix = (matrix[3, 3]f32{
-						draw_state.mat_scale.x, 0, draw_state.mat_offset.x,
-						0, draw_state.mat_scale.y, draw_state.mat_offset.y,
-						0, 0, 1,
-					})
-
-			draw_matrix = draw_matrix * draw_state.user_matrix
-
-		case View_Mode_Basis:
-
-			view_mode_basis := View_Mode_Basis(view_mode)
-
-			draw_matrix = 1;
-			
-			offset :=  view_mode_basis.centerpoint
-			draw_matrix = draw_matrix * matrix[3,3]f32 {
-				1, 0, -offset.x,
-				0, 1, -offset.y,
-				0, 0, 1,
-			}
-
-			scale_mat := matrix[3,3]f32 {
-				1, 0, 0,
-				0, 1, 0,
-				0, 0, 1,
-			}
-
-			scale_mat[0] = {view_mode.right.x, view_mode.right.y, 0}
-			scale_mat[1] = {view_mode.up.x, view_mode.up.y, 0}
-
-			draw_matrix = scale_mat * draw_matrix
-
-			midpoint := draw_size / 2
-
-			midpoint += draw_rect[0]
-			center := [2]f32{f32(midpoint.x), f32(midpoint.y)}
-
-			draw_matrix =  matrix[3,3]f32 {
-				1, 0, center.x,
-				0, 1, center.y,
-				0, 0, 1,
-			} * draw_matrix
-
-			draw_matrix = draw_matrix * draw_state.user_matrix
-	}
-}
-
-
-draw_buffer :: proc(renderer: ^SDL.Renderer, buffer: ^DrawBuffer, in_color: [4]f32) {
-
-	fcolor := SDL.FColor{in_color[0], in_color[1], in_color[2], in_color[3]}
-
-	//SDL.SetRenderTextureAddressMode(renderer, .CLAMP, .CLAMP)
-	SDL.SetRenderTextureAddressMode(renderer, .WRAP, .WRAP)
-
-	indices: rawptr = nil
-	if buffer.indices != nil && len(buffer.indices) > 0 {
-		indices = &buffer.indices[0]
-	}
-	SDL.RenderGeometryRaw(
-		renderer,
-		helper, // texture
-		&buffer.vertices[0][0],
-		8, // verts + stride
-		&fcolor,
-		0, // color + stride
-		&buffer.uvs[0][0],
-		8, // uvs
-		buffer.num_vertices,
-		indices,
-		buffer.num_indices,
-		1,
-	)
-}
-
-vertices_buf: [1000]vec2
-uvs_buf: [1000]vec2
-indices_buf: [2000]u8
-buffer := DrawBuffer{0, 0, vertices_buf[:], uvs_buf[:], nil, indices_buf[:]}
-
-CornerRadii :: gfx.CornerRadii
-BorderWidths :: gfx.BorderWidths
-Color :: m.Color
-
-txv :: gfx.txv
-
-
-draw_box_filled :: proc(box: Rect, corners: CornerRadii, color: Color) {
+draw_box_filled :: proc(box: abmath.Rect, corners: CornerRadii, color: abmath.Color) {
 
 	num_vertices: i32 = 0
 	num_indices: i32 = 0
@@ -340,14 +31,14 @@ draw_box_filled :: proc(box: Rect, corners: CornerRadii, color: Color) {
 	// center full rect
 	PAD :: 1 // expand for antialiasing
 
-	//HALF_PIXEL :: vec2{0.5, 0.5}
-	boxmin := vec2{box.x, box.y}
-	boxmax := vec2{box.x + box.w, box.y + box.h}
+	//HALF_PIXEL :: f32x2{0.5, 0.5}
+	boxmin := f32x2{box.x, box.y}
+	boxmax := f32x2{box.x + box.w, box.y + box.h}
 
-	topleft := vec2{boxmin.x + corners.nw, boxmin.y + corners.nw}
-	topright := vec2{boxmax.x - corners.ne, boxmin.y + corners.ne}
-	botleft := vec2{boxmin.x + corners.sw, boxmax.y - corners.sw}
-	botright := vec2{boxmax.x - corners.se, boxmax.y - corners.se}
+	topleft := f32x2{boxmin.x + corners.nw, boxmin.y + corners.nw}
+	topright := f32x2{boxmax.x - corners.ne, boxmin.y + corners.ne}
+	botleft := f32x2{boxmin.x + corners.sw, boxmax.y - corners.sw}
+	botright := f32x2{boxmax.x - corners.se, boxmax.y - corners.se}
 
 	vertices_buf[0] = txv(topleft)
 	vertices_buf[1] = txv(topright)
@@ -500,9 +191,9 @@ draw_box_filled :: proc(box: Rect, corners: CornerRadii, color: Color) {
 
 
 draw_rounded_corner :: proc(
-	vertices_buf: []vec2,
+	vertices_buf: []f32x2,
 	indices_buf: []u8,
-	uvs_buf: []vec2,
+	uvs_buf: []f32x2,
 	ptr_num_vertices: ^i32,
 	ptr_num_indices: ^i32,
 	pivot_idx: u8,
@@ -574,7 +265,8 @@ draw_rounded_corner :: proc(
 }
 
 
-draw_box_border :: proc(box: Rect, corners: CornerRadii, borders: BorderWidths, in_color: Color) {
+
+draw_box_border :: proc(box: abmath.Rect, corners: CornerRadii, borders: BorderWidths, in_color: abmath.Color) {
 
 	buffer.num_vertices = 0
 	buffer.num_indices = 0
@@ -674,12 +366,12 @@ draw_box_border :: proc(box: Rect, corners: CornerRadii, borders: BorderWidths, 
 
 // corner_idx indices: (top_left, top_right, bottom_left, bottom_right)
 draw_rounded_border :: proc(
-	buffer: ^gfx.DrawBuffer,
+	buffer: ^DrawBuffer,
 	width_h: f32,
 	width_v: f32,
 	radius: f32,
 	corner_idx: int,
-	corner: vec2,
+	corner: f32x2,
 ) {
 	segments := u8(math.min(24, math.floor(radius / math.ln(radius * 1.6 + 1))))
 	vertices_buf := buffer.vertices[buffer.num_vertices:]
@@ -698,7 +390,7 @@ draw_rounded_border :: proc(
 	keep_x := width_v > radius
 	keep_y := width_h > radius
 
-	flip := vec2{1, 1}
+	flip := f32x2{1, 1}
 	// corners 0 and 2 are in the left, so centerpoint is to the right
 	if corner_idx % 2 == 0 {
 		flip.x *= -1
@@ -712,12 +404,12 @@ draw_rounded_border :: proc(
 	centerpoint := corner - (flip * radius)
 
 	v_radius := flip * (radius + PAD)
-	v_radius_inner := flip * vec2{radius - width_v - PAD, radius - width_h - PAD}
+	v_radius_inner := flip * f32x2{radius - width_v - PAD, radius - width_h - PAD}
 
 	// draw from centerpoint +- x to centerpoint +- y
 	STROKE_OFFSET :: 0
 	STROKE_CONTRAST :: 1.4 // a way to compensate for gamma-blended lines,
-	base := vec2{0.5, 0.5} / TEX_SIZE + STROKE_OFFSET
+	base := f32x2{0.5, 0.5} / TEX_SIZE + STROKE_OFFSET
 
 
 	uv_outer: f32 = (0.5 - PAD) * STROKE_CONTRAST
@@ -736,7 +428,7 @@ draw_rounded_border :: proc(
 	mat_cos := math.cos(increment)
 	mat_sin := math.sin(increment)
 
-	vert_pos := vec2{1, 0}
+	vert_pos := f32x2{1, 0}
 	for idx in 1 ..< segments {
 		vert_pos = {
 			vert_pos.x * mat_cos - vert_pos.y * mat_sin,

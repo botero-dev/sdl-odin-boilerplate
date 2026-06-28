@@ -84,7 +84,21 @@ _layout_create :: proc(in_child_layout: ChildrenLayout) {
 	append(&layout_stack, child_layout)
 }
 
+StyleOverride :: struct {
+	type: typeid,
+	data: rawptr,
+}
+
+DummyType :: struct {}
+
 _layout_open :: proc(comment: string = "") {
+	dummy: ^DummyType = nil
+
+	_layout_open_styled(comment, dummy)
+}
+
+
+_layout_open_styled :: proc(comment: string = "", style: ^$T = nil) {
     clay.ConfigureOpenElement(DPI(clay_elem))
 	item_decl := &layout_state.items_decl[new_item_idx]
 	item_decl.children_layout = child_layout
@@ -94,6 +108,14 @@ _layout_open :: proc(comment: string = "") {
 	item_decl.padding = {f32(p.left), f32(p.right), f32(p.top), f32(p.bottom)}
 
 	item_decl.color = clay_elem.backgroundColor
+	if style != nil {
+		if (T ==  BoxStyleColored) {
+			box_colored := (^BoxStyleColored)(style)
+			item_decl.color = box_colored.background
+		}
+		item_decl.override = {T, style}
+	}
+
 	item_decl.comment = comment
 	
 	
@@ -142,6 +164,7 @@ LayoutItemDeclaration :: struct {
 	text_font: u16,
 	text_size: u16,
 	comment: string,
+	override: StyleOverride,
 }
 
 LayoutItemResult :: struct {
@@ -181,9 +204,11 @@ _layout_compute :: proc() {
 
 indent: int = 0
 print_layout_result :: proc() {
-	fmt.println()
-	fmt.println()
-	fmt.println()
+	if indent == 0 {
+		fmt.println()
+		fmt.println()
+		fmt.println()
+	}
 	item_base := layout_state.items_decl[layout_cursor]
 	item_result := layout_state.items_tree[layout_cursor]
 	for idx in 0..<indent {

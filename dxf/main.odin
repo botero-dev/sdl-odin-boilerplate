@@ -298,9 +298,9 @@ iterate :: proc() {
 
 	/////////////////////////////////////////
 	ui.layout_end()
-	ab.render_layout(&ui.render_commands)
+	//ab.render_layout(&ui.render_commands)
 
-	//layout_draw()
+	layout_draw()
 
 	ab.draw_present()
 
@@ -312,13 +312,33 @@ iterate :: proc() {
 }
 
 layout_draw :: proc() {
-	corners := ab.CornerRadii {}
+	corners := ab.CornerRadii {4,4,4,4}
 	num_items := len(ui.layout_state.items_tree)
 	for idx in 0..<num_items {
 		decl := ui.layout_state.items_decl[idx]
 		item := ui.layout_state.items_tree[idx]
 		if item.color.a != 0 {
-			ab.draw_box_filled(transmute(ab.Rect)item.layout_rect, corners, item.color)
+			rect := transmute(ab.Rect)item.layout_rect
+			SDL.SetRenderDrawColorFloat(ab.renderer, 1, 1, 1, 1)
+			SDL.SetRenderColorScale(ab.renderer, 1)
+			SDL.SetRenderDrawBlendMode(ab.renderer, {.BLEND})
+
+			c := item.color
+			c.a = 1
+
+			rect2 := transmute(SDL.FRect) rect
+			//SDL.RenderFillRect(ab.renderer, &rect2)
+
+			if decl.override.type == ui.BoxStyleColored {
+				box_style := (^ui.BoxStyleColored)(decl.override.data)
+				ui.draw_box_styled(rect, box_style^)
+				
+			} else {
+				ab.draw_box_filled(rect, corners, c)
+			}
+
+			
+			//fmt.println(rect, corners, item.color)
 		}
 		if decl.is_text {
 			cstr := cstring(raw_data(decl.text))

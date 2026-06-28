@@ -40,8 +40,8 @@ draw_text :: proc(text: dxf.Entity_Text, color: Color) {
     pos := [3]f32{f32(in_pos.x), f32(in_pos.y), 1}
 
     // dbg := f32(1)
-    // ab.draw_line(ab.renderer, pos.xy + {-dbg, 0}, pos.xy + {dbg, 0}, 1, {1, 0, 0, 1})
-    // ab.draw_line(ab.renderer, pos.xy + {0, -dbg}, pos.xy + {0, dbg}, 1, {1, 0, 0, 1})
+    // gfx.draw_line(ab.renderer, pos.xy + {-dbg, 0}, pos.xy + {dbg, 0}, 1, {1, 0, 0, 1})
+    // gfx.draw_line(ab.renderer, pos.xy + {0, -dbg}, pos.xy + {0, dbg}, 1, {1, 0, 0, 1})
 
     new_pos := ab.draw_matrix * pos
 
@@ -512,7 +512,7 @@ draw_entities :: proc (entities: dxf.DXF_Entities, model: ^Model) {
 
     for line in entities.lines {
         style := entity_style(line, dxf_file)
-        ab.draw_line(
+        gfx.draw_line(
             ab.renderer,
             {f32(line.start.x), f32(line.start.y)},
             {f32(line.end.x), f32(line.end.y)},
@@ -568,7 +568,7 @@ draw_entities :: proc (entities: dxf.DXF_Entities, model: ^Model) {
                 lbcd := lerp(lbc, lcd, t)
                 next := lerp(labc, lbcd, t)
 
-                ab.draw_line(
+                gfx.draw_line(
                     ab.renderer,
                     {f32(prev.x), f32(prev.y)},
                     {f32(next.x), f32(next.y)},
@@ -664,7 +664,7 @@ draw_entities :: proc (entities: dxf.DXF_Entities, model: ^Model) {
 
                 //style := entity_style(d.entity, dxf_file)
         
-                // ab.draw_line(
+                // gfx.draw_line(
                 //     ab.renderer,
                 //     {f32(d.pos_text.x), f32(d.pos_text.y)},
                 //     {f32(d.def_point_b.x), f32(d.def_point_b.y)},
@@ -682,21 +682,21 @@ draw_entities :: proc (entities: dxf.DXF_Entities, model: ^Model) {
 
                 pos_end := d.pos_def + line_end_relative
 
-                ab.draw_line(
+                gfx.draw_line(
                     ab.renderer,
                     {f32(d.pos_def.x), f32(d.pos_def.y)},
                     {f32(d.def_point_b.x), f32(d.def_point_b.y)},
                     1.0,
                     color_ext,
                 )
-                ab.draw_line(
+                gfx.draw_line(
                     ab.renderer,
                     {f32(pos_end.x), f32(pos_end.y)},
                     {f32(d.def_point_a.x), f32(d.def_point_a.y)},
                     1.0,
                     color_ext,
                 )
-                ab.draw_line(
+                gfx.draw_line(
                     ab.renderer,
                     {f32(d.pos_def.x), f32(d.pos_def.y)},
                     {f32(pos_end.x), f32(pos_end.y)},
@@ -735,7 +735,7 @@ draw_entities :: proc (entities: dxf.DXF_Entities, model: ^Model) {
 draw_poly_segment :: proc(prev: f64x2, next: f64x2, bulge: f64, style: gfx.LineStyleSimple) {
     
     if bulge == 0 {
-        ab.draw_line(
+        gfx.draw_line(
             ab.renderer,
             {f32(prev.x), f32(prev.y)},
             {f32(next.x), f32(next.y)},
@@ -761,7 +761,7 @@ draw_poly_segment :: proc(prev: f64x2, next: f64x2, bulge: f64, style: gfx.LineS
         for jdx in 0..<steps {
             delta = rot * delta
             new := center + delta
-            ab.draw_line(
+            gfx.draw_line(
                 ab.renderer,
                 {f32(curr.x), f32(curr.y)},
                 {f32(new.x), f32(new.y)},
@@ -784,7 +784,7 @@ sweep_point :: proc(center: f64x2, in_delta: f64x2, angle: f64, style: gfx.LineS
     for jdx in 0..<steps {
         delta = rot * delta
         new := center + delta
-        ab.draw_line(
+        gfx.draw_line(
             ab.renderer,
             {f32(curr.x), f32(curr.y)},
             {f32(new.x), f32(new.y)},

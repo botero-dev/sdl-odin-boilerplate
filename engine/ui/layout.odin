@@ -239,10 +239,10 @@ apply_style_box_colored :: proc(elem: ^clay.ElementDeclaration, style: BoxStyleC
 	elem.border = {
 		color = style.border_color,
 		width = {
-			u16(style.border_width.left),
-			u16(style.border_width.right),
-			u16(style.border_width.top),
-			u16(style.border_width.bottom),
+			u16(style.border_width.w),
+			u16(style.border_width.e),
+			u16(style.border_width.n),
+			u16(style.border_width.s),
 			0,
 		}	
 	}
@@ -262,10 +262,10 @@ config_box_colored :: proc(elem: ^clay.ElementDeclaration, style: BoxStyleColore
 	elem.border = {
 			color = style.border_color,
 			width = {
-				u16(style.border_width.left),
-				u16(style.border_width.right),
-				u16(style.border_width.top),
-				u16(style.border_width.bottom),
+				u16(style.border_width.w),
+				u16(style.border_width.e),
+				u16(style.border_width.n),
+				u16(style.border_width.s),
 				0,
 			}
 		}

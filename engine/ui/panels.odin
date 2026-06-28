@@ -172,6 +172,15 @@ panels_present_group :: proc (group: PanelLayoutGroup) {
     layout_close()
 }
 
+
+    style_panel := BoxStyleColored {
+        padding = {2,2,2,2},
+        corner_radii = {2,2,2,2},// todo: check why things fails when
+        background = panel_bgcolor
+    }
+
+
+
 panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
     definition := panel_layout_definitions[item.definition]
 
@@ -219,16 +228,9 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
     
     _layout_create(Layout_Extend{})
    	
-
-    panel := BoxStyleColored {
-        padding = {2,2,2,2},
-        corner_radii = {0,0,0,0},
-        background = panel_bgcolor
-    }
-
-    config_box_style(&clay_elem, panel)
+    config_box_style(&clay_elem, style_panel)
 	
-    _layout_open(definition.name)
+    _layout_open_styled(definition.name, &style_panel)
 
     definition.callback()
 
