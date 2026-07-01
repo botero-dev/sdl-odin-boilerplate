@@ -388,7 +388,7 @@ layout_viewport :: proc () {
 
 	ui.ui_pointer_handler(my_handler)
 
-	clay.UI(clay.ID("clock"))(
+	clay.UI(clay.ID("viewport-content"))(
 			{
 				layout = {
 					sizing = {
@@ -428,14 +428,20 @@ draw_viewport :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.R
 }
 
 
+layer_toggle_vis :: proc(layer_idx: int) {
+	fmt.println("toggle layer:", layer_idx)
+}
+
+
 layout_layers :: proc() {
 	ui.layout_scrollview()
 	ui.layout_container(ui.Layout_Linear_Vertical{2, {}}, nil, "layers")
 
 	if model_loaded {
-		for layer in model.dxf.layers {
+		for layer_idx in 0..<len(model.dxf.layers) {
+			layer := model.dxf.layers[layer_idx]
 			ui.layout_container(ui.Layout_Linear_Horizontal{})
-				ui.layout_button("X")
+				ui.layout_button("O", layer_idx, layer_toggle_vis)
 
 				ui.layout_linear_child(ui.LinearChildSizingFixed{width = {type = .Weight, amount=1,flags={.Debug}}, height={type=.Fit}, across=.Center})
 				ui.layout_container(ui.Layout_Extend{})

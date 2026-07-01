@@ -212,8 +212,8 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
                 height= {type = .Fit},
             })
             layout_container(Layout_Linear_Horizontal {separation = 4}, &style_tab_bar)
-                layout_button(definition.name, &style_tab_button)
-                layout_button("other", &style_tab_button_inactive)
+                layout_button(definition.name, variant= &style_tab_button)
+                layout_button("other", variant= &style_tab_button_inactive)
             layout_close()
 
         layout_linear_child({
