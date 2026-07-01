@@ -1,14 +1,17 @@
 package ui
 
+import "core:log"
 import "core:strings"
 import "core:mem"
 import "core:fmt"
+
 import clay "../clay-odin"
+import abm "../math"
+
 
 f32x2 :: [2]f32
-Rect :: struct {
-    x, y, w, h: f32
-}
+
+Rect :: abm.Rect
 
 current_layout_dimensions: f32x2
 text_config_default: ^clay.TextElementConfig
@@ -161,6 +164,7 @@ LayoutItemDeclaration :: struct {
 	children_layout: ChildrenLayout,
 	slot_config: int,
 	parent_idx: int,
+	end: int,
 	num_children: int,
 	padding: BoxOffsets,
 	color: Color,
@@ -171,6 +175,7 @@ LayoutItemDeclaration :: struct {
 	text_size: u16,
 	comment: string,
 	override: StyleOverride,
+	handler: PointerHandler,
 }
 
 LayoutItemResult :: struct {
@@ -196,6 +201,7 @@ layout_state: LayoutState
 
 _layout_compute :: proc() {
 	// fitting pass: goes over everything to tell what are the minimum sizes desired for things
+	// IDEA: maybe the fitting pass could be moved to happen in the layout declaration pass?
 	layout_cursor = 0
 	_layout_item()
 
@@ -256,10 +262,6 @@ _layout_item :: proc() -> int {
 	fit_size: f32x2
 	weight_sum: f32
 
-	if item.comment == "layers" {
-		//fmt.printf("", i32(2))
-	}
-
 	for idx in 0..<item.num_children {
 		created_item_idx :=_layout_item()
 		child_item := layout_state.items_decl[created_item_idx]
@@ -291,43 +293,34 @@ _layout_item :: proc() -> int {
 					}
 		}
 	}
-
-	layout_result := &layout_state.items_tree[index]
-	layout_result.fit_size = fit_size
-	layout_result.weight_sum = weight_sum
+	layout_state.items_decl[index].end = layout_cursor
 
 	#partial switch children_layout in item.children_layout {
 
 		case Layout_Linear_Horizontal:
 			if item.num_children > 1 {
 				separation := border_apply(children_layout.separation_flags, children_layout.separation)
-				layout_result.fit_size.x += separation * f32(item.num_children - 1)
+				fit_size.x += separation * f32(item.num_children - 1)
 			}
 		case Layout_Linear_Vertical:
 			if item.num_children > 1 {
 				separation := border_apply(children_layout.separation_flags, children_layout.separation)
-				layout_result.fit_size.y += separation * f32(item.num_children - 1)
+				fit_size.y += separation * f32(item.num_children - 1)
 			}
 	}
 
-	//calc_fit_size()
-	layout_result.fit_size.x += item.padding.left + item.padding.right
-	layout_result.fit_size.y += item.padding.top + item.padding.bottom
+	fit_size.x += item.padding.left + item.padding.right
+	fit_size.y += item.padding.top + item.padding.bottom
 
 	if item.is_text {
-		if item.text == "MUROSBAJOS" {
-			fmt.print()
-		}
 		text_calc_size := measure_text(item.text, item.text_font, item.text_size)
-		layout_result.fit_size.x += text_calc_size.x
-		layout_result.fit_size.y += text_calc_size.y
+		fit_size.x += text_calc_size.x
+		fit_size.y += text_calc_size.y
 	}
 
-
-	if item.comment == "layers" {
-		//fmt.printf("", i32(2))
-	}
-
+	layout_result := &layout_state.items_tree[index]
+	layout_result.fit_size = fit_size
+	layout_result.weight_sum = weight_sum
 
 	
 	return index
@@ -491,13 +484,53 @@ _layout_filling :: proc() {
 		
 		_layout_filling()
 	}
+}
 
-	if item_decl.comment == "layers" {
-		//fmt.printf("", i32(2))
+
+
+layout_process_event :: proc(event: ^PointerEvent) {
+
+	event.event.phase = .Capturing
+	log.info("pointer event:", event.event)
+
+	layout_cursor = 0
+	indent = 0
+	layout_process_event_item(event)
+}
+
+layout_process_event_item :: proc(event: ^PointerEvent) {
+
+	index := layout_cursor
+	
+	item_decl := layout_state.items_decl[index]
+	item_tree := layout_state.items_tree[index]
+
+	// todo: check drag-release-out interaction
+	// todo: check drag with touch in scroll views
+	if abm.point_in_rect(event.coords, item_tree.layout_rect) {
+
+		if item_decl.handler != nil {
+			item_decl.handler(event, nil)
+		}
+		
+
+
+		for idx in 0..<indent {
+			fmt.print("    ")
+		}
+		fmt.println("affects:", index, item_tree)
+		indent += 1
+
+		layout_cursor = index + 1
+		for layout_cursor < item_decl.end {
+			layout_process_event_item(event)
+		}
+		indent -= 1
 	}
 
-	
+	layout_cursor = item_decl.end
 }
+
 
 
 
@@ -610,3 +643,4 @@ apply_decl :: proc(elem: ^clay.ElementDeclaration, children_layout: ChildrenLayo
 	elem.layout.sizing = item_sizing
 	elem.floating = item_floating
 }
+

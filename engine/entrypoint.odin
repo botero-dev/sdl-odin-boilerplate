@@ -178,6 +178,8 @@ sdl_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.App
 
 	when ODIN_OS == .Linux && !(ODIN_PLATFORM_SUBTARGET == .Android) {
 		SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11") // prefer wayland if available
+		SDL.SetHint(SDL.HINT_PEN_MOUSE_EVENTS, "0")
+		SDL.SetHint(SDL.HINT_PEN_TOUCH_EVENTS, "0")
 	}
 
 

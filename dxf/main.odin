@@ -432,6 +432,10 @@ layer_toggle_vis :: proc(layer_idx: int) {
 	fmt.println("toggle layer:", layer_idx)
 }
 
+layer_change_color :: proc(layer_name: string) {
+	fmt.println("layer color:", layer_name)
+}
+
 
 layout_layers :: proc() {
 	ui.layout_scrollview()
@@ -447,7 +451,7 @@ layout_layers :: proc() {
 				ui.layout_container(ui.Layout_Extend{})
 					ui.layout_text(layer.name)
 				ui.layout_close()
-				ui.layout_button("")
+				ui.layout_button("", layer.name, layer_change_color)
 			ui.layout_close()
 		}
 	}

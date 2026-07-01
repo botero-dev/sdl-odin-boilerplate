@@ -1,15 +1,16 @@
 package ui
 
+import "core:fmt"
 import evt "../events"
 import clay "../clay-odin"
 
 Event :: evt.Event
 
 PointerEvent :: struct {
-	using event: Event,
-	current:     clay.ElementId,
-	target:      clay.ElementId,
+	using event: ^Event,
+	coords: f32x2,
 }
+
 
 
 PointerHandler :: #type proc(event: ^Event, user_data: rawptr)
@@ -159,10 +160,11 @@ ui_push_pointer_event :: proc(event: ^Event) {
 	
 	case .PEN_MOTION:
 		pen_data := sdl_event.pmotion
-		//coords = {pen_data.x, pen_data.y}
+		coords = {pen_data.x, pen_data.y}
+		//fmt.println("pen motion:", coords)
 	case .PEN_DOWN:
 		pen_data := sdl_event.ptouch
-		//coords = {}
+		coords = {pen_data.x, pen_data.y}
 
 	case .PEN_PROXIMITY_IN:
 		pen_data := sdl_event.pproximity
@@ -170,9 +172,13 @@ ui_push_pointer_event :: proc(event: ^Event) {
 
 	}
 
-	clay.SetPointerState({coords.x, coords.y}, pressed)
+	pointer_event := PointerEvent{event, coords}
 
-	finish_handling_mouse_input(event)
+	layout_process_event(&pointer_event)
+
+	//clay.SetPointerState({coords.x, coords.y}, pressed)
+
+	//finish_handling_mouse_input(event)
 
 }
 
