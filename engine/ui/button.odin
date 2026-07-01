@@ -92,7 +92,7 @@ layout_button_handler :: proc(text: string, variant: ^StyleClass = nil, info: ^H
 	
 	config_box_style(&clay_elem, style^)
 
-	_layout_open()
+	_layout_open_styled("", style)
 	
 	text_style: ^TextStyle
 	text_style = &btn_style.idle_text

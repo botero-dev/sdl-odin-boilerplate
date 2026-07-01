@@ -46,9 +46,11 @@ LayoutDirection :: enum {
 Layout_Extend :: struct {}
 Layout_Overlay_Float :: struct {}
 
+
 Layout_Linear :: struct {
 	// container state
 	separation: f32,
+	separation_flags: BorderFlags,
 }
 
 Layout_Linear_Horizontal :: distinct Layout_Linear
@@ -70,7 +72,17 @@ SizingType :: enum {
 	Ratio,
 }
 
+
+SizingFlags :: enum {
+	IgnoreFit,          // if set, the container won't add child fit_size to container fit_size calculation
+	Absolute,           // if set, it will use pixels as the amount to scale, otherwise the amount is a fraction of free space
+	IgnoreScaleFactor,  // when absolute==1, if set, it won't apply scale factor to sizing amount when it is in absolute mode.
+	Debug,
+}
+SizingBits :: bit_set[SizingFlags]
+
 Sizing :: struct {
+	flags: SizingBits,
 	type: SizingType,
 	amount: f32,
 }

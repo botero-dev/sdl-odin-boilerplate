@@ -280,6 +280,10 @@ my_handler :: proc(event: ^ab.Event, user_data: rawptr) {
 	}
 }
 
+tex_new_ui: ^SDL.Texture
+
+counter: i32 = 0
+toogle: bool = false
 
 iterate :: proc() {
 
@@ -298,10 +302,32 @@ iterate :: proc() {
 
 	/////////////////////////////////////////
 	ui.layout_end()
-	//ab.render_layout(&ui.render_commands)
+	ab.render_layout(&ui.render_commands)
 
-	layout_draw()
+	if tex_new_ui == nil {
+		tex_new_ui = SDL.CreateTexture(ab.renderer, .RGBA8888, .TARGET, 4096, 4096)
+	}
 
+	SDL.SetRenderTarget(ab.renderer, tex_new_ui)
+		SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 0)
+		SDL.RenderClear(ab.renderer)
+		layout_draw()
+	SDL.SetRenderTarget(ab.renderer, nil)
+
+	r := SDL.FRect {0, 0, f32(ab.win_size.x), f32(ab.win_size.y)}
+	//SDL.SetTextureAlphaModFloat(tex_new_ui, 0.5)
+
+	counter += 1
+	if counter % 60 == 0 {
+		toogle = !toogle
+	}
+
+	if toogle {
+		SDL.RenderTexture(ab.renderer, tex_new_ui, &r, &r )
+	}
+
+	SDL.SetTextureAlphaModFloat(tex_new_ui, 1)
+	
 	ab.draw_present()
 
 	err := SDL.GetError()
@@ -332,7 +358,12 @@ layout_draw :: proc() {
 			if decl.override.type == ui.BoxStyleColored {
 				box_style := (^ui.BoxStyleColored)(decl.override.data)
 				ui.draw_box_styled(rect, box_style^)
-				
+			} else if decl.override.type == ui.BoxStyle {
+				box_style := (^ui.BoxStyle)(decl.override.data)
+				#partial switch v in box_style {
+					case ui.BoxStyleColored:
+						ui.draw_box_styled(rect, v)
+				}
 			} else {
 				ab.draw_box_filled(rect, corners, c)
 			}
@@ -371,8 +402,13 @@ layout_viewport :: proc () {
 	)
 }
 
+skip_viewport := true
+
 draw_viewport :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
 
+	if skip_viewport {
+		return
+	}
 	box := render_command.boundingBox
 	viewport.last_draw_rect = transmute(ab.Rect)(box)
 
@@ -394,14 +430,14 @@ draw_viewport :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.R
 
 layout_layers :: proc() {
 	ui.layout_scrollview()
-	ui.layout_container(ui.Layout_Linear_Vertical{2}, nil, "layers")
+	ui.layout_container(ui.Layout_Linear_Vertical{2, {}}, nil, "layers")
 
 	if model_loaded {
 		for layer in model.dxf.layers {
 			ui.layout_container(ui.Layout_Linear_Horizontal{})
 				ui.layout_button("X")
 
-				ui.layout_linear_child(ui.LinearChildSizingFixed{width = {type = .Weight, amount=2}, height={type=.Fit}})
+				ui.layout_linear_child(ui.LinearChildSizingFixed{width = {type = .Weight, amount=1,flags={.Debug}}, height={type=.Fit}, across=.Center})
 				ui.layout_container(ui.Layout_Extend{})
 					ui.layout_text(layer.name)
 				ui.layout_close()

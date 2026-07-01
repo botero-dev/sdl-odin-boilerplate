@@ -23,19 +23,20 @@ _layout_set_dimensions :: proc(size: f32x2) {
 
 }
 
-scale_factor: f32 = 1
-
 text_round_policy := RoundingPolicy.Round
+border_round_policy := RoundingPolicy.Round
+padding_round_policy := RoundingPolicy.Round
+
+
 
 _layout_set_default_config :: proc() {
    	text_config_default = clay.TextConfig(
 		{
 			textColor = {1,1,1,1},
-			fontSize = u16(scaling_apply(text_round_policy, 14 * scale_factor)), // clay expects an integer here
+			fontSize = u16(scaling_apply_rounded(text_round_policy, 14)), // clay expects an integer here
 			textAlignment = .Left,
 		},
 	)
-
 }
 
 text_arena_mem : [1024*1024]u8
@@ -105,7 +106,12 @@ _layout_open_styled :: proc(comment: string = "", style: ^$T = nil) {
 	item_decl.parent_idx = container_idx
 
 	p := clay_elem.layout.padding
-	item_decl.padding = {f32(p.left), f32(p.right), f32(p.top), f32(p.bottom)}
+	item_decl.padding = {
+		scaling_apply_rounded(padding_round_policy, p.left),
+		scaling_apply_rounded(padding_round_policy, p.right),
+		scaling_apply_rounded(padding_round_policy, p.top),
+		scaling_apply_rounded(padding_round_policy, p.bottom),
+	}
 
 	item_decl.color = clay_elem.backgroundColor
 	if style != nil {
@@ -270,7 +276,8 @@ _layout_item :: proc() -> int {
 					hint, ok := child_item.layout_hint.(LinearChildSizingFixed)
 					if ok && hint.width.type == .Weight {
 						weight_sum += hint.width.amount
-					} else {
+					}
+					if .IgnoreFit not_in hint.width.flags {
 						fit_size.x += child_result.fit_size.x
 					}
 			case Layout_Linear_Vertical:
@@ -278,7 +285,8 @@ _layout_item :: proc() -> int {
 					hint, ok := child_item.layout_hint.(LinearChildSizingFixed)
 					if ok && hint.height.type == .Weight {
 						weight_sum += hint.height.amount
-					} else {
+					} 
+					if .IgnoreFit not_in hint.height.flags {
 						fit_size.y += child_result.fit_size.y
 					}
 		}
@@ -292,11 +300,13 @@ _layout_item :: proc() -> int {
 
 		case Layout_Linear_Horizontal:
 			if item.num_children > 1 {
-				layout_result.fit_size.x += children_layout.separation * f32(item.num_children - 1)
+				separation := border_apply(children_layout.separation_flags, children_layout.separation)
+				layout_result.fit_size.x += separation * f32(item.num_children - 1)
 			}
 		case Layout_Linear_Vertical:
 			if item.num_children > 1 {
-				layout_result.fit_size.y += children_layout.separation * f32(item.num_children - 1)
+				separation := border_apply(children_layout.separation_flags, children_layout.separation)
+				layout_result.fit_size.y += separation * f32(item.num_children - 1)
 			}
 	}
 
@@ -305,6 +315,9 @@ _layout_item :: proc() -> int {
 	layout_result.fit_size.y += item.padding.top + item.padding.bottom
 
 	if item.is_text {
+		if item.text == "MUROSBAJOS" {
+			fmt.print()
+		}
 		text_calc_size := measure_text(item.text, item.text_font, item.text_size)
 		layout_result.fit_size.x += text_calc_size.x
 		layout_result.fit_size.y += text_calc_size.y
@@ -340,11 +353,13 @@ _layout_filling :: proc() {
 	#partial switch layout in item_decl.children_layout {
 		case Layout_Linear_Horizontal:
 			size_to_spread = available_size.w - item_tree.fit_size.x
-			separation = layout.separation
+			separation = border_apply(layout.separation_flags, layout.separation)
+			//size_to_spread -= f32(item_decl.num_children-1) * separation
 			cursor_along = available_size.x
 		case Layout_Linear_Vertical:
 			size_to_spread = available_size.h - item_tree.fit_size.y
-			separation = layout.separation
+			separation = border_apply(layout.separation_flags, layout.separation)
+			//size_to_spread -= f32(item_decl.num_children-1) * separation
 			cursor_along = available_size.y
 	}
 	if item_tree.weight_sum != 0 {
@@ -359,16 +374,23 @@ _layout_filling :: proc() {
 		#partial switch layout in item_decl.children_layout {
 			case Layout_Linear_Horizontal:
 				child_tree.layout_rect.x = cursor_along
-				child_width: f32 = -1
+				child_width: f32 = 0
 				sizing_across := SizingAcross.Fill
-				if layout_hint, ok := child_decl.layout_hint.(LinearChildSizingFixed); ok {
+				ignore_fit_size := false
+				if layout_hint, has_layout_hint := child_decl.layout_hint.(LinearChildSizingFixed); has_layout_hint {
+					if .Debug in layout_hint.width.flags {
+						fmt.print("")
+					}
 					sizing_across = layout_hint.across
+					ignore_fit_size = .IgnoreFit in layout_hint.width.flags
 					if layout_hint.width.type == .Weight {
 						child_width = size_to_spread * layout_hint.width.amount
 					}
+					
+					
 				}
-				if child_width == -1 { // fallback to .Fit
-					child_width = child_tree.fit_size.x
+				if !ignore_fit_size {
+					child_width += child_tree.fit_size.x
 				}
 
 				child_tree.layout_rect.w = child_width
@@ -392,16 +414,19 @@ _layout_filling :: proc() {
 				
 			case Layout_Linear_Vertical:
 				child_tree.layout_rect.y = cursor_along
-				child_height: f32 = -1
+				child_height: f32 = 0
 				sizing_across := SizingAcross.Fill
+				ignore_fit_size := false
 				if layout_hint, ok := child_decl.layout_hint.(LinearChildSizingFixed); ok {
 					sizing_across = layout_hint.across
+					ignore_fit_size = .IgnoreFit in layout_hint.height.flags
 					if layout_hint.height.type == .Weight {
 						child_height = size_to_spread * layout_hint.height.amount
 					}
 				}
-				if child_height == -1 { // fallback to .Fit
-					child_height = child_tree.fit_size.y
+				
+				if !ignore_fit_size { // fallback to .Fit
+					child_height += child_tree.fit_size.y
 				}
 
 				child_tree.layout_rect.h = child_height
