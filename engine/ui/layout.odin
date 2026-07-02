@@ -219,6 +219,15 @@ layout_close :: proc() {
 	_layout_close()
 }
 
+layout_custom :: proc(custom_data: Layout_Custom_Data) {
+	_layout_create(Layout_Extend{})
+	item_decl := &layout_state.items_decl[new_item_idx]
+	item_decl.custom = custom_data
+	
+	_layout_open()
+	_layout_close()
+}
+
 
 class_btn := style_class("Button")
 

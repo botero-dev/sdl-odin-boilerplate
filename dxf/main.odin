@@ -51,7 +51,7 @@ init :: proc() {
 	}
 
 	ab.create_window("Editor", {1280, 720})
-	//ab.app_add_event_handler(my_handler)
+	//ab.app_add_event_handler(viewport_input_handler)
 
 	// TODO: check if called with startup args to avoid loading `casa`1
 	//ab.request_data_async("mailbox.dxf", nil, dxf_callback)
@@ -196,7 +196,9 @@ current_scale: f32
 
 SCALE_POWER :: 2
 
-my_handler :: proc(event: ^ab.Event, user_data: rawptr) {
+
+
+viewport_input_handler :: proc(event: ^ab.Event, user_data: rawptr) {
 	vp_size := f64x2 { f64(viewport.last_draw_rect.w), f64(viewport.last_draw_rect.h)}
 	if event.sdl_event.type == SDL.EventType.PINCH_BEGIN {
 		current_scale = 1
@@ -335,12 +337,10 @@ iterate :: proc() {
 	err := SDL.GetError()
 	if (err != nil && len(err) != 0) {
 		fmt.println(err)
-
 	}
 }
 
 layout_draw :: proc() {
-	corners := ab.CornerRadii {4,4,4,4}
 	num_items := len(ui.layout_state.items_tree)
 	for idx in 0..<num_items {
 		decl := ui.layout_state.items_decl[idx]
@@ -367,11 +367,10 @@ layout_draw :: proc() {
 						ui.draw_box_styled(rect, v)
 				}
 			} else {
+				corners := ab.CornerRadii {4,4,4,4}
 				ab.draw_box_filled(rect, corners, c)
 			}
 
-			
-			//fmt.println(rect, corners, item.color)
 		}
 		if decl.is_text {
 			cstr := cstring(raw_data(decl.text))
@@ -379,17 +378,24 @@ layout_draw :: proc() {
 			TTF.SetTextString(sdl_text, cstr, uint(len(decl.text)))
 			TTF.DrawRendererText(sdl_text, f32(item.layout_rect.x), f32(item.layout_rect.y))
 		}
+
+		if decl.custom.callback_render != nil {
+			decl.custom.callback_render(ui.layout_state, idx)
+		}
 	}
 }
 
 viewport_render_data := ab.CustomRenderData {
-	callback = draw_viewport
+	callback = draw_viewport_clay
 }
 
 layout_viewport :: proc () {
 
-	ui.ui_pointer_handler(my_handler)
+	ui.ui_pointer_handler(viewport_input_handler)
 
+	ui.layout_custom({callback_render = draw_viewport_ab})
+
+	/*
 	clay.UI(clay.ID("viewport-content"))(
 			{
 				layout = {
@@ -402,19 +408,27 @@ layout_viewport :: proc () {
 				custom = {&viewport_render_data},
 			},
 	)
+			*/
+
+
 }
 
-skip_viewport := false
 
-draw_viewport :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
+draw_viewport_clay :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
+	box := transmute(ab.Rect)render_command.boundingBox
+	draw_viewport(box)
+}
 
-	if skip_viewport {
-		return
-	}
-	box := render_command.boundingBox
-	viewport.last_draw_rect = transmute(ab.Rect)(box)
+draw_viewport_ab :: proc(layout: ui.LayoutState, index: int) {
+	item := layout.items_tree[index]
+	draw_viewport(item.layout_rect)
+}
 
-	ab.draw_set_draw_rect(ab.renderer, {i32(box.x), i32(box.y)}, {i32(box.width), i32(box.height)} )
+draw_viewport :: proc(box: ab.Rect) {
+
+	viewport.last_draw_rect = box
+
+	ab.draw_set_draw_rect(ab.renderer, {i32(box.x), i32(box.y)}, {i32(box.w), i32(box.h)} )
 
 	SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 1)
 

@@ -13,6 +13,18 @@ f32x2 :: [2]f32
 
 Rect :: abm.Rect
 
+Layout_Custom_GetFitSize :: #type proc() -> f32x2
+Layout_Custom_LayoutCallback :: #type proc()
+Layout_Custom_RenderCallback :: #type proc(layout: LayoutState, index: int)
+
+Layout_Custom_Data :: struct {
+	callback_fitsize: Layout_Custom_GetFitSize,
+	callback_layout: Layout_Custom_LayoutCallback,
+	callback_render: Layout_Custom_RenderCallback,
+	user_data: rawptr,
+}
+
+
 current_layout_dimensions: f32x2
 text_config_default: ^clay.TextElementConfig
 
@@ -177,6 +189,7 @@ LayoutItemDeclaration :: struct {
 	override: StyleOverride,
 	handler: PointerHandler,
 	handler_data: rawptr,
+	custom: Layout_Custom_Data,
 }
 
 LayoutItemResult :: struct {
