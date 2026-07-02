@@ -290,6 +290,8 @@ iterate :: proc() {
 	SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 0)
 	SDL.RenderClear(ab.renderer)
 	ui.ui_idle(0.01);
+    free_all(context.temp_allocator)
+
 	ui.layout_begin({f32(ab.win_size.x), f32(ab.win_size.y)}, ab.dpi)
 	/////////////////////////////////////
 
@@ -402,7 +404,7 @@ layout_viewport :: proc () {
 	)
 }
 
-skip_viewport := true
+skip_viewport := false
 
 draw_viewport :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
 

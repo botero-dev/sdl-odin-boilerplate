@@ -52,6 +52,10 @@ ui_push_pointer_handler :: proc(handler: PointerHandler = nil, user_data: rawptr
 
 	entry_handle := rawptr(uintptr(handler_idx))
 	clay.OnHover(layout_handle_mouse_input, entry_handle)
+
+	item_decl := &layout_state.items_decl[new_item_idx]
+	item_decl.handler = handler
+	item_decl.handler_data = user_data
 }
 
 ui_pop_pointer_handler :: proc() {

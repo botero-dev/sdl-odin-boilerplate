@@ -84,8 +84,9 @@ layout_button_handler :: proc(text: string, info: ^HandlerInfo = nil, variant: ^
 	
 	_layout_create(Layout_Extend{}, )
 
-	ui_add_button(text, info)
-	
+	if info !=  nil {
+		ui_add_button(text, info)
+	}
 	style: ^BoxStyle = &btn_style.idle_box
 	if clay.Hovered() {
 		style = &btn_style.hover_box

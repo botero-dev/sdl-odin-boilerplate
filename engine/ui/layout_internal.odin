@@ -176,6 +176,7 @@ LayoutItemDeclaration :: struct {
 	comment: string,
 	override: StyleOverride,
 	handler: PointerHandler,
+	handler_data: rawptr,
 }
 
 LayoutItemResult :: struct {
@@ -491,7 +492,6 @@ _layout_filling :: proc() {
 layout_process_event :: proc(event: ^PointerEvent) {
 
 	event.event.phase = .Capturing
-	log.info("pointer event:", event.event)
 
 	layout_cursor = 0
 	indent = 0
@@ -507,25 +507,53 @@ layout_process_event_item :: proc(event: ^PointerEvent) {
 
 	// todo: check drag-release-out interaction
 	// todo: check drag with touch in scroll views
-	if abm.point_in_rect(event.coords, item_tree.layout_rect) {
+	cursor_hovers := abm.point_in_rect(event.coords, item_tree.layout_rect) 
+	if cursor_hovers {
+		// for idx in 0..<indent {
+		// 	fmt.print("    ")
+		// }
+		// fmt.println(event.event.phase, index, item_tree)
 
 		if item_decl.handler != nil {
-			item_decl.handler(event, nil)
-		}
+			item_decl.handler(event, item_decl.handler_data)
 		
-
-
-		for idx in 0..<indent {
-			fmt.print("    ")
+			if event.event.handled {
+				fmt.println(event.event.phase, "handled", index, item_tree)
+				// stop propagating inwards, event was handled in capturing phase
+				return
+			}
 		}
-		fmt.println("affects:", index, item_tree)
-		indent += 1
+
 
 		layout_cursor = index + 1
+
 		for layout_cursor < item_decl.end {
+			indent += 1
 			layout_process_event_item(event)
+			indent -= 1
+			if event.event.handled {
+				return
+			}
 		}
-		indent -= 1
+		
+		event.event.phase = .Bubbling
+		
+		// for idx in 0..<indent {
+		// 	fmt.print("    ")
+		// }
+		// fmt.println(event.event.phase, index, item_tree)
+
+		if item_decl.handler != nil {
+			item_decl.handler(event, item_decl.handler_data)
+		
+			if event.event.handled {
+				fmt.println(event.event.phase, "handled", index, item_tree)
+				// stop propagating inwards, event was handled in capturing phase
+			}
+			
+		}
+
+
 	}
 
 	layout_cursor = item_decl.end

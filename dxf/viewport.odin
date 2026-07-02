@@ -470,7 +470,6 @@ current_block_color := 0
 vp_draw :: proc(vp: ViewportState) {
 	ab.draw_set_view_basis(vconv(vp.basis_x), vconv(vp.basis_y), vconv(vp.origin))
 
-    free_all(context.temp_allocator)
 
     draw_entities(vp.data.dxf.entities, vp.data)
 }
