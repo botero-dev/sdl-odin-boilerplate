@@ -198,6 +198,9 @@ LayoutItemResult :: struct {
     layout_rect: Rect,
 	pointer_rect: Rect,
 	color: Color,
+	hovered: bool,
+	hover_leaf: bool,
+	focused: bool,
 }
 
 // will hold last computed layout state. It will also hold data needed to resolve mouse events.

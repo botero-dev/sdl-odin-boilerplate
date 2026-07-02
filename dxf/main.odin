@@ -14,6 +14,7 @@ import "base:runtime"
 import ab "engine:."
 import "engine:gfx"
 import "engine:ui"
+import abm "engine:math"
 
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
@@ -354,9 +355,6 @@ layout_draw :: proc() {
 			c := item.color
 			c.a = 1
 
-			rect2 := transmute(SDL.FRect) rect
-			//SDL.RenderFillRect(ab.renderer, &rect2)
-
 			if decl.override.type == ui.BoxStyleColored {
 				box_style := (^ui.BoxStyleColored)(decl.override.data)
 				ui.draw_box_styled(rect, box_style^)
@@ -365,6 +363,14 @@ layout_draw :: proc() {
 				#partial switch v in box_style {
 					case ui.BoxStyleColored:
 						ui.draw_box_styled(rect, v)
+				}
+			} else if decl.override.type == ui.ButtonStyle {
+				button_style := (^ui.ButtonStyle)(decl.override.data)
+				hovered := abm.point_in_rect(ui.coords, rect)
+				if hovered {
+					ui.draw_box_styled(rect, button_style.hover_box.(ui.BoxStyleColored))
+				} else {
+					ui.draw_box_styled(rect, button_style.idle_box.(ui.BoxStyleColored))
 				}
 			} else {
 				corners := ab.CornerRadii {4,4,4,4}
