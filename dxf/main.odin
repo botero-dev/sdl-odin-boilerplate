@@ -23,9 +23,11 @@ import "dxf"
 
 f32x2 :: [2]f32
 f32x3 :: [3]f32
+f32x4 :: [4]f32
 
 f64x2 :: [2]f64
 f64x3 :: [3]f64
+f64x4 :: [4]f64
 
 vconv_f64x2_f32x2 :: proc (input: f64x2) -> f32x2 { return f32x2{ f32(input.x), f32(input.y) } }
 
@@ -396,11 +398,14 @@ draw_viewport :: proc(box: ab.Rect) {
 	viewport.last_draw_rect = box
 
 	ab.draw_set_draw_rect(ab.renderer, {i32(box.x), i32(box.y)}, {i32(box.w), i32(box.h)} )
+	SDL.SetRenderTarget(ab.renderer, nil)
 
 	SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 1)
 
 	rect := transmute(SDL.FRect) box
 	SDL.RenderFillRect(ab.renderer, &rect)
+
+	SDL.SetRenderDrawColorFloat(ab.renderer, 1,1,1,1)
 
 	if model_loaded {
 		viewport.data = &model

@@ -11,6 +11,7 @@ import "core:math/rand"
 import "core:unicode/utf8"
 
 
+import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
 
 import ab "engine:."
@@ -509,16 +510,40 @@ draw_entities :: proc (entities: dxf.DXF_Entities, model: ^Model) {
         
     }
 
+    /*
+DrawBuffer :: struct {
+	num_vertices: i32,
+	num_indices:  i32,
+	vertices:     []f32x2,
+	uvs:          []f32x2,
+	colors:       [][4]f32,
+	indices:      []u8,
+}
+    */
+    verts : [256]f32x2
+    uvs   : [256]f32x2
+    color : [256]f32x4
+    index : [256]u8
+    
+    buffer := gfx.DrawBuffer {
+        vertices = verts[:],
+        uvs = uvs[:],
+        colors = color[:],
+        indices = index[:],
+    }
+
     for line in entities.lines {
         style := entity_style(line, dxf_file)
-        gfx.draw_line(
-            ab.renderer,
+
+        gfx.buffer_line(&buffer,
             {f32(line.start.x), f32(line.start.y)},
             {f32(line.end.x), f32(line.end.y)},
-            1.0,
-            style.color,
-        )
-
+            1.0,)
+        
+        gfx.draw_buffer(ab.renderer, &buffer, style.color)
+        buffer.num_indices = 0
+        buffer.num_vertices = 0
+    
     }
 
     for polyline in entities.polylines {

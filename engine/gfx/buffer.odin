@@ -14,6 +14,8 @@ draw_buffer :: proc(renderer: ^SDL.Renderer, buffer: ^DrawBuffer, in_color: [4]f
 	if buffer.indices != nil && len(buffer.indices) > 0 {
 		indices = &buffer.indices[0]
 	}
+	SDL.SetTextureColorModFloat(helper, 1, 1, 1)
+	SDL.SetTextureAlphaModFloat(helper, 1)
 	SDL.RenderGeometryRaw(
 		renderer,
 		helper, // texture

@@ -17,7 +17,6 @@ import "ui"
 DrawBuffer :: gfx.DrawBuffer
 Rect :: m.Rect
 
-helper: ^SDL.Texture
 
 renderer: ^SDL.Renderer
 window: ^SDL.Window
@@ -38,28 +37,6 @@ gfx_init :: proc(in_renderer: ^SDL.Renderer, in_window: ^SDL.Window) {
 	SDL.SetRenderVSync(renderer, 1)
 
 	ui.text_engine = TTF.CreateRendererTextEngine(renderer)
-
-
-	helper = SDL.CreateTexture(renderer, .RGBA32, .TARGET, 2, 2)
-	SDL.SetRenderTarget(renderer, helper)
-	SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
-	SDL.RenderClear(renderer)
-
-	SDL.SetRenderDrawColorFloat(renderer, 1, 1, 1, 0)
-	SDL.RenderPoint(renderer, 0, 0)
-	SDL.RenderPoint(renderer, 0, 1)
-	SDL.RenderPoint(renderer, 1, 0)
-
-	SDL.SetRenderDrawColorFloat(renderer, 1, 1, 1, 1)
-	SDL.RenderPoint(renderer, 1, 1)
-
-	SDL.SetRenderTarget(renderer, nil)
-
-
-	// for drawing cheap lines
-	SDL.SetTextureScaleMode(helper, .PIXELART)
-	//SDL.SetTextureScaleMode(helper, .LINEAR)
-	SDL.SetTextureBlendMode(helper, {.BLEND})
 
 	gfx.renderer = renderer
 	gfx.init()
@@ -250,6 +227,7 @@ update_matrix :: proc() {
 					})
 
 			draw_matrix = draw_matrix * draw_state.user_matrix
+			gfx.draw_matrix = draw_matrix
 
 		case View_Mode_Basis:
 
@@ -287,6 +265,7 @@ update_matrix :: proc() {
 			} * draw_matrix
 
 			draw_matrix = draw_matrix * draw_state.user_matrix
+			gfx.draw_matrix = draw_matrix
 	}
 }
 
@@ -304,7 +283,7 @@ draw_buffer :: proc(renderer: ^SDL.Renderer, buffer: ^DrawBuffer, in_color: [4]f
 	}
 	SDL.RenderGeometryRaw(
 		renderer,
-		helper, // texture
+		gfx.helper, // texture
 		&buffer.vertices[0][0],
 		8, // verts + stride
 		&fcolor,
@@ -483,7 +462,7 @@ draw_box_filled :: proc(box: Rect, corners: CornerRadii, color: Color) {
 
 	SDL.RenderGeometryRaw(
 		renderer,
-		helper, // texture
+		gfx.helper, // texture
 		&vertices_buf[0][0],
 		8, // verts, stride
 		&fcolor,
@@ -657,7 +636,7 @@ draw_box_border :: proc(box: Rect, corners: CornerRadii, borders: BorderWidths, 
 	fcolor := SDL.FColor(color)
 	SDL.RenderGeometryRaw(
 		renderer,
-		helper, // texture
+		gfx.helper, // texture
 		&buffer.vertices[0][0],
 		8, // verts + stride
 		&fcolor,
