@@ -4,7 +4,6 @@ package engine
 import "engine:ui"
 import SDL "vendor:sdl3"
 
-import clay "clay-odin"
 import evt "events"
 
 
@@ -61,7 +60,6 @@ system_handler :: proc(event: ^Event) {
 		event.handled = true
 		window_event := sdl_event.window
 		win_size = {window_event.data1, window_event.data2}
-		clay.SetLayoutDimensions({f32(win_size.x), f32(win_size.y)})
 		//ui_dirty = true
 
 	case .WINDOW_DISPLAY_SCALE_CHANGED:
@@ -86,7 +84,6 @@ system_handler :: proc(event: ^Event) {
 
 	if pressed, matches := evt.match_mapping_button(event, input_inspector); matches && pressed {
 		event.handled = true
-		clay.SetDebugModeEnabled(true)
 	}
 }
 

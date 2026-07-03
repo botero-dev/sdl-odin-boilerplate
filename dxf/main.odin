@@ -18,7 +18,6 @@ import abm "engine:math"
 
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
-import clay "engine:clay-odin"
 
 import "dxf"
 
@@ -296,43 +295,13 @@ iterate :: proc() {
     free_all(context.temp_allocator)
 
 	ui.layout_begin({f32(ab.win_size.x), f32(ab.win_size.y)}, ab.dpi)
-	/////////////////////////////////////
-
-	// ui.layout_container(ui.Layout_Linear_Horizontal{})
-	// layout_viewport()
-	// layout_layers()
-	// ui.layout_close()
 
 	ui.panels_present_layout(panels)
 
-	/////////////////////////////////////////
 	ui.layout_end()
-	ab.render_layout(&ui.render_commands)
 
-	if tex_new_ui == nil {
-		tex_new_ui = SDL.CreateTexture(ab.renderer, .RGBA8888, .TARGET, 4096, 4096)
-	}
+	layout_draw()
 
-	SDL.SetRenderTarget(ab.renderer, tex_new_ui)
-		SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 0)
-		SDL.RenderClear(ab.renderer)
-		layout_draw()
-	SDL.SetRenderTarget(ab.renderer, nil)
-
-	r := SDL.FRect {0, 0, f32(ab.win_size.x), f32(ab.win_size.y)}
-	//SDL.SetTextureAlphaModFloat(tex_new_ui, 0.5)
-
-	counter += 1
-	if counter % 60 == 0 {
-		toogle = !toogle
-	}
-
-	if toogle {
-		SDL.RenderTexture(ab.renderer, tex_new_ui, &r, &r )
-	}
-
-	SDL.SetTextureAlphaModFloat(tex_new_ui, 1)
-	
 	ab.draw_present()
 
 	err := SDL.GetError()
@@ -349,7 +318,6 @@ layout_draw :: proc() {
 		if item.color.a != 0 {
 			rect := transmute(ab.Rect)item.layout_rect
 			SDL.SetRenderDrawColorFloat(ab.renderer, 1, 1, 1, 1)
-			SDL.SetRenderColorScale(ab.renderer, 1)
 			SDL.SetRenderDrawBlendMode(ab.renderer, {.BLEND})
 
 			c := item.color
@@ -381,6 +349,7 @@ layout_draw :: proc() {
 		if decl.is_text {
 			cstr := cstring(raw_data(decl.text))
 		    sdl_text := ui.get_text_with_font_size(decl.text_font, decl.text_size)
+			TTF.SetTextColor(sdl_text, 255, 255, 255, 255)
 			TTF.SetTextString(sdl_text, cstr, uint(len(decl.text)))
 			TTF.DrawRendererText(sdl_text, f32(item.layout_rect.x), f32(item.layout_rect.y))
 		}
@@ -391,9 +360,6 @@ layout_draw :: proc() {
 	}
 }
 
-viewport_render_data := ab.CustomRenderData {
-	callback = draw_viewport_clay
-}
 
 layout_viewport :: proc () {
 
@@ -419,11 +385,6 @@ layout_viewport :: proc () {
 
 }
 
-
-draw_viewport_clay :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
-	box := transmute(ab.Rect)render_command.boundingBox
-	draw_viewport(box)
-}
 
 draw_viewport_ab :: proc(layout: ui.LayoutState, index: int) {
 	item := layout.items_tree[index]

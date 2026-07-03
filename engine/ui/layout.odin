@@ -1,9 +1,8 @@
 package ui
 
+import "base:runtime"
 import "engine:ui"
 import "core:log"
-
-import clay "../clay-odin"
 
 
 layout_stack: [dynamic]ChildrenLayout
@@ -128,10 +127,11 @@ LayoutHint :: union {
 }
 
 layout_hint: LayoutHint
+layout_hint_loc: runtime.Source_Code_Location
 
-layout_overlay_child :: proc(rule: OverlayChildSizing) {
+layout_overlay_child :: proc(rule: OverlayChildSizing, loc := #caller_location) {
 	if layout_hint != nil {
-		log.error("unconsumed layout hint '", layout_hint, "' before pushing '", rule, "'")
+		log.error("unconsumed layout hint set at:", layout_hint_loc, layout_hint, "' before pushing '", rule, "'")
 	}
 
 	current := layout_stack[len(layout_stack)-1]
@@ -145,12 +145,13 @@ layout_overlay_child :: proc(rule: OverlayChildSizing) {
 	}
 
 	layout_hint = rule
+	layout_hint_loc = loc
 }
 
 
-layout_linear_child :: proc(rule: LinearChildSizingFixed) {
+layout_linear_child :: proc(rule: LinearChildSizingFixed, loc := #caller_location) {
 	if layout_hint != nil {
-		log.error("unconsumed layout hint '", layout_hint, "' before pushing '", rule, "'")
+		log.error("unconsumed layout hint set at:", layout_hint_loc, layout_hint, "' before pushing '", rule, "'")
 	}
 
 	current := layout_stack[len(layout_stack)-1]
@@ -164,39 +165,14 @@ layout_linear_child :: proc(rule: LinearChildSizingFixed) {
 	}
 
 	layout_hint = rule
+	layout_hint_loc = loc
 }
 
-
-convert_to_clay_rule :: proc(rule: Sizing) -> clay.SizingAxis {
-	r: clay.SizingAxis
-	switch rule.type {
-		case .Fit:
-			r = {type = .Fit, constraints = {sizeMinMax = {0,0}}}
-		case .RealPixels:
-			v := rule.amount
-			r = {type = .Fit, constraints = {sizeMinMax = {v, v}}}
-		case .DensityPixels:
-			v := rule.amount * scale_factor
-			r = {type = .Fit, constraints = {sizeMinMax = {v, v}}}
-		case .Ratio:
-			v := rule.amount
-			r = {type = .Percent, constraints = {sizeMinMax = {v, v}}}
-		case .Weight:
-			v := f32(0) //rule.amount
-			r = {type = .Grow, constraints = {sizeMinMax = {v, v}}}
-	}
-	return r
-}
 
 layout_scrollview :: proc(maybe_tag:Maybe(string) = nil) {
 
 	_layout_create(ui.Layout_Extend{})
 	
-	clay_elem.clip = {
-		vertical = true,
-		childOffset = clay.GetScrollOffset(),
-	}
-
 	_layout_open()
 	
 }
@@ -207,10 +183,10 @@ layout_container :: proc(children_layout: ChildrenLayout, style: ^StyleClass = n
 
 	if style != nil {
 		box_style := get_current_style(&style_tab_bar, BoxStyleColored)
-		apply_style_box_colored(&clay_elem, box_style^)
+		_layout_open_styled(style=box_style)
+	} else {
+		_layout_open()
 	}
-
-	_layout_open()
 }
 
 DEBUG := false
@@ -231,88 +207,23 @@ layout_custom :: proc(custom_data: Layout_Custom_Data) {
 
 class_btn := style_class("Button")
 
-text_config: ^clay.TextElementConfig
-
-
-config_box_style :: proc(elem: ^clay.ElementDeclaration, style: BoxStyle) {
-	
-	switch s in style {
-		case BoxStyleColored:
-			config_box_colored(elem, s)
-		case BoxStyleTextured:
-			config_box_textured(s)
-	}
-}
+text_config: ^TextElementConfig
 
 
 
-apply_style_box_colored :: proc(elem: ^clay.ElementDeclaration, style: BoxStyleColored) {
-
-	elem.layout.padding = {
-		u16(style.padding.left),
-		u16(style.padding.right),
-		u16(style.padding.top),
-		u16(style.padding.bottom),
-	}
-
-	elem.backgroundColor = style.background
-	
-	elem.border = {
-		color = style.border_color,
-		width = {
-			u16(style.border_width.w),
-			u16(style.border_width.e),
-			u16(style.border_width.n),
-			u16(style.border_width.s),
-			0,
-		}	
-	}
-	elem.cornerRadius = transmute(clay.CornerRadius) style.corner_radii
-}
-	
-
-config_box_colored :: proc(elem: ^clay.ElementDeclaration, style: BoxStyleColored) {
-
-	elem.layout.padding = {
-				u16(style.padding.left),
-				u16(style.padding.right),
-				u16(style.padding.top),
-				u16(style.padding.bottom),
-			}
-	elem.backgroundColor = style.background
-	elem.border = {
-			color = style.border_color,
-			width = {
-				u16(style.border_width.w),
-				u16(style.border_width.e),
-				u16(style.border_width.n),
-				u16(style.border_width.s),
-				0,
-			}
-		}
-	elem.cornerRadius = transmute(clay.CornerRadius) style.corner_radii
-
-}
-
-config_box_textured :: proc(style: BoxStyleTextured) {
-
-}
-
-
-layout_text_const :: proc($text: string, in_config: ^clay.TextElementConfig = nil) {
+layout_text_const :: proc($text: string, in_config: ^TextElementConfig = nil) {
 	config := in_config
 	if config == nil {
 		config = text_config_default
 	}
-	clay.Text(text, config)
+	_layout_text(text, config.fontSize, config.fontId)	
 }
 
-layout_text_dynamic :: proc(text: string, in_config: ^clay.TextElementConfig = nil) {
+layout_text_dynamic :: proc(text: string, in_config: ^TextElementConfig = nil) {
 	config := in_config
 	if config == nil {
 		config = text_config_default
 	}
-	clay.TextDynamic(text, config)
 	_layout_text(text, config.fontSize, config.fontId)
 }
 
@@ -332,11 +243,6 @@ layout_textbox :: proc(text: string, variant: ^StyleClass = nil, info: ^HandlerI
 	_layout_create(Layout_Linear_Horizontal{})
 
 	ui_add_button(text, info)
-	if clay.Hovered() {
-		style = &box_style.hover_box
-	}
-
-	config_box_style(&clay_elem, style^)
 
 	_layout_open()
 	

@@ -1,7 +1,6 @@
 package ui
 
 import "engine:gfx"
-import clay "../clay-odin"
 
 Style :: struct {
 
@@ -82,16 +81,6 @@ ButtonStyle :: struct {
 	hover_text: TextStyle,
 	pressed_text: TextStyle,
 	disabled_text: TextStyle,
-}
-
-TextStyle :: struct {
-	using config: clay.TextElementConfig
-	/* // maybe use these in the future:
-	color: Color,
-	font: i32,
-	size: f32,
-	modifier: i32, // future bitmask for black/italics/underline/strikethrough
-	*/
 }
 
 

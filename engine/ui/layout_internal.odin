@@ -5,7 +5,6 @@ import "core:strings"
 import "core:mem"
 import "core:fmt"
 
-import clay "../clay-odin"
 import abm "../math"
 
 
@@ -26,15 +25,10 @@ Layout_Custom_Data :: struct {
 
 
 current_layout_dimensions: f32x2
-text_config_default: ^clay.TextElementConfig
-
-render_commands: clay.ClayArray(clay.RenderCommand)
 
 _layout_set_dimensions :: proc(size: f32x2) {
 
     current_layout_dimensions = size
-    clay.SetLayoutDimensions({current_layout_dimensions.x, current_layout_dimensions.y})
-	
 
 }
 
@@ -45,13 +39,8 @@ padding_round_policy := RoundingPolicy.Round
 
 
 _layout_set_default_config :: proc() {
-   	text_config_default = clay.TextConfig(
-		{
-			textColor = {1,1,1,1},
-			fontSize = u16(scaling_apply_rounded(text_round_policy, 14)), // clay expects an integer here
-			textAlignment = .Left,
-		},
-	)
+	text_config_default = new(TextElementConfig)
+	text_config_default.fontSize = 14
 }
 
 text_arena_mem : [1024*1024]u8
@@ -60,7 +49,6 @@ text_arena: mem.Arena
 _layout_begin :: proc(in_scale_factor: f32) {
 	mem.arena_init(&text_arena, text_arena_mem[:])
     scale_factor = in_scale_factor
-   	clay.BeginLayout()
 	clear(&layout_state.items_decl)	
 	clear(&layout_state.items_tree)
 	layout_state = {}
@@ -70,11 +58,9 @@ _layout_begin :: proc(in_scale_factor: f32) {
 
 _layout_end :: proc() {
 	_layout_compute()
-	render_commands = clay.EndLayout()
 }
 
 
-clay_elem: clay.ElementDeclaration
 child_layout: ChildrenLayout
 container_idx: int
 
@@ -87,16 +73,13 @@ _layout_create :: proc(in_child_layout: ChildrenLayout) {
 	}
 
 	child_layout = in_child_layout
-   	clay._OpenElement()
-	clay_elem = {}
 
 	new_item_idx = len(layout_state.items_decl)
 	append(&layout_state.items_decl, LayoutItemDeclaration {})
 	item_decl := &layout_state.items_decl[new_item_idx]
 	item_decl.layout_hint = layout_hint
+	layout_hint = nil
 
-
-    apply_decl(&clay_elem, child_layout)
 	append(&layout_stack, child_layout)
 }
 
@@ -115,27 +98,25 @@ _layout_open :: proc(comment: string = "") {
 
 
 _layout_open_styled :: proc(comment: string = "", style: ^$T = nil) {
-    clay.ConfigureOpenElement(DPI(clay_elem))
 	item_decl := &layout_state.items_decl[new_item_idx]
 	item_decl.children_layout = child_layout
 	item_decl.parent_idx = container_idx
 
-	p := clay_elem.layout.padding
-	item_decl.padding = {
-		scaling_apply_rounded(padding_round_policy, p.left),
-		scaling_apply_rounded(padding_round_policy, p.right),
-		scaling_apply_rounded(padding_round_policy, p.top),
-		scaling_apply_rounded(padding_round_policy, p.bottom),
-	}
-
-	item_decl.color = clay_elem.backgroundColor
 	if style != nil {
 		if (T ==  BoxStyleColored) {
 			box_colored := (^BoxStyleColored)(style)
 			item_decl.color = box_colored.background
+			item_decl.padding = box_colored.padding
+		} else if T == ButtonStyle {
+			button_style := (^ButtonStyle)(style)
+			box_colored := button_style.idle_box.(BoxStyleColored)
+			item_decl.color = box_colored.background
+			item_decl.padding = box_colored.padding
+		} else {
+			log.info(style)
 		}
 		item_decl.override = {T, style}
-	}
+	} 
 
 	item_decl.comment = comment
 	
@@ -145,7 +126,6 @@ _layout_open_styled :: proc(comment: string = "", style: ^$T = nil) {
 
 _layout_close :: proc() {
 	pop(&layout_stack)
-	clay._CloseElement()
 	container_idx = layout_state.items_decl[container_idx].parent_idx
 }
 
@@ -166,7 +146,9 @@ _layout_text :: proc(text: string, size: u16, font: u16) -> int {
 	item_decl.is_text = true
 	item_decl.text = new_string
 	item_decl.text_font = font
-	item_decl.text_size = size
+	
+	font_size_with_scalefactor := scaling_apply_rounded(.Round, size)
+	item_decl.text_size = u16(font_size_with_scalefactor)
 	return new_item_idx
 }
 
@@ -514,6 +496,8 @@ layout_process_event :: proc(event: ^PointerEvent) {
 	layout_process_event_item(event)
 }
 
+LOG_POINTER_EVENTS :: false
+
 layout_process_event_item :: proc(event: ^PointerEvent) {
 
 	index := layout_cursor
@@ -525,10 +509,12 @@ layout_process_event_item :: proc(event: ^PointerEvent) {
 	// todo: check drag with touch in scroll views
 	cursor_hovers := abm.point_in_rect(event.coords, item_tree.layout_rect) 
 	if cursor_hovers {
-		// for idx in 0..<indent {
-		// 	fmt.print("    ")
-		// }
-		// fmt.println(event.event.phase, index, item_tree)
+		when LOG_POINTER_EVENTS {
+			for idx in 0..<indent {
+				fmt.print("    ")
+			}
+			fmt.println(event.event.phase, index, item_tree)
+		}
 
 		if item_decl.handler != nil {
 			item_decl.handler(event, item_decl.handler_data)
@@ -553,138 +539,24 @@ layout_process_event_item :: proc(event: ^PointerEvent) {
 		}
 		
 		event.event.phase = .Bubbling
-		
-		// for idx in 0..<indent {
-		// 	fmt.print("    ")
-		// }
-		// fmt.println(event.event.phase, index, item_tree)
-
+		when LOG_POINTER_EVENTS {	
+			for idx in 0..<indent {
+				fmt.print("    ")
+			}
+			fmt.println(event.event.phase, index, item_tree)
+		}
 		if item_decl.handler != nil {
 			item_decl.handler(event, item_decl.handler_data)
-		
-			if event.event.handled {
-				fmt.println(event.event.phase, "handled", index, item_tree)
-				// stop propagating inwards, event was handled in capturing phase
+			when LOG_POINTER_EVENTS {
+				if event.event.handled {
+					fmt.println(event.event.phase, "handled", index, item_tree)
+					// stop propagating inwards, event was handled in capturing phase
+				}
 			}
-			
 		}
-
-
 	}
 
 	layout_cursor = item_decl.end
 }
 
-
-
-
-apply_decl :: proc(elem: ^clay.ElementDeclaration, children_layout: ChildrenLayout) {
-
-	direction: clay.LayoutDirection
-	#partial switch c in children_layout {
-		case Layout_Linear_Horizontal:
-			direction = .LeftToRight
-			elem.layout.childGap = u16(c.separation)
-		case Layout_Linear_Vertical:
-			direction = .TopToBottom
-			elem.layout.childGap = u16(c.separation)
-	}
-	elem.layout.layoutDirection = direction
-
-
-	item_sizing := clay.Sizing {}
-
-	item_floating := clay.FloatingElementConfig {}
-
-	current := layout_stack[len(layout_stack)-1]
-	switch layout in current {
-		case Layout_Overlay_Float:
-			item_floating.attachTo = .Parent
-			rule := OverlayChildSizing {}
-
-			if cached_rule, ok := layout_hint.(OverlayChildSizing); ok {
-				rule = cached_rule
-				layout_hint = nil // is this really necessary/desired?
-			}
-		
-			if rule.sizing_x == .Fill {
-				item_sizing.width = {type = .Percent, constraints = {sizePercent = 1}}
-			} else {
-				item_sizing.width = {type = .Fit}
-			}
-			if rule.sizing_y == .Fill {
-				item_sizing.height = {type = .Percent, constraints = {sizePercent = 1}}
-			} else {
-				item_sizing.height = {type = .Fit}
-			}
-			point: clay.FloatingAttachPointType
-			if rule.sizing_x == .Fill && rule.sizing_y == .Begin {  point = .LeftTop }
-			if rule.sizing_x == .Fill && rule.sizing_y == .Fill {   point = .LeftTop }
-			if rule.sizing_x == .Fill && rule.sizing_y == .Middle { point = .LeftCenter }
-			if rule.sizing_x == .Fill && rule.sizing_y == .End {    point = .LeftBottom }
-			if rule.sizing_x == .Begin && rule.sizing_y == .Begin {	 point = .LeftTop }
-			if rule.sizing_x == .Begin && rule.sizing_y == .Fill {   point = .LeftTop }
-			if rule.sizing_x == .Begin && rule.sizing_y == .Middle { point = .LeftCenter }
-			if rule.sizing_x == .Begin && rule.sizing_y == .End {    point = .LeftBottom }
-			if rule.sizing_x == .Middle && rule.sizing_y == .Begin {  point = .CenterTop }
-			if rule.sizing_x == .Middle && rule.sizing_y == .Fill {   point = .CenterTop }
-			if rule.sizing_x == .Middle && rule.sizing_y == .Middle { point = .CenterCenter }
-			if rule.sizing_x == .Middle && rule.sizing_y == .End {    point = .CenterBottom }
-			if rule.sizing_x == .End && rule.sizing_y == .Begin {	 point = .RightTop }
-			if rule.sizing_x == .End && rule.sizing_y == .Fill {	 point = .RightTop }
-			if rule.sizing_x == .End && rule.sizing_y == .Middle { point = .RightCenter }
-			if rule.sizing_x == .End && rule.sizing_y == .End {    point = .RightBottom }
-			
-			item_floating.attachment.element = point
-			item_floating.attachment.parent = point
-
-		case Layout_Extend:
-			// we shouldn't need this, but clay can't do overlay layout without 
-			// using "floating". but then the children won't affect parents during layout.
-			//
-			// So for now, we have layout_extend which is like overlay, but demands using only one child
-
-			rule := OverlayChildSizing {}
-			
-			if cached_rule, ok := layout_hint.(OverlayChildSizing); ok {
-				rule = cached_rule
-				layout_hint = nil // is this really necessary/desired?
-			}
-		
-			if rule.sizing_x == .Fill {
-				item_sizing.width = {type = .Grow}
-			} else {
-				item_sizing.width = {type = .Fit}
-			}
-			if rule.sizing_y == .Fill {
-				item_sizing.height = {type = .Grow}
-			} else {
-				item_sizing.height = {type = .Fit}
-			}
-		
-		case Layout_Linear_Horizontal:
-			rule := LinearChildSizingFixed {}
-			rule.height = {type = .Weight} // in horizontal containers, elements fill vertically by default
-			if in_rule, ok := layout_hint.(LinearChildSizingFixed); ok {
-				rule = in_rule
-				layout_hint = nil
-			}
-			item_sizing.width = convert_to_clay_rule(rule.width)
-			item_sizing.height = convert_to_clay_rule(rule.height)
-			//log.info(maybe_tag, item_sizing)
-		case Layout_Linear_Vertical:
-			rule := LinearChildSizingFixed {}
-			rule.width = {type = .Weight} // in vertical containers, elements fill horizontally by default
-			if in_rule, ok := layout_hint.(LinearChildSizingFixed); ok {
-				rule = in_rule
-				layout_hint = nil
-			}
-			item_sizing.width = convert_to_clay_rule(rule.width)
-			item_sizing.height = convert_to_clay_rule(rule.height)
-			//log.info(maybe_tag, item_sizing)
-	}
-
-	elem.layout.sizing = item_sizing
-	elem.floating = item_floating
-}
 

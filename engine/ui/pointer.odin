@@ -2,7 +2,6 @@ package ui
 
 import "core:fmt"
 import evt "../events"
-import clay "../clay-odin"
 
 Event :: evt.Event
 
@@ -51,7 +50,6 @@ ui_push_pointer_handler :: proc(handler: PointerHandler = nil, user_data: rawptr
 	current_handler = handler_idx
 
 	entry_handle := rawptr(uintptr(handler_idx))
-	clay.OnHover(layout_handle_mouse_input, entry_handle)
 
 	item_decl := &layout_state.items_decl[new_item_idx]
 	item_decl.handler = handler
@@ -73,56 +71,6 @@ ui_pointer_handler :: proc(handler: PointerHandler = nil, user_data: rawptr = ni
 // the stack so we can walk back to the root from the hovered item, this way we
 // can call mouse handlers from the outermost element to the innermost to allow
 // interception, and then bubble back the event to the root.
-
-receiver: i32 = 0
-
-layout_handle_mouse_input :: proc "c" (
-	id: clay.ElementId,
-	pointerData: clay.PointerData,
-	userData: rawptr,
-) {
-	receiver = i32(uintptr(userData))
-}
-
-current_pointer_handler_stack: [dynamic]i32
-
-finish_handling_mouse_input :: proc(event: ^Event) {
-	if receiver == 0 {
-		return
-	}
-	clear(&current_pointer_handler_stack)
-
-	append(&current_pointer_handler_stack, receiver)
-
-	pointer_handler := pointer_handler_buffer[receiver]
-	for pointer_handler.parent_idx != 0 {
-		append(&current_pointer_handler_stack, pointer_handler.parent_idx)
-		pointer_handler = pointer_handler_buffer[pointer_handler.parent_idx]
-	}
-
-
-	event.phase = .Capturing
-	#reverse for index in current_pointer_handler_stack {
-		handler := pointer_handler_buffer[index]
-		if handler.handler != nil {
-			handler.handler(event, handler.user_data)
-			if event.handled {
-				break
-			}
-		}
-	}
-	event.phase = .Bubbling
-	for index in current_pointer_handler_stack {
-		handler := pointer_handler_buffer[index]
-		if handler.handler != nil {
-			handler.handler(event, handler.user_data)
-			if event.handled {
-				break
-			}
-		}
-	}
-}
-
 wheel_delta: [2]f32
 
 coords := f32x2{}
@@ -137,7 +85,6 @@ ui_push_pointer_event :: proc(event: ^Event) {
 			return
 	}
 
-	receiver = 0
 
 	pressed: bool = false
 
@@ -192,6 +139,6 @@ ui_idle :: proc(dt: f64) {
 }
 
 update_scroll :: proc(dt: f32) {
-	clay.UpdateScrollContainers(false, {wheel_delta.x, wheel_delta.y}, dt)
+	//clay.UpdateScrollContainers(false, {wheel_delta.x, wheel_delta.y}, dt)
 	wheel_delta = {}
 }

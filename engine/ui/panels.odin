@@ -2,8 +2,6 @@ package ui
 
 import "core:log"
 
-import clay "../clay-odin"
-
 /*
     panel system lets you specify panel id+callback, and then
     you can have a data driven layout that you can save and modify
@@ -228,8 +226,6 @@ panels_present_registered_item :: proc (item: PanelLayoutRegisteredItem) {
     
     _layout_create(Layout_Extend{})
    	
-    config_box_style(&clay_elem, style_panel)
-	
     _layout_open_styled(definition.name, &style_panel)
 
     definition.callback()

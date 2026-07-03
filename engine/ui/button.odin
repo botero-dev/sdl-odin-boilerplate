@@ -3,7 +3,6 @@ package ui
 import SDL "vendor:sdl3"
 
 import evt "../events"
-import clay "../clay-odin"
 
 
 ButtonHandlerSimple :: #type proc()
@@ -88,11 +87,6 @@ layout_button_handler :: proc(text: string, info: ^HandlerInfo = nil, variant: ^
 		ui_add_button(text, info)
 	}
 	style: ^BoxStyle = &btn_style.idle_box
-	if clay.Hovered() {
-		style = &btn_style.hover_box
-	}
-	
-	config_box_style(&clay_elem, style^)
 
 	_layout_open_styled("", btn_style)
 	

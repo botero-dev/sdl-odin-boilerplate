@@ -12,8 +12,6 @@ import "core:strings"
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
 
-import clay "clay-odin"
-
 
 
 vec2 :: [2]f32
@@ -33,154 +31,8 @@ DPI_mult :: proc "contextless" (value: f32) -> f32 {
 
 print_render_commands: bool
 
-
-render_layout :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand)) {
-
-	for idx in 0 ..< i32(render_commands.length) {
-		render_command := clay.RenderCommandArray_Get(render_commands, idx)
-
-		box := transmute(Rect)render_command.boundingBox
-
-		switch render_command.commandType {
-		case .Rectangle:
-			if print_render_commands {
-				log.info("cmd:", idx, render_command, render_command.renderData.rectangle)
-			}
-
-			rect := render_command.renderData.rectangle
-			corners := rect.cornerRadius
-			if corners == {0, 0, 0, 0} {
-				//fmt.println(render_command)
-				color := rect.backgroundColor
-				SDL.SetRenderDrawColorFloat(renderer, color[0], color[1], color[2], color[3])
-				SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
-				rect2 := SDL.FRect(box)
-				SDL.RenderFillRect(renderer, &rect2)
-			} else {
-				corners := transmute(CornerRadii)rect.cornerRadius
-				color := Color(rect.backgroundColor)
-				draw_box_filled(box, corners, color)
-			}
-
-		case .Border:
-			if print_render_commands {
-				log.info("cmd:", idx, render_command, render_command.renderData.border)
-			}
-
-			border := render_command.renderData.border
-			radii := transmute(CornerRadii)border.cornerRadius
-			borders := BorderWidths {
-				f32(border.width.left),
-				f32(border.width.right),
-				f32(border.width.top),
-				f32(border.width.bottom),
-			}
-			draw_box_border(box, radii, borders, border.color)
-
-		case .Text:
-			//fmt.println(render_command)
-			text_data := render_command.renderData.text
-			string_slice := text_data.stringContents
-			color := text_data.textColor
-
-			text := ui.get_text_with_font_size(text_data.fontId, text_data.fontSize)
-
-			if text != nil {
-				color *= draw_state.modulate
-				TTF.SetTextColor(
-					text,
-					u8(color[0] * 255),
-					u8(color[1] * 255),
-					u8(color[2] * 255),
-					u8(color[3] * 255),
-				)
-				TTF.SetTextString(text, cstring(string_slice.chars), uint(string_slice.length))
-				TTF.SetTextWrapWidth(text, 0)
-				//TTF.DrawRendererText(text, math.round(box.x), math.round(box.y))
-
-				m := linalg.transpose(draw_state.user_matrix)
-				TTF.DrawRendererTextTx(text, box.x, box.y, &m[0][0])
-			}
-
-		case .Image:
-			if print_render_commands {
-				log.info("cmd:", idx, render_command, render_command.renderData.image)
-			}
-
-			image := render_command.renderData.image
-			color := image.backgroundColor
-
-			tex := (^SDL.Texture)(image.imageData)
-			SDL.SetTextureColorModFloat(tex, color[0], color[1], color[2])
-			SDL.SetTextureAlphaModFloat(tex, color[3])
-			SDL.SetTextureBlendMode(tex, {.BLEND})
-
-			rect2 := SDL.FRect(box)
-			SDL.RenderTexture(renderer, tex, nil, &rect2)
-
-			corners := image.cornerRadius
-			if corners != {0, 0, 0, 0} {
-				log.info("image unhandled case!")
-			}
-		case .ScissorStart:
-			clip_rect := SDL.Rect{i32(box.x), i32(box.y), i32(box.w), i32(box.h)}
-			SDL.SetRenderClipRect(renderer, &clip_rect)
-		case .ScissorEnd:
-			SDL.SetRenderClipRect(renderer, nil)
-		case .None:
-			fmt.println(
-				"unhandled render command type: None",
-				render_command.commandType,
-				render_command,
-			)
-		case .Custom:
-			custom_render_data: clay.CustomRenderData = render_command.renderData.custom
-
-			custom_data := (^CustomRenderData)(custom_render_data.customData)
-			custom_data.callback(custom_data, render_command)
-		}
-	}
-}
-
-CustomRenderCallback :: #type proc(
-	render_data: ^CustomRenderData,
-	render_command: ^clay.RenderCommand,
-)
-
-CustomRenderData :: struct {
-	callback: CustomRenderCallback,
-}
-
-
-// TextElementConfig :: struct {
-// 	userData:           rawptr,
-// 	textColor:          Color,
-// 	fontId:             u16,
-// 	fontSize:           u16,
-// 	letterSpacing:      u16,
-// 	lineHeight:         u16,
-// 	wrapMode:           TextWrapMode,
-// 	textAlignment:      TextAlignment,
-// }
-
-// StringSlice :: struct {
-// 	length: c.int32_t,
-// 	chars:  [^]c.char,
-// 	baseChars:  [^]c.char,
-// }
-
-
-clay_memory: []byte
-
 ui_init :: proc() {
 	ui._nav_init()
-
-	min_size := clay.MinMemorySize()
-	clay_memory = make([]byte, min_size)
-	clay_arena := clay.CreateArenaWithCapacityAndMemory(uint(min_size), &clay_memory[0])
-	clay.Initialize(clay_arena, {}, {handler = clay_error_handler})
-	clay.SetMeasureTextFunction(ui.clay_measure_text, nil)
-	clay.SetCullingEnabled(false)
 
 	request_data_async("InterVariable.ttf", nil, assign_font)
 }
@@ -199,13 +51,12 @@ assign_font :: proc(result: RequestResult) {
 default_font_id: u16 = ui.NIL_FONT
 
 
-
-clay_error_handler :: proc "c" (errorData: clay.ErrorData) {
-	context = get_global_context()
-	log.info(errorData)
+CustomRenderData :: struct {
+	callback: proc(render_data: ^CustomRenderData, render_command: ^RenderCommand),
 }
-
-
+RenderCommand :: struct {
+	boundingBox: Rect
+}
 
 UIModifier :: struct {
 	using custom_render_data: CustomRenderData,
@@ -226,7 +77,7 @@ ui_modifier_modulate :: proc(color: [4]f32) -> UIModifierModulate {
 
 ui_modifier_modulate_callback :: proc(
 	render_data: ^CustomRenderData,
-	render_command: ^clay.RenderCommand,
+	render_command: ^RenderCommand,
 ) {
 	modulate := (^UIModifierModulate)(render_data)
 	if !modulate.pushed {
@@ -252,7 +103,7 @@ ui_modifier_transform :: proc "contextless" (
 }
 ui_modifier_transform_callback :: proc(
 	render_data: ^CustomRenderData,
-	render_command: ^clay.RenderCommand,
+	render_command: ^RenderCommand,
 ) {
 	modifier := (^UIModifierTransform)(render_data)
 	if !modifier.pushed {
@@ -298,7 +149,7 @@ current_modifier: ^UIModifier
 ui_modifier_push :: proc(modifier: ^UIModifier) {
 	// only open
 	ui._layout_create(ui.Layout_Extend{})
-	ui.clay_elem.custom = {modifier}
+	//ui.clay_elem.custom = {modifier}
 	ui._layout_open()
 
 	if !modifier.wrap {
@@ -311,7 +162,7 @@ ui_modifier_pop :: proc(modifier: ^UIModifier) {
 		ui._layout_close()
 	}
 	ui._layout_create(ui.Layout_Extend{})
-	ui.clay_elem.custom = {modifier}
+	//ui.clay_elem.custom = {modifier}
 	ui._layout_open()
 	ui._layout_close()
 }

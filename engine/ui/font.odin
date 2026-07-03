@@ -7,7 +7,6 @@ import "core:log"
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
 
-import clay "../clay-odin"
 
 NIL_FONT :: ~u16(0)
 
@@ -80,18 +79,16 @@ measure_text :: proc(text: string, font_id: u16, font_size: u16) -> f32x2 {
 }
 
 
-clay_measure_text :: proc "c" (
-	text: clay.StringSlice,
-	config: ^clay.TextElementConfig,
-	userData: rawptr,
-) -> clay.Dimensions {
-	context = runtime.default_context()
-	font := get_font_with_size(config.fontId, config.fontSize)
-	if font == nil {
-		log.info("unable to calculate font size")
-		return {}
-	}
-	size := [2]c.int{}
-	TTF.GetStringSize(font, cstring(text.chars), uint(text.length), &size.x, &size.y)
-	return {width = f32(size.x), height = f32(size.y)}
+TextStyle :: struct {
+	//using config: clay.TextElementConfig
+	fontId: u16,
+	fontSize: u16,
+	/* // maybe use these in the future:
+	color: Color,
+	modifier: i32, // future bitmask for black/italics/underline/strikethrough
+	*/
 }
+
+TextElementConfig :: TextStyle
+
+text_config_default: ^TextElementConfig
