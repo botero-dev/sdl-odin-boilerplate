@@ -90,10 +90,7 @@ layout_button_handler :: proc(text: string, info: ^HandlerInfo = nil, variant: ^
 
 	_layout_open_styled("", btn_style)
 	
-	text_style: ^TextStyle
-	text_style = &btn_style.idle_text
-	
-	layout_text(text)
+	layout_text(text, &btn_style.idle_text)
 
 	layout_close() // box
 }
@@ -105,11 +102,9 @@ HandlerInfoGenericHeader :: struct {
 
 HandlerInfoGeneric :: struct($T: typeid) {
 	using base: HandlerInfo,
-//	using header: HandlerInfoGenericHeader,
 	callback: #type proc(userdata: T),
 	user_data: T,
 }
-
 
 create_proc_generic :: proc($T: typeid) -> proc(^HandlerInfo) {
 	_handle_proc_generic :: proc(userdata: ^HandlerInfo) {
@@ -118,19 +113,6 @@ create_proc_generic :: proc($T: typeid) -> proc(^HandlerInfo) {
 	}
 	return _handle_proc_generic
 }
-
-
-
-layout_button_callback2 :: proc(text: string, callback: ButtonHandlerSimple, variant: ^StyleClass = nil) {
-	info: ^HandlerInfoSimple
-	if callback != nil {
-		info = new(HandlerInfoSimple, context.temp_allocator)
-		info.handler = _handle_proc_simple
-		info.callback = callback
-	}
-	layout_button_handler(text, info, variant)
-}
-
 
 layout_button_full :: proc(text: string, user_data: $T, callback: #type proc(T) , variant: ^StyleClass = nil) {
 

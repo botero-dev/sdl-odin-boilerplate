@@ -268,10 +268,12 @@ draw_circle :: proc(
         draw_buffer(renderer, shared_buffer, in_color)
     }
     if simpleline, simpleline_ok := style.line.(LineStyleSimple); simpleline_ok {
-        shared_buffer.num_vertices = 0
-        shared_buffer.num_indices = 0
-        buffer_circle_outline(shared_buffer, shape.center, shape.radius, simpleline.width)
-        draw_buffer(renderer, shared_buffer, in_color)
+		if simpleline.width != 0 {
+			shared_buffer.num_vertices = 0
+			shared_buffer.num_indices = 0
+			buffer_circle_outline(shared_buffer, shape.center, shape.radius, simpleline.width)
+			draw_buffer(renderer, shared_buffer, in_color)
+		}
     }
 }
 

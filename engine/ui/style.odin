@@ -154,6 +154,10 @@ push_style :: proc(class: ^StyleClass, style: $T) {
 
 style_directory: StyleDirectory
 
+class_btn := style_class("Button")
+class_btn_icon := style_class("Button", "Icon")
+
+
 setup_directory :: proc() {
 
 	btn_style := ButtonStyle{}
@@ -177,10 +181,16 @@ setup_directory :: proc() {
 	pressed_box.border_color = {1, 1, 1, 0.1}
 	btn_style.pressed_box = pressed_box
 
-	
-	
-	c := style_class("Button")
-	push_style(&c, btn_style)
+	btn_style.idle_text.fontSize = 14
+
+	push_style(&class_btn, btn_style)
+
+
+	btn_icon_style := btn_style
+	btn_icon_style.idle_text.fontId = 1
+	push_style(&class_btn_icon, btn_icon_style)
+
+
 
 	container_style_base := ContainerStyle {
 		padding = {4, 4, 4, 4},

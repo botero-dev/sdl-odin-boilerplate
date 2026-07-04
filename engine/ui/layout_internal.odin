@@ -39,8 +39,6 @@ padding_round_policy := RoundingPolicy.Round
 
 
 _layout_set_default_config :: proc() {
-	text_config_default = new(TextElementConfig)
-	text_config_default.fontSize = 14
 }
 
 text_arena_mem : [1024*1024]u8
@@ -146,6 +144,10 @@ _layout_text :: proc(text: string, size: u16, font: u16) -> int {
 	item_decl.is_text = true
 	item_decl.text = new_string
 	item_decl.text_font = font
+
+	if size == 0 {
+		log.warn("text size zero")
+	}
 	
 	font_size_with_scalefactor := scaling_apply_rounded(.Round, size)
 	item_decl.text_size = u16(font_size_with_scalefactor)

@@ -69,6 +69,8 @@ init_styles :: proc() {
     tab_style.hover_box = tab_style.idle_box
     tab_style.pressed_box = tab_style.idle_box
 
+    tab_style.idle_text.fontSize = 14
+
     style_tab_button = style_class("Button", "tab")
     push_style(&style_tab_button, tab_style)    
 
@@ -82,6 +84,7 @@ init_styles :: proc() {
 
     tab_style_inactive.hover_box = tab_style_inactive.idle_box
     tab_style_inactive.pressed_box = tab_style_inactive.idle_box
+    tab_style_inactive.idle_text.fontSize = 14
     
     style_tab_button_inactive = style_class("Button", "tab_inactive")
     push_style(&style_tab_button_inactive, tab_style_inactive)

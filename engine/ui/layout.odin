@@ -8,6 +8,16 @@ import "core:log"
 layout_stack: [dynamic]ChildrenLayout
 
 
+
+init :: proc() {
+	text_config_default = new(TextElementConfig)
+	text_config_default.fontSize = 14
+
+	_nav_init()
+
+}
+
+
 layout_begin :: proc(size: f32x2, scale_factor: f32) {
 
 	if layout_hint != nil {
@@ -205,7 +215,6 @@ layout_custom :: proc(custom_data: Layout_Custom_Data) {
 }
 
 
-class_btn := style_class("Button")
 
 text_config: ^TextElementConfig
 

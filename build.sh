@@ -133,7 +133,6 @@ elif [[ "$TARGET" = "web" ]]; then
 		emcc \
 		-o "$PACKAGE_PATH/index.html" \
 		"$BUILD_OBJ_PATH/game.wasm.o" \
-		"engine/clay-odin/wasm/clay.o" \
 		"$INSTALL_PATH/lib/libSDL3.a" \
 		"$INSTALL_PATH/lib/libSDL3_image.a" \
 		"$INSTALL_PATH/lib/libSDL3_ttf.a" \

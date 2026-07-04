@@ -19,6 +19,11 @@ loaded_fonts: u16 = 0
 fonts: [dynamic]FontData
 text_engine: ^TTF.TextEngine
 
+default_font_id: u16 = NIL_FONT
+symbol_font_id: u16 = NIL_FONT
+
+
+
 
 load_font_io :: proc(io: ^SDL.IOStream) -> u16 {
 	new_font := FontData {
@@ -92,3 +97,11 @@ TextStyle :: struct {
 TextElementConfig :: TextStyle
 
 text_config_default: ^TextElementConfig
+
+refresh_font_styles :: proc() {
+	btn_style := get_current_style(&class_btn, ButtonStyle)
+	btn_style.idle_text.fontId = default_font_id
+
+	btn_icon_style := get_current_style(&class_btn_icon, ButtonStyle)
+	btn_icon_style.idle_text.fontId = symbol_font_id
+}
