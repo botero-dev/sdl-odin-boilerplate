@@ -913,7 +913,9 @@ resolve_color :: proc(index: int) -> Color {
 entity_style :: proc(entity: dxf.DXF_Entity, file: dxf.DXF_Data) -> gfx.LineStyleSimple {
 
 	index := entity_resolve_color_index(entity, file, entity.color)
-
+    if index < 0 {
+        return gfx.LineStyleSimple{width = 0, color = {0,0,0,0}}
+    }
     color := resolve_color(index)
 
 	return gfx.LineStyleSimple{width = 1, color = color}

@@ -62,7 +62,8 @@ init :: proc() {
 	ab.request_data_async("casa1.dxf", nil, dxf_callback)
 	//ab.request_data_async("trex.dxf", nil, dxf_callback)
 
-	ab.request_data_async("NotoSansCJK-VF.otf.ttc", nil, assign_font)
+	//ab.request_data_async("NotoSansCJK-VF.otf.ttc", nil, assign_font)
+	ab.request_data_async("MaterialSymbolsOutlined.ttf", nil, assign_font)
 	//ab.request_data_async("Play-Regular.ttf", nil, assign_font)
 
 
@@ -369,22 +370,6 @@ layout_viewport :: proc () {
 
 	ui.layout_custom({callback_render = draw_viewport_ab})
 
-	/*
-	clay.UI(clay.ID("viewport-content"))(
-			{
-				layout = {
-					sizing = {
-						width = clay.SizingGrow(),
-						height = clay.SizingGrow(),
-					},
-				},
-				backgroundColor = {1, 1, 1, 1},
-				custom = {&viewport_render_data},
-			},
-	)
-			*/
-
-
 }
 
 
@@ -417,7 +402,8 @@ draw_viewport :: proc(box: ab.Rect) {
 
 
 layer_toggle_vis :: proc(layer_idx: int) {
-	fmt.println("toggle layer:", layer_idx)
+	layer := &model.dxf.layers[layer_idx]
+	layer.color = -layer.color
 }
 
 layer_change_color :: proc(layer_name: string) {
@@ -433,7 +419,10 @@ layout_layers :: proc() {
 		for layer_idx in 0..<len(model.dxf.layers) {
 			layer := model.dxf.layers[layer_idx]
 			ui.layout_container(ui.Layout_Linear_Horizontal{})
-				ui.layout_button("O", layer_idx, layer_toggle_vis)
+				style := &ui.class_btn_icon
+				layer_visible := layer.color >= 0
+				layer_label := layer_visible ? "visibility" : "visibility_off"
+				ui.layout_button(layer_label, layer_idx, layer_toggle_vis, style)
 
 				ui.layout_linear_child(ui.LinearChildSizingFixed{width = {type = .Weight, amount=1,flags={.Debug}}, height={type=.Fit}, across=.Center})
 				ui.layout_container(ui.Layout_Extend{})
