@@ -1,0 +1,9 @@
+[submodule "vendor/odin"]
+	path = vendor/odin
+	url = git@github.com:0xafbf/Odin.git
+[submodule "vendor/SDL"]
+	path = vendor/SDL
+	url = https://github.com/libsdl-org/SDL.git
+[submodule "vendor/SDL_ttf"]
+	path = vendor/SDL_ttf
+	url = git@github.com:libsdl-org/SDL_ttf.git
