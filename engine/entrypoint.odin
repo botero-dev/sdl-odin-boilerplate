@@ -55,19 +55,21 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
 		log.info("android_main")
 	}
 
-	/*
-
+	// SDL's Java layer calls SDL_main() from libmain.so to drive the app.
+	// It must be exported so nativeRunMain can find it, otherwise the
+	// activity is torn down with "Couldn't find function SDL_main".
+	// app_init() (run at library load from the .init thread) has already
+	// registered the app callbacks by the time this runs.
 	@(export)
 	SDL_main :: proc "c" (argc: i32, argv: [^]cstring) -> i32 {
 		context = runtime.default_context()
 		context.logger = runtime.Logger {
 			procedure = sdl_log_proc,
 		}
+		ctx = context
 		log.info("android SDL_main")
-		main()
-		return 0
+		return i32(SDL.EnterAppMainCallbacks(0, nil, sdl_init, sdl_iterate, sdl_event, sdl_quit))
 	}
-	*/
 
 } else {
 
@@ -147,10 +149,12 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {} else {
 	log.info("app_init")
 
 
-	//args := os.args
-	//when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {
-		// we don't use this as we call the callbacks directly
-	//} else {
+	// On Android, app_init is invoked from the .init/constructor thread at
+	// library load (before SDL's Java layer runs), so we only register the
+	// app callbacks here; SDL_main() (exported above) runs the app loop on
+	// the SDL thread via EnterAppMainCallbacks. Running it here would
+	// conflict with SDL's Java-driven SDL_main.
+	when ODIN_PLATFORM_SUBTARGET != .Android {
 		SDL.EnterAppMainCallbacks(
 			0,
 			nil,
@@ -159,7 +163,7 @@ when ODIN_ARCH == .wasm32 || ODIN_ARCH == .wasm64p32 {} else {
 			sdl_event,
 			sdl_quit,
 		)
-	//}
+	}
 }
 
 main_thread: SDL.ThreadID
@@ -173,6 +177,16 @@ sdl_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.App
 	main_thread = SDL.GetCurrentThreadID()
 
 	app_event_init()
+
+	// SDL_Init must run before SDL_CreateAsyncIOQueue: the queue's worker
+	// thread does JNI/app-metadata lookups (SDL_GetExeName) that require
+	// SDL's platform init, which is only set up by SDL_Init. On Android this
+	// otherwise crashes with "CallStaticObjectMethod received NULL jclass".
+	if !SDL.Init({.VIDEO}) {
+		log.error("SDL.Init failed")
+		return .FAILURE
+	}
+
 	load_queue = SDL.CreateAsyncIOQueue()
 
 

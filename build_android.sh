@@ -14,6 +14,14 @@ set -x
 
 target="$1"
 
+# ABIs to build. Defaults to all supported; for a fast emulator-only build use:
+#   ABIS=x86_64 ./build_android.sh <project>
+# (x86_64 is the native ABI of most Android emulators.)
+ABIS="${ABIS:-armeabi-v7a arm64-v8a x86_64}"
+
+# Keep gradle in sync: only build the ABIs above.
+abi_filter_prop="$(echo "$ABIS" | tr ' ' ',')"
+
 if [ ! -d "build/android" ]; then
 	mkdir -p "build"
 	cp -r "platform/android" "build/android"
@@ -27,7 +35,7 @@ fi
 
 pushd build/android
 
-./gradlew buildDebug -info
+./gradlew buildDebug -PappAbis="$abi_filter_prop" -info
 popd
 
 
@@ -37,19 +45,30 @@ APP_PATH="build/android/app"
 BUILD_LIB_PATH="$APP_PATH/build/intermediates/ndkBuild/$BUILD_CONFIG/obj/local"
 BUILD_OUT_PATH="$APP_PATH/libs"
 
-echo "odin build android arm64"
-mkdir -p "$BUILD_OUT_PATH/arm64-v8a"
+# Clean the jniLibs output dir so stale libmain.so files from previously built
+# ABIs don't leak into the APK (a mixed-ABI APK breaks loading on devices that
+# prefer a different ABI than the one that contains the SDL libraries).
+rm -rf "$BUILD_OUT_PATH"
 
-"$ODIN_ROOT/odin" build "$target" -debug -collection:engine=engine -target=linux_arm64 -subtarget=android -build-mode=shared \
-	-extra-linker-flags:"-L$BUILD_LIB_PATH/arm64-v8a" \
-	-out:"$BUILD_OUT_PATH/arm64-v8a/libmain.so" # -show-system-calls
+for abi in $ABIS; do
+	echo "odin build android $abi"
+	mkdir -p "$BUILD_OUT_PATH/$abi"
 
-echo "odin build android arm32"
-mkdir -p "$BUILD_OUT_PATH/armeabi-v7a"
+	case "$abi" in
+		arm64-v8a)   ODIN_TARGET="linux_arm64" ;;
+		armeabi-v7a) ODIN_TARGET="linux_arm32" ;;
+		x86_64)      ODIN_TARGET="linux_amd64" ;;
+		x86)         ODIN_TARGET="linux_i386" ;;
+		*)
+			echo "error: unsupported ABI '$abi'" >&2
+			exit 1
+			;;
+	esac
 
-"$ODIN_ROOT/odin" build "$target" -debug -collection:engine=engine -target=linux_arm32 -subtarget=android -build-mode=shared \
-	-extra-linker-flags:"-L$BUILD_LIB_PATH/armeabi-v7a" \
-	-out:"$BUILD_OUT_PATH/armeabi-v7a/libmain.so" #-show-system-calls
+	"$ODIN_ROOT/odin" build "$target" -debug -collection:engine=engine -target="$ODIN_TARGET" -subtarget=android -build-mode=shared \
+		-extra-linker-flags:"-L$BUILD_LIB_PATH/$abi" \
+		-out:"$BUILD_OUT_PATH/$abi/libmain.so" # -show-system-calls
+done
 
 # -show-system-calls
 # -show-timings
@@ -58,5 +77,5 @@ echo "finished compiling, gradle install now"
 
 pushd build/android
 
-./gradlew installDebug -info
+./gradlew installDebug -PappAbis="$abi_filter_prop" -info
 popd

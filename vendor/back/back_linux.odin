@@ -40,6 +40,11 @@ _Trace_Entry :: rawptr
 
 @(private="package")
 _trace :: proc(buf: Trace) -> (n: int) {
+	when ODIN_PLATFORM_SUBTARGET == .Android && ODIN_ARCH == .i386 {
+		// bionic on 32-bit x86 doesn't export backtrace
+		return 0
+	}
+
 	n = int(backtrace(raw_data(buf), i32(len(buf))))
 	return
 }
@@ -58,6 +63,11 @@ _lines_destroy :: proc(msgs: []Line) {
 
 @(private="package")
 _lines :: proc(bt: Trace) -> (out: []Line, err: Lines_Error) {
+	when ODIN_PLATFORM_SUBTARGET == .Android && ODIN_ARCH == .i386 {
+		// bionic on 32-bit x86 doesn't export backtrace/backtrace_symbols.
+		return {}, .Info_Not_Found
+	}
+
 	msgs := backtrace_symbols(raw_data(bt), i32(len(bt)))[:len(bt)]
 	defer libc.free(raw_data(msgs))
 
