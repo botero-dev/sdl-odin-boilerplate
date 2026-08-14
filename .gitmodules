@@ -1,9 +1,9 @@
 [submodule "vendor/odin"]
 	path = vendor/odin
-	url = git@github.com:0xafbf/Odin.git
+	url = https://github.com/botero-dev/Odin.git
 [submodule "vendor/SDL"]
 	path = vendor/SDL
-	url = https://github.com/libsdl-org/SDL.git
+	url = https://github.com/botero-dev/SDL.git
 [submodule "vendor/SDL_ttf"]
 	path = vendor/SDL_ttf
-	url = git@github.com:libsdl-org/SDL_ttf.git
+	url = https://github.com/botero-dev/SDL_ttf.git
