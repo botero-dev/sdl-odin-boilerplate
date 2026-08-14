@@ -62,8 +62,7 @@ init :: proc() {
 	ab.request_data_async("casa1.dxf", nil, dxf_callback)
 	//ab.request_data_async("trex.dxf", nil, dxf_callback)
 
-	//ab.request_data_async("NotoSansCJK-VF.otf.ttc", nil, assign_font)
-	ab.request_data_async("MaterialSymbolsOutlined.ttf", nil, assign_font)
+	ab.request_data_async("NotoSansCJK-VF.otf.ttc", nil, assign_font)
 	//ab.request_data_async("Play-Regular.ttf", nil, assign_font)
 
 
@@ -261,17 +260,24 @@ viewport_input_handler :: proc(event: ^ab.Event, user_data: rawptr) {
 	}
 
 
+	BUTTON_PAN :: 2
+	if event.sdl_event.button.button == BUTTON_PAN || event.sdl_event.button.which == SDL.TOUCH_MOUSEID {
+		
+		if event.sdl_event.type == .MOUSE_BUTTON_DOWN {
+				mouse_pressed = true
+				mouse_btn_evt := (^SDL.MouseButtonEvent)(event.sdl_event)
+				mouse_coords = linalg.round([2]f32{mouse_btn_evt.x, mouse_btn_evt.y})
 
-	if event.sdl_event.type == .MOUSE_BUTTON_DOWN {
-		mouse_pressed = true
-		mouse_btn_evt := (^SDL.MouseButtonEvent)(event.sdl_event)
-		mouse_coords = linalg.round([2]f32{mouse_btn_evt.x, mouse_btn_evt.y})
-
-		model_coords := view_to_model(viewport, vp_size, mouse_coords)
-		grab_coords = model_coords
-	}
-	if event.sdl_event.type == .MOUSE_BUTTON_UP {
-		mouse_pressed = false
+				model_coords := view_to_model(viewport, vp_size, mouse_coords)
+				grab_coords = model_coords
+			
+		}
+		if event.sdl_event.type == .MOUSE_BUTTON_UP {
+			
+				mouse_pressed = false
+			
+		}
+		
 	}
 	if event.sdl_event.type == .MOUSE_MOTION {
 		mouse_motion := (^SDL.MouseMotionEvent)(event.sdl_event)
@@ -282,8 +288,13 @@ viewport_input_handler :: proc(event: ^ab.Event, user_data: rawptr) {
 			delta := model_coords - grab_coords
 			viewport.origin -= delta
 		}
+
+		if !mouse_pressed {
+			mouse_motion_handler(model_coords, viewport.data)
+		}
 	}
 }
+
 
 tex_new_ui: ^SDL.Texture
 

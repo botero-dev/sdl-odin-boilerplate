@@ -539,7 +539,7 @@ DrawBuffer :: struct {
             {f32(line.start.x), f32(line.start.y)},
             {f32(line.end.x), f32(line.end.y)},
             1.0,)
-        
+
         gfx.draw_buffer(ab.renderer, &buffer, style.color)
         buffer.num_indices = 0
         buffer.num_vertices = 0
@@ -864,6 +864,25 @@ view_to_model :: proc(vp: ViewportState, draw_size: f64x2, in_coords: [2]f32) ->
 
 	return {result.x, result.y}
 }
+
+
+mouse_motion_handler :: proc(model_coords: f64x2, model: ^Model) {
+    hovered := -1
+    hovered_type := -1
+
+    if model != nil {
+
+        for line in model.dxf.entities.lines {
+            
+            start := [3]f32{f32(line.start.x), f32(line.start.y), 1}
+            end := [3]f32{f32(line.end.x), f32(line.end.y), 1}
+
+            starta := gfx.draw_matrix * start
+            enda := gfx.draw_matrix * end
+        }
+    }
+}
+
 
 
 
