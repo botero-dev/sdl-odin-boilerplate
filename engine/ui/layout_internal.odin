@@ -17,8 +17,8 @@ Layout_Custom_LayoutCallback :: #type proc()
 Layout_Custom_RenderCallback :: #type proc(layout: LayoutState, index: int)
 
 Layout_Custom_Data :: struct {
-	callback_fitsize: Layout_Custom_GetFitSize,
-	callback_layout: Layout_Custom_LayoutCallback,
+	calc_fitsize: Layout_Custom_GetFitSize,
+	calc_layout: Layout_Custom_LayoutCallback,
 	callback_render: Layout_Custom_RenderCallback,
 	user_data: rawptr,
 }
@@ -490,6 +490,10 @@ _layout_filling :: proc() {
 
 
 layout_process_event :: proc(event: ^PointerEvent) {
+
+	if len(layout_state.items_decl) == 0 {
+		return
+	}
 
 	event.event.phase = .Capturing
 

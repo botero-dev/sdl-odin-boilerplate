@@ -114,6 +114,11 @@ StyleContainer :: struct($T: typeid) {
 	styles: [dynamic]T,
 }
 
+create_style :: proc(class: string, variant: string, payload: $T) -> StyleClass {
+	style := style_class(class, variant)
+	push_style(&style, payload)
+	return style
+}
 
 push_style :: proc(class: ^StyleClass, style: $T) {
 

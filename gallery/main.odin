@@ -21,10 +21,8 @@ import "core:thread"
 
 import "base:runtime"
 
-
-import clay "engine:clay-odin"
-
 import ab "engine:."
+import gfx "engine:gfx"
 import "engine:ui"
 
 when ODIN_PLATFORM_SUBTARGET == .Android {
@@ -135,7 +133,7 @@ ImgPath :: struct {
 init :: proc() {
 	log.info("init")
 
-	success := ui.create_window("Gallery", {1280, 720})
+	success := ab.create_window("Gallery", {1280, 720})
 	assert(success)
 
 	err: runtime.Allocator_Error
@@ -276,109 +274,12 @@ app_draw :: proc() {
 
 		free_all(context.temp_allocator)
 
-		ab.ui_idle(app_dt)
+		ui.ui_idle(app_dt)
 		create_layout()
 
-		ab.render_layout(&ui.render_commands)
+		ui.layout_draw()
 		ab.draw_present()
 	}
-}
-
-
-render_target: ^SDL.Texture
-// code I used for drawing some pixels to a buffer and then draw them huge with nearest filtering
-// todo: refactor into a proper texture inspector
-draw_debug_texture :: proc() {
-
-	vertices_buf: [1000][2]f32
-	uvs_buf: [1000][2]f32
-	indices_buf: [2000]u8
-
-	buffer := ab.DrawBuffer{0, 0, vertices_buf[:], uvs_buf[:], nil, indices_buf[:]}
-
-	pos_t := [2]f32{30, 30}
-	yy, xx := math.sincos(f32(app_time) * 0.3)
-	pos_t  += {xx, yy}
-	//buffer_line(&buffer, pos, pos+end, width)
-	ab.buffer_circle(&buffer, pos_t, 20)
-
-	SIZE :: 64
-
-	if render_target == nil {
-		render_target = SDL.CreateTexture(ab.renderer, .RGBA32, .TARGET, SIZE, SIZE)
-	}; {
-
-		SDL.SetTextureScaleMode(render_target, .NEAREST)
-		SDL.SetTextureBlendMode(render_target, {.BLEND_PREMULTIPLIED})
-		SDL.SetRenderTarget(ab.renderer, render_target)
-		SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 0)
-		SDL.RenderClear(ab.renderer)
-		//color := [4]f32{0.5, 0.5, 0.5, 0.5}
-		color := [4]f32{1, 1, 1, 1}
-		//color := [4]f32{200, 200, 200, 1}
-		ab.draw_buffer(ab.renderer, &buffer, color)
-		SDL.SetRenderTarget(ab.renderer, nil)
-	}
-
-	rect := SDL.FRect{0, 0, SIZE, SIZE}
-
-	origin :: [2]f32{20, 20}
-	target_pos := SDL.FPoint{origin.x, origin.y}
-	SCALE :: 32
-	target_right := SDL.FPoint{target_pos.x + SIZE * SCALE, target_pos.y}
-	target_down := SDL.FPoint{target_pos.x, target_pos.y + SIZE * SCALE}
-
-	SDL.RenderTextureAffine(
-		ab.renderer,
-		render_target,
-		&rect,
-		&target_pos,
-		&target_right,
-		&target_down,
-	)
-
-	line_color := [4]f32{1, 0.3, 0.3, 0.3}
-	for idx_int in 0 ..= SIZE {
-		idx := f32(idx_int)
-
-		ab.draw_line(ab.renderer, {0, idx} * SCALE + origin, {SIZE, idx} * SCALE + origin, 1, line_color)
-		ab.draw_line(ab.renderer, {idx, 0} * SCALE + origin, {idx, SIZE} * SCALE + origin, 1, line_color)
-	}
-
-	tx :: proc(vert: [2]f32) -> [2]f32 {return vert * SCALE + origin}
-
-	for idx in 0 ..< buffer.num_vertices {
-		vert := buffer.vertices[idx]
-		uv := buffer.uvs[idx]
-		pos := vert * SCALE + {target_pos.x, target_pos.y}
-		pos.x = math.round(pos.x)
-		pos.y = math.round(pos.y)
-
-		ab.draw_circle(ab.renderer, pos, 3)
-
-		text := fmt.ctprintf("%.6f\n%.6f", uv.x, uv.y)
-		SDL.SetRenderDrawColorFloat(ab.renderer, 1, 0, 0, 0.5)
-		SDL.RenderDebugText(ab.renderer, pos.x, pos.y, text)
-
-		text2 := fmt.ctprintf("%.6f\n%.6f", vert.x, vert.y)
-		SDL.SetRenderDrawColorFloat(ab.renderer, 0, 1, 0, 0.5)
-		SDL.RenderDebugText(ab.renderer, pos.x, pos.y+10, text2)
-	}
-	for idx in 0 ..< buffer.num_indices {
-		if idx % 3 == 0 {
-			a := buffer.indices[idx]
-			b := buffer.indices[idx + 1]
-			c := buffer.indices[idx + 2]
-			ab.draw_line(ab.renderer, tx(buffer.vertices[a]), tx(buffer.vertices[b]), 1, line_color)
-			ab.draw_line(ab.renderer, tx(buffer.vertices[b]), tx(buffer.vertices[c]), 1, line_color)
-			ab.draw_line(ab.renderer, tx(buffer.vertices[c]), tx(buffer.vertices[a]), 1, line_color)
-		}
-	}
-}
-
-
-clock_render_data := ab.CustomRenderData {
-	callback = draw_clock,
 }
 
 layout_clock :: proc() {
@@ -386,32 +287,21 @@ layout_clock :: proc() {
 	CLK_SIZE :: 240
 	CLK_OFFSET :: 20
 
-	clay.UI(clay.ID("clock"))(
-		ab.DPI(
-			{
-				layout = {
-					layoutDirection = .LeftToRight,
-					sizing = {
-						width = clay.SizingFixed(CLK_SIZE),
-						height = clay.SizingFixed(CLK_SIZE),
-					},
-					childGap = 16,
-				},
-				floating = {
-					attachTo = .Parent,
-					attachment = {element = .RightTop, parent = .RightTop},
-					offset = {-CLK_OFFSET, CLK_OFFSET},
-				},
-				backgroundColor = {1, 1, 1, 1},
-				custom = {&clock_render_data},
-			},
-		),
-	)
+	ui.layout_overlay_child({.End, .Begin})
+	ui.layout_custom({
+		calc_fitsize = proc() -> [2]f32 { return {CLK_SIZE, CLK_SIZE}},
+		callback_render = proc(layout: ui.LayoutState, index: int) {
+			computed := layout.items_tree[index].layout_rect
+			comm := ab.RenderCommand { boundingBox = computed }
+			draw_clock(nil, &comm)
+		}
+	})
 
-	ab.ui_pointer_handler()
+
+	ui.ui_pointer_handler()
 }
 
-draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
+draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^ab.RenderCommand) {
 	box := render_command.boundingBox
 
 	ab.draw_push_state()
@@ -424,13 +314,13 @@ draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.Rend
 	mat *= {1.2, 0, 0, 0, 1, 0, 0, 0, 1}
 	mat *= linalg.matrix3_rotate(-angle, axis)
 
-	ab.draw_set_draw_rect(ab.renderer, {i32(box.x), i32(box.y)}, {i32(box.width), i32(box.height)})
+	ab.draw_set_draw_rect(ab.renderer, {i32(box.x), i32(box.y)}, {i32(box.w), i32(box.h)})
 	ab.draw_set_view_rect({-1.2, 1.2}, {1.2, -1.2})
 
 	LINE_SCALE :: 0.02
 	ab.draw_set_line_scale(0.02)
 
-	ab.draw_circle(ab.renderer, {0, 0}, 1.1, {0, 0, 0, 0.8})
+	gfx.draw_circle_basic({0, 0}, 1.1, {0, 0, 0, 0.8})
 
 	vert_pos := [2]f32{1, 0}
 
@@ -446,7 +336,7 @@ draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.Rend
 			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
 			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
 		}
-		ab.draw_line(ab.renderer, vert_pos * 0.8, vert_pos, 2)
+		gfx.draw_line(ab.renderer, vert_pos * 0.8, vert_pos, 2)
 	}
 
 	time_now := time.now()
@@ -490,9 +380,9 @@ draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.Rend
 	min_dir := [2]f32{min_cos, min_sin}
 	sec_dir := [2]f32{sec_cos, sec_sin}
 
-	ab.draw_line(ab.renderer, -0.1 * hour_dir, 0.5 * hour_dir, 2)
-	ab.draw_line(ab.renderer, -0.15 * min_dir, 0.75 * min_dir, 2)
-	ab.draw_line(ab.renderer, -0.15 * sec_dir, 0.7 * sec_dir, 2, {1, 0, 0, 1})
+	gfx.draw_line(ab.renderer, -0.1 * hour_dir, 0.5 * hour_dir, 2)
+	gfx.draw_line(ab.renderer, -0.15 * min_dir, 0.75 * min_dir, 2)
+	gfx.draw_line(ab.renderer, -0.15 * sec_dir, 0.7 * sec_dir, 2, {1, 0, 0, 1})
 	ab.draw_clear_matrix()
 
 	ab.draw_pop_state()
@@ -502,7 +392,7 @@ draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.Rend
 ui_dirty: bool = true
 
 
-main_nav := ab.NavigationScope {
+main_nav := ui.NavigationScope {
 	direction = .Vertical
 }
 
@@ -527,30 +417,21 @@ main_handler :: proc(event: ^ab.Event, user_data: rawptr) {
 }
 
 
-text_config: ^clay.TextElementConfig
 
 // An example function to create your layout tree
 create_layout :: proc() {
 	// Begin constructing the layout.
-	text_config = clay.TextConfig(
-		{
-			fontId = ab.default_font_id,
-			textColor = color_text,
-			fontSize = ab.border_policy(16),
-			textAlignment = .Center,
-		},
-	)
 
-	ui.layout_begin()
+	ui.layout_begin({f32(ab.win_size.x), f32(ab.win_size.y)}, ab.dpi)
 
 	{
-		ab.ui_reset_handler_buffer()
-		ab.ui_pointer_handler(main_handler)
+		//ui.ui_reset_handler_buffer()
+		ui.ui_pointer_handler(main_handler)
 
-		ab.nav_scope(&main_nav, main_handler)
+		ui.nav_scope(&main_nav, main_handler)
 
 		{
-			ab.nav_add_item("center")
+			ui.nav_add_item("center")
 		}
 
 		layout_gallery()
@@ -558,21 +439,22 @@ create_layout :: proc() {
 
 		layout_clock()
 	}
-	ab.nav_finish()
+	ui.nav_finish()
 
 	// Returns a list of render commands
 	ui.layout_end()
 }
 
-gallery_render_data := ab.CustomRenderData{render_gallery}
 
 layout_gallery :: proc() {
-	clay.UI(clay.ID("gallery"))(
-	{
-		layout = {sizing = {width = clay.SizingPercent(1), height = clay.SizingPercent(1)}},
-		custom = {&gallery_render_data},
-	},
-	)
+	ui.layout_overlay_child({.Fill, .Fill})
+	ui.layout_custom({
+		callback_render = proc(layout: ui.LayoutState, index: int) {
+			computed := layout.items_tree[index].layout_rect
+			comm := ab.RenderCommand { boundingBox = computed }
+			render_gallery(nil, &comm)
+		}
+	})
 }
 
 AspectRatioFitMode :: enum {
@@ -623,7 +505,7 @@ draw_tex_rect_aspect :: proc(rect: SDL.FRect, tex: ^SDL.Texture, fill: bool, col
 	SDL.RenderTexture(ab.renderer, tex, &srcrect, &dstrect)
 }
 
-render_gallery :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.RenderCommand) {
+render_gallery :: proc(render_data: ^ab.CustomRenderData, render_command: ^ab.RenderCommand) {
 	in_rect := render_command.boundingBox
 
 	if len(images) <= 0 {
@@ -631,13 +513,13 @@ render_gallery :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.
 	}
 
 	dark_level := f32(0.1)
-	back_color_dark := clay.Color{dark_level, dark_level, dark_level, 1}
-	back_color := clay.Color{1, 1, 1, 1}
+	back_color_dark := gfx.f32x4{dark_level, dark_level, dark_level, 1}
+	back_color := gfx.f32x4{1, 1, 1, 1}
 	curr_img_tex := images[current_img_idx].texture
 
 	//log.info("curr tex: ", curr_img_tex)
 
-	rect := SDL.FRect{in_rect.x, in_rect.y, in_rect.width, in_rect.height}
+	rect := SDL.FRect{in_rect.x, in_rect.y, in_rect.w, in_rect.h}
 	draw_tex_rect_aspect(rect, curr_img_tex, true, back_color_dark)
 	draw_tex_rect_aspect(rect, curr_img_tex, false, back_color)
 
@@ -660,36 +542,8 @@ render_gallery :: proc(render_data: ^ab.CustomRenderData, render_command: ^clay.
 }
 
 
-toolbar_decl := clay.ElementDeclaration {
-	layout = {
-		layoutDirection = .LeftToRight,
-		sizing = {width = clay.SizingFit(), height = clay.SizingFit()},
-		childGap = 16,
-	},
-	floating = {
-		attachTo = .Parent,
-		attachment = {element = .CenterBottom, parent = .CenterBottom},
-		offset = {0, -16},
-	},
-}
-
-section_decl := clay.ElementDeclaration {
-	layout = {
-		layoutDirection = .TopToBottom,
-		padding = {4, 4, 4, 4},
-		childAlignment = {.Center, .Top},
-	},
-	cornerRadius = {20, 20, 20, 20},
-	backgroundColor = color_frame,
-}
-
-subsection_decl := clay.ElementDeclaration {
-	layout = {layoutDirection = .LeftToRight, childGap = 4},
-}
-
-
 toolbar_opacity: f32
-toolbar_nav: ab.NavigationScope
+toolbar_nav: ui.NavigationScope
 
 idle_toolbar :: proc(dt: f64) {
 
@@ -723,7 +577,7 @@ layout_toolbar :: proc() {
 	clear(&toolbar_nav.contents)
 	toolbar_nav.direction = .Horizontal
 
-	ab.nav_scope(&toolbar_nav)
+	ui.nav_scope(&toolbar_nav)
 
 	if toolbar_opacity == 0 {
 		return
@@ -731,34 +585,57 @@ layout_toolbar :: proc() {
 
 	opacity_modifier = ab.ui_modifier_modulate({1, 1, 1, toolbar_opacity})
 
-	toolbar_style := ab.DPI(toolbar_decl)
-	section_style := ab.DPI(section_decl)
-	subsection_style := ab.DPI(subsection_decl)
 
-	clay.UI(clay.ID("ToolBar"))(toolbar_style)
-	ab.ui_pointer_handler()
+	ui.layout_overlay_child({.Middle, .End})
 
-	ab.ui_modifier(&opacity_modifier)
+	
 
-
+	ui.layout_container(ui.Layout_Linear_Horizontal{separation = 8})
 	{
-		clay.UI(clay.ID("ToolBarSection"))(section_style)
-		ui.layout_text("Gallery Config", text_config)
-		clay.UI()(subsection_style)
-		sidebar_item_component("Select Folder", select_directory)
-		sidebar_item_component("Config Online Src")
-	}
+		//ui.ui_pointer_handler()
+		ab.ui_modifier(&opacity_modifier)
 
-	{
-		clay.UI(clay.ID("ToolBarSection2"))(section_style)
-		ui.layout_text("Slideshow", text_config)
-		clay.UI()(subsection_style)
-		sidebar_item_component("First", playback_first)
-		sidebar_item_component("Previous", playback_previous)
-		sidebar_item_component("Play\nPause", playback_playpause)
-		sidebar_item_component("Next", playback_next)
-		sidebar_item_component("Last", playback_last)
+		// @static style_panel := ui.create_style("Panel", "", ui.BoxStyleColored {
+		// 	background = {1, 0, 0, 1}
+		// })
+		@static init := false
+		style_panel := ui.style_class("panel")
+		if !init {
+			init = true
+			ui.push_style(&style_panel, ui.BoxStyleColored {
+				background = {1, 0, 0, 1}
+			})
+		}
+
+
+		ui.layout_container(ui.Layout_Linear_Vertical{}, &style_panel)
+		{
+			ui.layout_linear_child({across = .Center})
+			ui.layout_text("Gallery Config")
+
+			ui.layout_container(ui.Layout_Linear_Horizontal{})
+				sidebar_item_component("Select Folder", select_directory)
+				sidebar_item_component("Config Online Src")
+			ui.layout_close()
+		}
+		ui.layout_close()
+		
+		ui.layout_container(ui.Layout_Linear_Vertical{})
+		{
+			ui.layout_linear_child({across = .Center})
+			ui.layout_text("Slideshow")
+			ui.layout_container(ui.Layout_Linear_Horizontal{})
+				sidebar_item_component("First", playback_first)
+				sidebar_item_component("Previous", playback_previous)
+				sidebar_item_component("Play\nPause", playback_playpause)
+				sidebar_item_component("Next", playback_next)
+				sidebar_item_component("Last", playback_last)
+			ui.layout_close()
+		}
+		ui.layout_close()
 	}
+	ui.layout_close()
+	
 }
 
 
@@ -819,12 +696,12 @@ playback_last :: proc() {
 }
 
 
-color_idle := clay.Color{0.0, 0.0, 0.0, 1}
-color_border := clay.Color{1, 1, 1, 0.3}
-color_frame := clay.Color{0.2, 0.2, 0.2, 1}
-//color_frame := clay.Color {1, 1, 1, 1}
-color_hover := clay.Color{0.4, 0.4, 0.4, 1}
-color_text := clay.Color{0.8, 0.8, 0.8, 1}
+color_idle := gfx.f32x4{0.0, 0.0, 0.0, 1}
+color_border := gfx.f32x4{1, 1, 1, 0.3}
+color_frame := gfx.f32x4{0.2, 0.2, 0.2, 1}
+//color_frame := gfx.f32x4 {1, 1, 1, 1}
+color_hover := gfx.f32x4{0.4, 0.4, 0.4, 1}
+color_text := gfx.f32x4{0.8, 0.8, 0.8, 1}
 
 
 rotate_modifier: ab.UIModifierTransform
@@ -835,32 +712,32 @@ sidebar_item_component :: proc {
 	sidebar_item_component_proc,
 }
 
-sidebar_item_component_proc :: proc($label: string, callback: ab.ButtonHandlerSimple) {
-	info: ^ab.HandlerInfoSimple
+sidebar_item_component_proc :: proc($label: string, callback: ui.ButtonHandlerSimple) {
+	info: ^ui.HandlerInfoSimple
 	if callback != nil {
-		info = new(ab.HandlerInfoSimple, context.temp_allocator)
+		info = new(ui.HandlerInfoSimple, context.temp_allocator)
 		info.handler = handle_proc_simple
-		info.target = callback
+		info.callback = callback
 	}
 	sidebar_item_component_handlerinfo(label, info)
 }
 
-handle_proc_simple :: proc(userdata: ^ab.HandlerInfo) {
-	data_simple := (^ab.HandlerInfoSimple)(userdata)
-	data_simple.target()
+handle_proc_simple :: proc(userdata: ^ui.HandlerInfo) {
+	data_simple := (^ui.HandlerInfoSimple)(userdata)
+	data_simple.callback()
 }
 
 
-sidebar_item_component_handlerinfo :: proc($label: string, info: ^ab.HandlerInfo = nil) {
+sidebar_item_component_handlerinfo :: proc($label: string, info: ^ui.HandlerInfo = nil) {
 
-	clay.UI(clay.ID(label))
-	item_handle := ab.ui_add_button(label, info)
+	//clay.UI(clay.ID(label))
+	item_handle := ui.ui_add_button(label, info)
 
 	is_focused := false
 	if toolbar_last_interaction_is_mouse {
-		is_focused = clay.Hovered()
+		//is_focused = clay.Hovered()
 	} else {
-		is_focused = ab.nav_get_focused(item_handle)
+		is_focused = ui.nav_get_focused(item_handle)
 	}
 
 	color := color_idle
@@ -873,20 +750,7 @@ sidebar_item_component_handlerinfo :: proc($label: string, info: ^ab.HandlerInfo
 		color = color_hover
 	}
 
-	clay.UI()(
-		ab.DPI(
-			{
-				layout = {
-					sizing = {width = clay.SizingFixed(64), height = clay.SizingFixed(64)},
-					childAlignment = {.Center, .Center},
-				},
-				cornerRadius = {16, 16, 16, 16},
-				border = {width = {1, 1, 1, 1, 0}, color = color_border},
-				backgroundColor = color,
-			},
-		),
-	)
-
+	
 
 	ui.layout_text(label)
 

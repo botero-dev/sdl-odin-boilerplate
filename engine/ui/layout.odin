@@ -4,6 +4,12 @@ import "base:runtime"
 import "engine:ui"
 import "core:log"
 
+import SDL "vendor:sdl3"
+import TTF "vendor:sdl3/ttf"
+
+import "../gfx"
+import abm "../math"
+
 
 layout_stack: [dynamic]ChildrenLayout
 
@@ -31,11 +37,12 @@ layout_begin :: proc(size: f32x2, scale_factor: f32) {
 	_layout_set_default_config()
 	_layout_begin(scale_factor)
 
-	append(&layout_stack, Layout_Overlay_Float{})
+	_layout_create(Layout_Overlay_Float{})
+	_layout_open("--root--")
 }
 
 layout_end :: proc() {
-	pop(&layout_stack)
+	_layout_close()
 	if len(layout_stack) != 0 {
 		log.error("layout_stack is not empty when finishing drawing.")
 		log.error(layout_stack)
@@ -192,7 +199,7 @@ layout_container :: proc(children_layout: ChildrenLayout, style: ^StyleClass = n
 	_layout_create(children_layout)
 
 	if style != nil {
-		box_style := get_current_style(&style_tab_bar, BoxStyleColored)
+		box_style := get_current_style(style, BoxStyleColored)
 		_layout_open_styled(style=box_style)
 	} else {
 		_layout_open()
@@ -261,4 +268,56 @@ layout_textbox :: proc(text: string, variant: ^StyleClass = nil, info: ^HandlerI
 	layout_text(text)
 
 	layout_close() // box
+}
+
+
+
+layout_draw :: proc() {
+	num_items := len(layout_state.items_tree)
+	for idx in 0..<num_items {
+		decl := layout_state.items_decl[idx]
+		item := layout_state.items_tree[idx]
+		if item.color.a != 0 {
+			rect := item.layout_rect
+			SDL.SetRenderDrawColorFloat(gfx.renderer, 1, 1, 1, 1)
+			SDL.SetRenderDrawBlendMode(gfx.renderer, {.BLEND})
+
+			c := item.color
+			c.a = 1
+
+			if decl.override.type == BoxStyleColored {
+				box_style := (^BoxStyleColored)(decl.override.data)
+				draw_box_styled(rect, box_style^)
+			} else if decl.override.type == BoxStyle {
+				box_style := (^BoxStyle)(decl.override.data)
+				#partial switch v in box_style {
+					case BoxStyleColored:
+						draw_box_styled(rect, v)
+				}
+			} else if decl.override.type == ButtonStyle {
+				button_style := (^ButtonStyle)(decl.override.data)
+				hovered := abm.point_in_rect(coords, rect)
+				if hovered {
+					draw_box_styled(rect, button_style.hover_box.(BoxStyleColored))
+				} else {
+					draw_box_styled(rect, button_style.idle_box.(BoxStyleColored))
+				}
+			} else {
+				corners := gfx.CornerRadii {4,4,4,4}
+				gfx.draw_box_filled(rect, corners, c)
+			}
+
+		}
+		if decl.is_text {
+			cstr := cstring(raw_data(decl.text))
+		    sdl_text := get_text_with_font_size(decl.text_font, decl.text_size)
+			TTF.SetTextColor(sdl_text, 255, 255, 255, 255)
+			TTF.SetTextString(sdl_text, cstr, uint(len(decl.text)))
+			TTF.DrawRendererText(sdl_text, f32(item.layout_rect.x), f32(item.layout_rect.y))
+		}
+
+		if decl.custom.callback_render != nil {
+			decl.custom.callback_render(layout_state, idx)
+		}
+	}
 }

@@ -314,63 +314,13 @@ iterate :: proc() {
 
 	ui.layout_end()
 
-	layout_draw()
+	ui.layout_draw()
 
 	ab.draw_present()
 
 	err := SDL.GetError()
 	if (err != nil && len(err) != 0) {
 		fmt.println(err)
-	}
-}
-
-layout_draw :: proc() {
-	num_items := len(ui.layout_state.items_tree)
-	for idx in 0..<num_items {
-		decl := ui.layout_state.items_decl[idx]
-		item := ui.layout_state.items_tree[idx]
-		if item.color.a != 0 {
-			rect := transmute(ab.Rect)item.layout_rect
-			SDL.SetRenderDrawColorFloat(ab.renderer, 1, 1, 1, 1)
-			SDL.SetRenderDrawBlendMode(ab.renderer, {.BLEND})
-
-			c := item.color
-			c.a = 1
-
-			if decl.override.type == ui.BoxStyleColored {
-				box_style := (^ui.BoxStyleColored)(decl.override.data)
-				ui.draw_box_styled(rect, box_style^)
-			} else if decl.override.type == ui.BoxStyle {
-				box_style := (^ui.BoxStyle)(decl.override.data)
-				#partial switch v in box_style {
-					case ui.BoxStyleColored:
-						ui.draw_box_styled(rect, v)
-				}
-			} else if decl.override.type == ui.ButtonStyle {
-				button_style := (^ui.ButtonStyle)(decl.override.data)
-				hovered := abm.point_in_rect(ui.coords, rect)
-				if hovered {
-					ui.draw_box_styled(rect, button_style.hover_box.(ui.BoxStyleColored))
-				} else {
-					ui.draw_box_styled(rect, button_style.idle_box.(ui.BoxStyleColored))
-				}
-			} else {
-				corners := ab.CornerRadii {4,4,4,4}
-				ab.draw_box_filled(rect, corners, c)
-			}
-
-		}
-		if decl.is_text {
-			cstr := cstring(raw_data(decl.text))
-		    sdl_text := ui.get_text_with_font_size(decl.text_font, decl.text_size)
-			TTF.SetTextColor(sdl_text, 255, 255, 255, 255)
-			TTF.SetTextString(sdl_text, cstr, uint(len(decl.text)))
-			TTF.DrawRendererText(sdl_text, f32(item.layout_rect.x), f32(item.layout_rect.y))
-		}
-
-		if decl.custom.callback_render != nil {
-			decl.custom.callback_render(ui.layout_state, idx)
-		}
 	}
 }
 
