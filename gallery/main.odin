@@ -590,8 +590,8 @@ layout_toolbar :: proc() {
 
 	
 
-	ui.layout_container(ui.Layout_Linear_Horizontal{separation = 8})
 	{
+		ui.container_horizontal(separation = 20, offsets = ui.BoxOffsets{30, 30, 30, 30})
 		//ui.ui_pointer_handler()
 		ab.ui_modifier(&opacity_modifier)
 
@@ -602,39 +602,46 @@ layout_toolbar :: proc() {
 		style_panel := ui.style_class("panel")
 		if !init {
 			init = true
-			ui.push_style(&style_panel, ui.BoxStyleColored {
-				background = {1, 0, 0, 1}
+			ui.push_style(&style_panel, ui.ContainerLinearStyle {
+				box_style = ui.BoxStyleColored {
+					background = {0.3, 0.3, 0.3, 1},
+					border_color = {0.5, 0.5, 0.5, 1},
+					border_width = {1, 1, 1, 1}
+				},
+				padding = {20,20,8,8}
+				
 			})
 		}
 
-
-		ui.layout_container(ui.Layout_Linear_Vertical{}, &style_panel)
 		{
+			ui.container_vertical(&style_panel)
+
 			ui.layout_linear_child({across = .Center})
 			ui.layout_text("Gallery Config")
 
-			ui.layout_container(ui.Layout_Linear_Horizontal{})
+			{ 
+				ui.container_horizontal(separation=12)
 				sidebar_item_component("Select Folder", select_directory)
 				sidebar_item_component("Config Online Src")
-			ui.layout_close()
+			}
 		}
-		ui.layout_close()
 		
-		ui.layout_container(ui.Layout_Linear_Vertical{})
 		{
+			ui.container_vertical(&style_panel)
 			ui.layout_linear_child({across = .Center})
 			ui.layout_text("Slideshow")
-			ui.layout_container(ui.Layout_Linear_Horizontal{})
+			{
+				ui.container_horizontal(separation=12)
 				sidebar_item_component("First", playback_first)
 				sidebar_item_component("Previous", playback_previous)
 				sidebar_item_component("Play\nPause", playback_playpause)
 				sidebar_item_component("Next", playback_next)
 				sidebar_item_component("Last", playback_last)
-			ui.layout_close()
+			}
+			
 		}
-		ui.layout_close()
+		
 	}
-	ui.layout_close()
 	
 }
 

@@ -41,11 +41,16 @@ padding_round_policy := RoundingPolicy.Round
 _layout_set_default_config :: proc() {
 }
 
+computed_mem: [1024*1024]u8
+computed_arena: mem.Arena
+
 text_arena_mem : [1024*1024]u8
 text_arena: mem.Arena
 
 _layout_begin :: proc(in_scale_factor: f32) {
 	mem.arena_init(&text_arena, text_arena_mem[:])
+	mem.arena_init(&computed_arena, computed_mem[:])
+
     scale_factor = in_scale_factor
 	clear(&layout_state.items_decl)	
 	clear(&layout_state.items_tree)
@@ -101,17 +106,17 @@ _layout_open_styled :: proc(comment: string = "", style: ^$T = nil) {
 	item_decl.parent_idx = container_idx
 
 	if style != nil {
-		if (T ==  BoxStyleColored) {
+		when T ==  BoxStyleColored {
 			box_colored := (^BoxStyleColored)(style)
 			item_decl.color = box_colored.background
 			item_decl.padding = box_colored.padding
-		} else if T == ButtonStyle {
+			item_decl.box_style = style^ // copied, maybe we should store pointer?
+			
+		} else when T == ButtonStyle {
 			button_style := (^ButtonStyle)(style)
 			box_colored := button_style.idle_box.(BoxStyleColored)
 			item_decl.color = box_colored.background
 			item_decl.padding = box_colored.padding
-		} else {
-			log.info(style)
 		}
 		item_decl.override = {T, style}
 	} 
@@ -120,6 +125,19 @@ _layout_open_styled :: proc(comment: string = "", style: ^$T = nil) {
 	
 	
 	container_idx = new_item_idx
+
+	#partial switch &children_layout in item_decl.children_layout {
+
+		case Layout_Linear_Horizontal:
+			if item_decl.override.type == ContainerLinearStyle {
+				children_layout.separation = ((^ContainerLinearStyle)(item_decl.override.data)).separation
+			}
+		case Layout_Linear_Vertical:
+			if item_decl.override.type == ContainerLinearStyle {
+				children_layout.separation = ((^ContainerLinearStyle)(item_decl.override.data)).separation
+			}
+	}
+
 }
 
 _layout_close :: proc() {
@@ -164,6 +182,7 @@ LayoutItemDeclaration :: struct {
 	num_children: int,
 	padding: BoxOffsets,
 	color: Color,
+	box_style: BoxStyle,
 	layout_hint: LayoutHint, // hint to layout within parent
 	is_text: bool,
 	text: string,
@@ -299,13 +318,15 @@ _layout_item :: proc() -> int {
 	#partial switch children_layout in item.children_layout {
 
 		case Layout_Linear_Horizontal:
+			separation := children_layout.separation
 			if item.num_children > 1 {
-				separation := border_apply(children_layout.separation_flags, children_layout.separation)
+				separation = border_apply(children_layout.separation_flags, separation)
 				fit_size.x += separation * f32(item.num_children - 1)
 			}
 		case Layout_Linear_Vertical:
+			separation := children_layout.separation
 			if item.num_children > 1 {
-				separation := border_apply(children_layout.separation_flags, children_layout.separation)
+				separation = border_apply(children_layout.separation_flags, separation)
 				fit_size.y += separation * f32(item.num_children - 1)
 			}
 	}

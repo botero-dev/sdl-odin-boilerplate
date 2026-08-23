@@ -2,8 +2,10 @@ package ui
 
 import "engine:gfx"
 
-Style :: struct {
-
+// this struct (or any struct that extends from this) can be sent to a layout call, and it will resolve
+WithOverrides :: struct($T: typeid) {
+	using base: T,
+	set_fields: bit_set[0 ..< 32],
 }
 
 StyleClass :: struct {
@@ -30,14 +32,10 @@ RectStyleCommon :: struct {
 }
 
 
-ContainerStyle :: struct {
-	using base_rect: RectStyleCommon,
-	separation: f32,
-}
 
 
-BoxStyleBase :: struct {
-	using base_rect: RectStyleCommon,
+BoxStyleCommon :: struct {
+	//using base_rect: RectStyleCommon,
 	draw_offset: BoxOffsets,
 }
 
@@ -49,7 +47,7 @@ BoxStyleTexturedMapping :: enum {
 }
 
 BoxStyleTextured :: struct {
-	using base_box: BoxStyleBase,
+	using base_box: BoxStyleCommon,
 	texture_id: u32,
 	mapping: BoxStyleTexturedMapping,
 	transform: [4]f32, // x, y, scalex, scaley
@@ -59,18 +57,28 @@ BoxStyleTextured :: struct {
 
 
 BoxStyleColored :: struct {
-	using base: BoxStyleBase,
+	using base: BoxStyleCommon,
+	padding: BoxOffsets,
 	background: Color,
-	border_color: Color,
+	border_color: Color, // maybe per-border color?
 	border_width: BorderWidths,
-	corner_radii: CornerRadii,
+	corner_radii: CornerRadii, // how to allow rounded/tapered? sign?
 	// blendmode?
+	// shadow?
+
 }
 
 BoxStyle :: union {
 	BoxStyleColored,
 	BoxStyleTextured,
 }
+
+ContainerLinearStyle :: struct {
+	padding: BoxOffsets,
+	separation: f32,
+	box_style: BoxStyle,
+}
+
 
 ButtonStyle :: struct {
 	idle_box: BoxStyle,
@@ -197,14 +205,14 @@ setup_directory :: proc() {
 
 
 
-	container_style_base := ContainerStyle {
+	container_style_base := ContainerLinearStyle {
 		padding = {4, 4, 4, 4},
 		separation = 4,
 	}
 	cont_base := style_class("Container")
 	push_style(&cont_base, container_style_base)
 
-	container_style_tight := ContainerStyle {
+	container_style_tight := ContainerLinearStyle {
 		padding = {4, 4, 4, 4},
 		separation = 4,
 	}

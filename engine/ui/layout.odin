@@ -3,6 +3,7 @@ package ui
 import "base:runtime"
 import "engine:ui"
 import "core:log"
+import "core:mem"
 
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
@@ -194,7 +195,66 @@ layout_scrollview :: proc(maybe_tag:Maybe(string) = nil) {
 	
 }
 
-layout_container :: proc(children_layout: ChildrenLayout, style: ^StyleClass = nil,  maybe_tag:Maybe(string) = nil) {
+style_container :: proc(offsets: Maybe(BoxOffsets) = nil, separation: Maybe(f32) = nil) -> WithOverrides(ContainerLinearStyle) {
+	result: WithOverrides(ContainerLinearStyle)
+	if offsets != nil {
+		result.padding = offsets.?
+		result.set_fields += {0}
+	}
+	if separation != nil {
+		result.separation = separation.?
+		result.set_fields += {1}
+	}
+	return result
+}
+
+layout_container_new :: proc(
+	children_layout: ChildrenLayout, 
+	overrides: WithOverrides(ContainerLinearStyle),
+	style: ^StyleClass = nil,
+	maybe_tag:Maybe(string) = nil
+) {
+	_layout_create(children_layout)
+
+		container_style: ^ContainerLinearStyle
+		if style != nil {
+			container_style = get_current_style(style, ContainerLinearStyle)
+		}
+
+		if overrides.set_fields != {} {
+			allocator := mem.arena_allocator(&computed_arena)
+			collapsed_style := new(ContainerLinearStyle, allocator)
+			if container_style != nil {
+				collapsed_style^ = container_style^
+			} else {
+				collapsed_style^ = {}
+			}
+			
+			if 0 in overrides.set_fields {
+				collapsed_style.padding = overrides.padding
+			}
+			if 1 in overrides.set_fields {
+				collapsed_style.separation = overrides.separation
+			}
+			if 2 in overrides.set_fields {
+				// we don't use per-field overrides for visual things.
+				collapsed_style.box_style = overrides.box_style
+			}
+			container_style = collapsed_style
+		}
+
+		_layout_open_styled(style=container_style)
+		
+		// hack:
+		if container_style != nil {
+			item_decl := &layout_state.items_decl[new_item_idx]
+			item_decl.padding = container_style.padding
+			item_decl.box_style = container_style.box_style
+		}
+
+}
+
+layout_container_old :: proc(children_layout: ChildrenLayout, style: ^StyleClass = nil,  maybe_tag:Maybe(string) = nil) {
 
 	_layout_create(children_layout)
 
@@ -204,6 +264,11 @@ layout_container :: proc(children_layout: ChildrenLayout, style: ^StyleClass = n
 	} else {
 		_layout_open()
 	}
+}
+
+layout_container :: proc {
+	layout_container_old,
+	layout_container_new,
 }
 
 DEBUG := false
@@ -277,7 +342,15 @@ layout_draw :: proc() {
 	for idx in 0..<num_items {
 		decl := layout_state.items_decl[idx]
 		item := layout_state.items_tree[idx]
-		if item.color.a != 0 {
+		if decl.box_style != nil {
+			rect := item.layout_rect
+			SDL.SetRenderDrawColorFloat(gfx.renderer, 1, 1, 1, 1)
+			SDL.SetRenderDrawBlendMode(gfx.renderer, {.BLEND})
+			#partial switch v in decl.box_style {
+				case BoxStyleColored:
+					draw_box_styled(rect, v)
+			}
+		} else if item.color.a != 0 {
 			rect := item.layout_rect
 			SDL.SetRenderDrawColorFloat(gfx.renderer, 1, 1, 1, 1)
 			SDL.SetRenderDrawBlendMode(gfx.renderer, {.BLEND})
