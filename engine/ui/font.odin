@@ -8,7 +8,9 @@ import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
 
 
-NIL_FONT :: ~u16(0)
+FontId :: distinct u16
+
+NIL_FONT :: FontId(~u16(0))
 
 FontData :: struct {
 	font_io: ^SDL.IOStream,
@@ -19,8 +21,8 @@ loaded_fonts: u16 = 0
 fonts: [dynamic]FontData
 text_engine: ^TTF.TextEngine
 
-default_font_id: u16 = NIL_FONT
-symbol_font_id: u16 = NIL_FONT
+default_font_id := NIL_FONT
+symbol_font_id := NIL_FONT
 
 
 
@@ -37,7 +39,7 @@ load_font_io :: proc(io: ^SDL.IOStream) -> u16 {
 }
 
 
-get_font_with_size :: proc(font_id: u16, size: u16) -> ^TTF.Font {
+get_font_with_size :: proc(font_id: FontId, size: u16) -> ^TTF.Font {
 	if font_id == NIL_FONT {
 		return nil
 	}
@@ -58,7 +60,7 @@ get_font_with_size :: proc(font_id: u16, size: u16) -> ^TTF.Font {
 // single text object gets reused
 single_text: ^TTF.Text
 
-get_text_with_font_size :: proc(font_id: u16, size: u16) -> ^TTF.Text {
+get_text_with_font_size :: proc(font_id: FontId, size: u16) -> ^TTF.Text {
 	//log.info("get_text_with_size")
 	font := get_font_with_size(font_id, size)
 	if font == nil {
@@ -72,36 +74,24 @@ get_text_with_font_size :: proc(font_id: u16, size: u16) -> ^TTF.Text {
 }
 
 
-measure_text :: proc(text: string, font_id: u16, font_size: u16) -> f32x2 {
+measure_text :: proc(text: string, font_id: FontId, font_size: u16) -> f32x2 {
 	font := get_font_with_size(font_id, font_size)
 	if font == nil {
 		log.info("unable to calculate font size")
 		return {}
 	}
 	size := [2]c.int{}
-	TTF.GetStringSize(font, cstring(raw_data(text)), len(text), &size.x, &size.y)
+	TTF.GetStringSizeWrapped(font, cstring(raw_data(text)), len(text), 0, &size.x, &size.y)
+
 	return {f32(size.x), f32(size.y)}
 }
 
-
-TextStyle :: struct {
-	//using config: clay.TextElementConfig
-	fontId: u16,
-	fontSize: u16,
-	/* // maybe use these in the future:
-	color: Color,
-	modifier: i32, // future bitmask for black/italics/underline/strikethrough
-	*/
-}
-
-TextElementConfig :: TextStyle
-
-text_config_default: ^TextElementConfig
+text_config_default: ^TextStyle
 
 refresh_font_styles :: proc() {
 	btn_style := get_current_style(&class_btn, ButtonStyle)
-	btn_style.idle_text.fontId = default_font_id
+	btn_style.idle_text.font = default_font_id
 
 	btn_icon_style := get_current_style(&class_btn_icon, ButtonStyle)
-	btn_icon_style.idle_text.fontId = symbol_font_id
+	btn_icon_style.idle_text.font = symbol_font_id
 }

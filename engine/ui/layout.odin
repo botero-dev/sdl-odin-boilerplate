@@ -4,6 +4,7 @@ import "base:runtime"
 import "engine:ui"
 import "core:log"
 import "core:mem"
+import "core:fmt"
 
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
@@ -17,11 +18,11 @@ layout_stack: [dynamic]ChildrenLayout
 
 
 init :: proc() {
-	text_config_default = new(TextElementConfig)
-	text_config_default.fontSize = 14
+	text_config_default = new(TextStyle)
+	text_config_default.size = 14
+	text_config_default.color = Color32{full=0xFFFFFFFF}
 
 	_nav_init()
-
 }
 
 
@@ -42,18 +43,20 @@ layout_begin :: proc(size: f32x2, scale_factor: f32) {
 	_layout_open("--root--")
 }
 
+debug_guard := false
 layout_end :: proc() {
+
+
 	_layout_close()
 	if len(layout_stack) != 0 {
 		log.error("layout_stack is not empty when finishing drawing.")
 		log.error(layout_stack)
 		clear(&layout_stack)
 	}
-
 	_layout_end()
 
-}
 
+}
 
 LayoutDirection :: enum {
 	Horizontal,
@@ -222,7 +225,7 @@ layout_container_new :: proc(
 		}
 
 		if overrides.set_fields != {} {
-			allocator := mem.arena_allocator(&computed_arena)
+			allocator := mem.arena_allocator(&layout_state.computed_arena)
 			collapsed_style := new(ContainerLinearStyle, allocator)
 			if container_style != nil {
 				collapsed_style^ = container_style^
@@ -288,30 +291,6 @@ layout_custom :: proc(custom_data: Layout_Custom_Data) {
 
 
 
-text_config: ^TextElementConfig
-
-
-
-layout_text_const :: proc($text: string, in_config: ^TextElementConfig = nil) {
-	config := in_config
-	if config == nil {
-		config = text_config_default
-	}
-	_layout_text(text, config.fontSize, config.fontId)	
-}
-
-layout_text_dynamic :: proc(text: string, in_config: ^TextElementConfig = nil) {
-	config := in_config
-	if config == nil {
-		config = text_config_default
-	}
-	_layout_text(text, config.fontSize, config.fontId)
-}
-
-layout_text :: proc {
-	layout_text_const,
-	layout_text_dynamic,
-}
 
 layout_textbox :: proc(text: string, variant: ^StyleClass = nil, info: ^HandlerInfo = nil) {
 
@@ -381,12 +360,30 @@ layout_draw :: proc() {
 			}
 
 		}
-		if decl.is_text {
+		if decl.override.type == TextStyle {
+			text_style := (^TextStyle)(decl.override.data)
+		
 			cstr := cstring(raw_data(decl.text))
-		    sdl_text := get_text_with_font_size(decl.text_font, decl.text_size)
-			TTF.SetTextColor(sdl_text, 255, 255, 255, 255)
+
+
+			//////////// when we handle horizontal alignment
+			font := get_font_with_size(text_style.font, text_style.size)
+			TTF.SetFontWrapAlignment(font, .CENTER)
+			//
+
+			// when we handle vertical alignment
+			fit_size := item.fit_size
+			draw_rect := item.layout_rect
+
+			// if valign = middle:
+			draw_rect.y += (draw_rect.h - fit_size.y) * 0.5
+			
+	
+		    sdl_text := get_text_with_font_size(text_style.font, text_style.size)
+			color := text_style.color.channels
+			TTF.SetTextColor(sdl_text, color.r, color.g, color.b, color.a)
 			TTF.SetTextString(sdl_text, cstr, uint(len(decl.text)))
-			TTF.DrawRendererText(sdl_text, f32(item.layout_rect.x), f32(item.layout_rect.y))
+			TTF.DrawRendererText(sdl_text, draw_rect.x, draw_rect.y)
 		}
 
 		if decl.custom.callback_render != nil {

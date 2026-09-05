@@ -88,9 +88,9 @@ layout_button_handler :: proc(text: string, info: ^HandlerInfo = nil, variant: ^
 	}
 	style: ^BoxStyle = &btn_style.idle_box
 
-	_layout_open_styled("", btn_style)
+	_layout_open_styled(text, btn_style)
 	
-	layout_text(text, &btn_style.idle_text)
+	layout_text(text)
 
 	layout_close() // box
 }

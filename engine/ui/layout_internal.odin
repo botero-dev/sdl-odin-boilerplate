@@ -41,20 +41,23 @@ padding_round_policy := RoundingPolicy.Round
 _layout_set_default_config :: proc() {
 }
 
-computed_mem: [1024*1024]u8
-computed_arena: mem.Arena
-
-text_arena_mem : [1024*1024]u8
-text_arena: mem.Arena
-
 _layout_begin :: proc(in_scale_factor: f32) {
-	mem.arena_init(&text_arena, text_arena_mem[:])
-	mem.arena_init(&computed_arena, computed_mem[:])
+
+	clear(&layout_state.items_decl)
+	clear(&layout_state.items_tree)
+
+	if layout_state.computed_mem == nil {
+		layout_state.computed_mem = make([]byte, 1024*1024)
+	}
+
+	if layout_state.text_arena_mem == nil {
+		layout_state.text_arena_mem = make([]byte, 1024*1024)
+	}
+
+	mem.arena_init(&layout_state.text_arena, layout_state.text_arena_mem)
+	mem.arena_init(&layout_state.computed_arena, layout_state.computed_mem)
 
     scale_factor = in_scale_factor
-	clear(&layout_state.items_decl)	
-	clear(&layout_state.items_tree)
-	layout_state = {}
 	container_idx = -1
 }
 
@@ -145,8 +148,8 @@ _layout_close :: proc() {
 	container_idx = layout_state.items_decl[container_idx].parent_idx
 }
 
-_layout_text :: proc(text: string, size: u16, font: u16) -> int {
-	allocator := mem.arena_allocator(&text_arena)
+_layout_text :: proc(text: string, style: ^TextStyle) -> int {
+	allocator := mem.arena_allocator(&layout_state.text_arena)
 
 	new_string := strings.clone(text, allocator)
 
@@ -158,17 +161,12 @@ _layout_text :: proc(text: string, size: u16, font: u16) -> int {
 	append(&layout_state.items_decl, LayoutItemDeclaration {})
 	item_decl := &layout_state.items_decl[new_item_idx]
 	item_decl.layout_hint = layout_hint
+	layout_hint = nil
 
-	item_decl.is_text = true
+	item_decl.override = {TextStyle, style}
 	item_decl.text = new_string
-	item_decl.text_font = font
-
-	if size == 0 {
-		log.warn("text size zero")
-	}
 	
-	font_size_with_scalefactor := scaling_apply_rounded(.Round, size)
-	item_decl.text_size = u16(font_size_with_scalefactor)
+
 	return new_item_idx
 }
 
@@ -184,10 +182,7 @@ LayoutItemDeclaration :: struct {
 	color: Color,
 	box_style: BoxStyle,
 	layout_hint: LayoutHint, // hint to layout within parent
-	is_text: bool,
 	text: string,
-	text_font: u16,
-	text_size: u16,
 	comment: string,
 	override: StyleOverride,
 	handler: PointerHandler,
@@ -210,11 +205,18 @@ LayoutItemResult :: struct {
 // It will take into account themes data like padding as it matters to layout. but other things like colors will be kept as pointers to point to them when drawing
 
 LayoutState :: struct {
-    rect: Rect,
+//    rect: Rect,
 	items_decl: [dynamic]LayoutItemDeclaration,
 	items_tree: [dynamic]LayoutItemResult,
 	layout_idx_current: int,
 	layout_idx_parent: int,
+
+	computed_mem: []byte,
+	computed_arena: mem.Arena,
+
+	text_arena_mem : []byte,
+	text_arena: mem.Arena,
+
 }
 
 layout_state: LayoutState
@@ -232,38 +234,6 @@ _layout_compute :: proc() {
 
 	layout_cursor = 0
 	//print_layout_result()
-}
-
-indent: int = 0
-print_layout_result :: proc() {
-	if indent == 0 {
-		fmt.println()
-		fmt.println()
-		fmt.println()
-	}
-	item_base := layout_state.items_decl[layout_cursor]
-	item_result := layout_state.items_tree[layout_cursor]
-	for idx in 0..<indent {
-		fmt.print(" | ")
-	}
-	fmt.print(" +-")
-
-	if len(item_base.comment) != 0 {
-		fmt.printf("(%s) ", item_base.comment)
-	}
-
-	fmt.println(item_base)
-	for idx in 0..<indent {
-		fmt.print(" | ")
-	}
-	fmt.print(" | ")
-	fmt.println(item_result)
-	layout_cursor += 1
-	indent += 1
-	for idx in 0..<item_base.num_children {
-		print_layout_result()
-	}
-	indent -= 1
 }
 
 layout_cursor := 0
@@ -334,8 +304,9 @@ _layout_item :: proc() -> int {
 	fit_size.x += item.padding.left + item.padding.right
 	fit_size.y += item.padding.top + item.padding.bottom
 
-	if item.is_text {
-		text_calc_size := measure_text(item.text, item.text_font, item.text_size)
+	if item.override.type == TextStyle {
+		text_style := (^TextStyle)(item.override.data)
+		text_calc_size := measure_text(item.text, text_style.font, text_style.size)
 		fit_size.x += text_calc_size.x
 		fit_size.y += text_calc_size.y
 	}

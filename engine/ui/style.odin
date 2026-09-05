@@ -17,6 +17,11 @@ StyleClass :: struct {
 
 Color :: [4]f32
 
+Color32 :: struct #raw_union {
+    channels: [4]u8,
+    full: u32,
+}
+
 CornerRadii :: gfx.CornerRadii
 BorderWidths :: gfx.BorderWidths
 
@@ -194,13 +199,13 @@ setup_directory :: proc() {
 	pressed_box.border_color = {1, 1, 1, 0.1}
 	btn_style.pressed_box = pressed_box
 
-	btn_style.idle_text.fontSize = 14
+	btn_style.idle_text.size = 14
 
 	push_style(&class_btn, btn_style)
 
 
 	btn_icon_style := btn_style
-	btn_icon_style.idle_text.fontId = 1
+	btn_icon_style.idle_text.font = 1
 	push_style(&class_btn_icon, btn_icon_style)
 
 

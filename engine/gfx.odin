@@ -97,6 +97,9 @@ draw_pop_state :: proc() {
 }
 
 draw_present :: proc() {
+
+	ui.debugger_draw()
+
 	if len(draw_state_stack) != 0 {
 		log.warn("Draw State Stack should be empty when presenting.")
 	}

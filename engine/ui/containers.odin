@@ -9,24 +9,24 @@ container_linear :: proc(
 	separation: Maybe(f32) = nil,
 	box_style: Maybe(BoxStyle) = nil,
 ) {
-	result: WithOverrides(ContainerLinearStyle)
+	overrides: WithOverrides(ContainerLinearStyle)
 	if offsets != nil {
-		result.padding = offsets.?
-		result.set_fields += {0}
+		overrides.padding = offsets.?
+		overrides.set_fields += {0}
 	}
 	if separation != nil {
-		result.separation = separation.?
-		result.set_fields += {1}
+		overrides.separation = separation.?
+		overrides.set_fields += {1}
 	}
 	if box_style != nil {
-		result.box_style = box_style.?
-		result.set_fields += {2}
+		overrides.box_style = box_style.?
+		overrides.set_fields += {2}
 	}
 
 	if horizontal {
-		layout_container(Layout_Linear_Horizontal{}, result, style)
+		layout_container(Layout_Linear_Horizontal{}, overrides, style)
 	} else {
-		layout_container(Layout_Linear_Vertical{}, result, style)
+		layout_container(Layout_Linear_Vertical{}, overrides, style)
 	}
 	
 }

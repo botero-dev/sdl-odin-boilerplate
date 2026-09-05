@@ -608,7 +608,8 @@ layout_toolbar :: proc() {
 					border_color = {0.5, 0.5, 0.5, 1},
 					border_width = {1, 1, 1, 1}
 				},
-				padding = {20,20,8,8}
+				padding = {20,20,8,8},
+				separation = 40
 				
 			})
 		}
@@ -619,6 +620,7 @@ layout_toolbar :: proc() {
 			ui.layout_linear_child({across = .Center})
 			ui.layout_text("Gallery Config")
 
+			ui.layout_linear_child({height = ui.Sizing{type = .Weight, amount = 1}})
 			{ 
 				ui.container_horizontal(separation=12)
 				sidebar_item_component("Select Folder", select_directory)
@@ -757,9 +759,9 @@ sidebar_item_component_handlerinfo :: proc($label: string, info: ^ui.HandlerInfo
 		color = color_hover
 	}
 
-	
+	ui.layout_button(label)
 
-	ui.layout_text(label)
+	//ui.layout_text(label)
 
 	if is_focused {
 		ab.ui_modifier_pop(&rotate_modifier)
