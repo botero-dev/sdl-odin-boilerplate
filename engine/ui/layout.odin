@@ -368,7 +368,7 @@ layout_draw :: proc() {
 
 			//////////// when we handle horizontal alignment
 			font := get_font_with_size(text_style.font, text_style.size)
-			TTF.SetFontWrapAlignment(font, .CENTER)
+			TTF.SetFontWrapAlignment(font, .LEFT)
 			//
 
 			// when we handle vertical alignment
@@ -379,7 +379,7 @@ layout_draw :: proc() {
 			draw_rect.y += (draw_rect.h - fit_size.y) * 0.5
 			
 	
-		    sdl_text := get_text_with_font_size(text_style.font, text_style.size)
+			sdl_text := get_text_with_font_size(text_style.font, text_style.size)
 			color := text_style.color.channels
 			TTF.SetTextColor(sdl_text, color.r, color.g, color.b, color.a)
 			TTF.SetTextString(sdl_text, cstr, uint(len(decl.text)))

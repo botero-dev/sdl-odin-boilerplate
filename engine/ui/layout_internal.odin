@@ -265,13 +265,25 @@ _layout_item :: proc() -> int {
 					fit_size.y = max(fit_size.y, child_result.fit_size.y)
 			case Layout_Linear_Horizontal:
 					fit_size.y = max(fit_size.y, child_result.fit_size.y)
+					ignore_fit := false
 					hint, ok := child_item.layout_hint.(LinearChildSizingFixed)
-					if ok && hint.width.type == .Weight {
-						weight_sum += hint.width.amount
+					if ok {
+						if hint.width.type == .Weight {
+							weight_sum += hint.width.amount
+						}
+						if hint.width.type == .DensityPixels {
+							fit_size.x = hint.width.amount
+						}
+						if hint.width.type == .RealPixels {
+							fit_size.x = hint.width.amount
+						}
+						ignore_fit = .IgnoreFit in hint.width.flags
 					}
-					if .IgnoreFit not_in hint.width.flags {
+					if !ignore_fit {
 						fit_size.x += child_result.fit_size.x
 					}
+
+
 			case Layout_Linear_Vertical:
 					fit_size.x = max(fit_size.x, child_result.fit_size.x)
 					hint, ok := child_item.layout_hint.(LinearChildSizingFixed)

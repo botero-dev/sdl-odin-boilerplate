@@ -26,7 +26,7 @@ ZERO_PIX_CLAMP := vec2{0.5, 1.5} / TEX_SIZE
 PIXEL_X := vec2{1, 0} / TEX_SIZE
 PIXEL_Y := vec2{1, 0} / TEX_SIZE
 
-win_size: [2]i32 = {1280, 720}
+//win_size: [2]i32 = {1280, 720}
 
 
 
@@ -203,7 +203,7 @@ update_matrix :: proc() {
 	draw_size := draw_rect[1]
 	if draw_size == {0, 0} {
 		// TODO: maybe find current framebuffer size before?
-		draw_size = {win_size.x, win_size.y}
+		draw_size = {gfx.win_size.x, gfx.win_size.y}
 	}
 	
 	switch view_mode in draw_state.view_mode {

@@ -5,6 +5,7 @@ import "engine:ui"
 import SDL "vendor:sdl3"
 
 import evt "events"
+import "gfx"
 
 
 event_retval: SDL.AppResult
@@ -59,7 +60,7 @@ system_handler :: proc(event: ^Event) {
 	case .WINDOW_PIXEL_SIZE_CHANGED:
 		event.handled = true
 		window_event := sdl_event.window
-		win_size = {window_event.data1, window_event.data2}
+		gfx.win_size = {window_event.data1, window_event.data2}
 		//ui_dirty = true
 
 	case .WINDOW_DISPLAY_SCALE_CHANGED:

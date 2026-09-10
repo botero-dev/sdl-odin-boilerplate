@@ -422,7 +422,7 @@ main_handler :: proc(event: ^ab.Event, user_data: rawptr) {
 create_layout :: proc() {
 	// Begin constructing the layout.
 
-	ui.layout_begin({f32(ab.win_size.x), f32(ab.win_size.y)}, ab.dpi)
+	ui.layout_begin({f32(gfx.win_size.x), f32(gfx.win_size.y)}, ab.dpi)
 
 	{
 		//ui.ui_reset_handler_buffer()
@@ -585,19 +585,6 @@ layout_toolbar :: proc() {
 
 	opacity_modifier = ab.ui_modifier_modulate({1, 1, 1, toolbar_opacity})
 
-
-	ui.layout_overlay_child({.Middle, .End})
-
-	
-
-	{
-		ui.container_horizontal(separation = 20, offsets = ui.BoxOffsets{30, 30, 30, 30})
-		//ui.ui_pointer_handler()
-		ab.ui_modifier(&opacity_modifier)
-
-		// @static style_panel := ui.create_style("Panel", "", ui.BoxStyleColored {
-		// 	background = {1, 0, 0, 1}
-		// })
 		@static init := false
 		style_panel := ui.style_class("panel")
 		if !init {
@@ -609,36 +596,48 @@ layout_toolbar :: proc() {
 					border_width = {1, 1, 1, 1}
 				},
 				padding = {20,20,8,8},
-				separation = 40
+				separation = 12
 				
 			})
 		}
 
+
+	{
+		// overlay on top of root node
+		ui.layout_overlay_child({.Middle, .End})
+		ui.container_horizontal(separation = 20, offsets = ui.BoxOffsets{30, 30, 30, 30})
+	
+		//ui.ui_pointer_handler()
+		ab.ui_modifier(&opacity_modifier)
 		{
 			ui.container_vertical(&style_panel)
 
 			ui.layout_linear_child({across = .Center})
 			ui.layout_text("Gallery Config")
 
-			ui.layout_linear_child({height = ui.Sizing{type = .Weight, amount = 1}})
 			{ 
+				ui.layout_linear_child({height = ui.Sizing{type = .Weight, amount = 1}})
 				ui.container_horizontal(separation=12)
-				sidebar_item_component("Select Folder", select_directory)
-				sidebar_item_component("Config Online Src")
+	
+				toolbar_button("Select Folder", select_directory)
+				toolbar_button("Config Online Src")
 			}
 		}
 		
 		{
 			ui.container_vertical(&style_panel)
+	
 			ui.layout_linear_child({across = .Center})
 			ui.layout_text("Slideshow")
+	
 			{
+				//ui.layout_linear_child({height = ui.Sizing{type = .Weight, amount = 1}})
 				ui.container_horizontal(separation=12)
-				sidebar_item_component("First", playback_first)
-				sidebar_item_component("Previous", playback_previous)
-				sidebar_item_component("Play\nPause", playback_playpause)
-				sidebar_item_component("Next", playback_next)
-				sidebar_item_component("Last", playback_last)
+				toolbar_button("First", playback_first)
+				toolbar_button("Previous", playback_previous)
+				toolbar_button("Play\nPause", playback_playpause)
+				toolbar_button("Next", playback_next)
+				toolbar_button("Last", playback_last)
 			}
 			
 		}
@@ -716,19 +715,19 @@ color_text := gfx.f32x4{0.8, 0.8, 0.8, 1}
 rotate_modifier: ab.UIModifierTransform
 
 // Re-useable components are just normal procs.
-sidebar_item_component :: proc {
-	sidebar_item_component_handlerinfo,
-	sidebar_item_component_proc,
+toolbar_button :: proc {
+	toolbar_button_handlerinfo,
+	toolbar_button_proc,
 }
 
-sidebar_item_component_proc :: proc($label: string, callback: ui.ButtonHandlerSimple) {
+toolbar_button_proc :: proc($label: string, callback: ui.ButtonHandlerSimple) {
 	info: ^ui.HandlerInfoSimple
 	if callback != nil {
 		info = new(ui.HandlerInfoSimple, context.temp_allocator)
 		info.handler = handle_proc_simple
 		info.callback = callback
 	}
-	sidebar_item_component_handlerinfo(label, info)
+	toolbar_button_handlerinfo(label, info)
 }
 
 handle_proc_simple :: proc(userdata: ^ui.HandlerInfo) {
@@ -737,7 +736,7 @@ handle_proc_simple :: proc(userdata: ^ui.HandlerInfo) {
 }
 
 
-sidebar_item_component_handlerinfo :: proc($label: string, info: ^ui.HandlerInfo = nil) {
+toolbar_button_handlerinfo :: proc($label: string, info: ^ui.HandlerInfo = nil) {
 
 	//clay.UI(clay.ID(label))
 	item_handle := ui.ui_add_button(label, info)
