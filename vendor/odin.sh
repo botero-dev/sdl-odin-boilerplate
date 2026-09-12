@@ -11,9 +11,16 @@ if [[ ! -d "odin" ]]; then
 fi
 
 
-if [ ! -f "odin/odin" ]; then
+if [ ! -f "odin/odin" ] && [ ! -f "odin/odin.exe" ]; then
 	echo "Compiling Odin compiler..." 2>&1
     pushd "odin" > /dev/null
-    "./build_odin.sh" release-native
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*)
+            cmd //c build.bat release
+            ;;
+        *)
+            "./build_odin.sh" release-native
+            ;;
+    esac
     popd > /dev/null
 fi

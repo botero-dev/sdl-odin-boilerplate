@@ -47,7 +47,7 @@ if [[ "${AB_SKIP_REBUILD_LIBS:-0}" == 0 ]]; then
 	./vendor/sdl_image.sh
 	make_cmake_library vendor/SDL_image SDL3_image  \
 		-DSDL3_DIR="$BUILD_CMAKE_PATH/SDL3"         \
-		-DSDLIMG_AVIF=OFF 
+		-DSDLIMAGE_AVIF=OFF 
 		# -DSDLIMAGE_VENDORED=true 
 
 	./vendor/sdl_ttf.sh

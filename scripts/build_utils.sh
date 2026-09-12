@@ -29,7 +29,7 @@ invoke_log() {
 	mkdir -p "$LOG_BASE"
 	LOG_NAME="$LOG_BASE/$(date +%Y%m%d_%H%M%S_%3N).log"
 	
-	echo "$@" ">> $LOG_NAME"
+	echo "$@" ">> $(to_win_path "$LOG_NAME")"
 	"$@" >> "$LOG_NAME"
 }
 export -f invoke_log
@@ -39,6 +39,14 @@ to_bash_path() {
     echo "$1" | sed 's|^\([A-Za-z]\):/|/\1/|'
 }
 export -f to_bash_path
+
+# Convert Unix bash path format (/C/) to Windows path format (C:/)
+to_win_path() {
+    echo "$1" | sed 's|^/\([A-Za-z]\)/|\1:/|'
+}
+export -f to_win_path
+
+
 
 make_library_name() {
 	if [[ "$TARGET" = "linux" ]]; then

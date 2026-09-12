@@ -7,19 +7,23 @@ A gallery application is developed as a test environment to implement the many s
 
 - Main loop to grab input, do idle processing, layout and rendering.
 - Event handling like pointer routing and keyboard/gamepad/tv remote navigation.
-- UI Layout with Clay.
+- UI Layout
 - 2D drawing of antialiased lines and rectangles with borders and rounded corners.
-- Drawing state stack for applying 2D transforms and color modulation when drawing.
+- Drawing state stack for applying 2D transforms and color modulation when drawing. (broken atm)
 - AsyncIO loading from storage and threaded decoding of image assets.
 - Compiles in Windows, Linux, Android and WASM.
 
+## Compiling
+
+Install dependencies:
+- LLVM on Linux/macOS
+- Visual Studio on Windows
+- CMake
+
+
 ### How to build:
 
-You need to compile clay dependency first as its not integrated into other build scripts yet.
-
-	./vendor/clay.sh
-
-You need to have SDL repo and Odin compiler in the parent folder. This requirement will be lifted in the future.
+Build scripts will grab submodules if needed.
 
 Linux or Windows (run from git bash):
 

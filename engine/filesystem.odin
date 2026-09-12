@@ -46,17 +46,24 @@ request_data_async :: proc(url: cstring, user_data: rawptr, callback: RequestCal
 			base := "." //SDL.GetBasePath()
 			//target_url = fmt.ctprintf("%s/%s", base, url)
 		} else {
-			target_url = fmt.ctprintf("content/%s", url)
+			base := SDL.GetBasePath()
+			target_url = fmt.ctprintf("%s/content/%s", base, url)
 		}
 
-
+		
 		io := SDL.AsyncIOFromFile(target_url, "r")
+
+		if io == nil {
+			log.warn("file not found:", target_url)
+		} else {
+			log.info("file found:", target_url)
+		}
 
 		file_size := u64(SDL.GetAsyncIOSize(io))
 		if file_size < 0 {
 			log.warn("file not found:", target_url)
 		}
-
+		
 		data := make([]byte, file_size)
 
 		handler := new(RequestHandler)
