@@ -94,6 +94,15 @@ elif [[ "$TARGET" = "win" ]]; then
 		-out:"$PACKAGE_PATH/$PROJECT.exe"
 	)
 
+	# Odin defaults to /subsystem:console on Windows, which makes Windows
+	# allocate a console window for the app. Use the GUI subsystem instead,
+	# unless AB_CONSOLE=1 is set (useful when debugging).
+	if [[ "${AB_CONSOLE:-0}" = "1" ]]; then
+		compile_cmd+=(-subsystem:console)
+	else
+		compile_cmd+=(-subsystem:windows)
+	fi
+
 elif [[ "$TARGET" = "web" ]]; then
 	mkdir -p "$BUILD_OBJ_PATH/web"
 
