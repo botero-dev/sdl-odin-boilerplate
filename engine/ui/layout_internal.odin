@@ -263,6 +263,17 @@ _layout_item :: proc() -> int {
 			case Layout_Overlay_Float:
 					fit_size.x = max(fit_size.x, child_result.fit_size.x)
 					fit_size.y = max(fit_size.y, child_result.fit_size.y)
+			
+			case Layout_Scroll:
+				fit_size.x = max(fit_size.x, child_result.fit_size.x)
+				fit_size.y = max(fit_size.y, child_result.fit_size.y)
+				if children_layout.vertical {
+					fit_size.y = 0
+				}
+				if children_layout.horizontal {
+					fit_size.x = 0
+				}
+
 			case Layout_Linear_Horizontal:
 					fit_size.y = max(fit_size.y, child_result.fit_size.y)
 					ignore_fit := false
@@ -445,6 +456,13 @@ _layout_filling :: proc() {
 						child_tree.layout_rect.x = available_size.x + available_size.w - child_tree.fit_size.x
 						child_tree.layout_rect.w = child_tree.fit_size.x
 				}
+			case Layout_Scroll:
+				scroll := layout.offset
+				child_tree.layout_rect.x = available_size.x - scroll.x
+				child_tree.layout_rect.y = available_size.y - scroll.y
+				child_tree.layout_rect.w = max(child_tree.fit_size.x, available_size.x)
+				child_tree.layout_rect.h = max(child_tree.fit_size.y, available_size.y)
+
 			case Layout_Extend, Layout_Overlay_Float:
 				sizing_x := ChildSizingAxis.Fill
 				sizing_y := ChildSizingAxis.Fill

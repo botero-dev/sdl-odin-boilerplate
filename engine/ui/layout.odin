@@ -5,6 +5,7 @@ import "engine:ui"
 import "core:log"
 import "core:mem"
 import "core:fmt"
+import "core:c"
 
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
@@ -76,11 +77,18 @@ Layout_Linear :: struct {
 Layout_Linear_Horizontal :: distinct Layout_Linear
 Layout_Linear_Vertical :: distinct Layout_Linear
 
+Layout_Scroll :: struct {
+	vertical: bool,
+	horizontal: bool,
+	offset: ^f32x2,
+}
+
 ChildrenLayout :: union #no_nil {
 	Layout_Extend,
 	Layout_Overlay_Float,
 	Layout_Linear_Horizontal,
 	Layout_Linear_Vertical,
+	Layout_Scroll,
 }
 
 
@@ -189,13 +197,32 @@ layout_linear_child :: proc(rule: LinearChildSizingFixed, loc := #caller_locatio
 	layout_hint_loc = loc
 }
 
+scroll_handler :: proc(event: ^Event, user_data: rawptr) {
+	if event.phase == .Bubbling {
+		if event.type == .Mouse {
+			if event.sdl_event.type == SDL.EventType.MOUSE_WHEEL {
+				wheel_evt := event.sdl_event.wheel
+				offset := (^f32x2)(user_data)
+				offset.y += -wheel_evt.y * 24
+				offset.x += wheel_evt.x * 24
+			}
+		}
+	}
 
-layout_scrollview :: proc(maybe_tag:Maybe(string) = nil) {
+}
 
-	_layout_create(ui.Layout_Extend{})
+layout_scrollview :: proc(offset: ^f32x2, maybe_tag:Maybe(string) = nil) {
+
+	_layout_create(Layout_Scroll{vertical=true, offset=offset})
+
+	scroll_style := BoxStyleColored {
+		border_color=Color{1,1,0,1},
+		border_width={2,2,2,2},
+	}
+	_layout_open_styled("scroll", &scroll_style)
 	
-	_layout_open()
-	
+	ui_pointer_handler(scroll_handler, offset)
+
 }
 
 style_container :: proc(offsets: Maybe(BoxOffsets) = nil, separation: Maybe(f32) = nil) -> WithOverrides(ContainerLinearStyle) {
@@ -314,11 +341,23 @@ layout_textbox :: proc(text: string, variant: ^StyleClass = nil, info: ^HandlerI
 	layout_close() // box
 }
 
-
+ModifierInstance :: struct {
+	end_idx: int,
+}
+ 
+draw_modifiers : [dynamic]ModifierInstance
 
 layout_draw :: proc() {
+
+	clear(&draw_modifiers)
+
 	num_items := len(layout_state.items_tree)
 	for idx in 0..<num_items {
+		for ;((len(draw_modifiers) != 0) && (draw_modifiers[len(draw_modifiers)-1].end_idx == idx)); {
+			SDL.SetRenderClipRect(gfx.renderer, nil)
+			pop(&draw_modifiers)
+		}
+
 		decl := layout_state.items_decl[idx]
 		item := layout_state.items_tree[idx]
 		if decl.box_style != nil {
@@ -358,8 +397,20 @@ layout_draw :: proc() {
 				corners := gfx.CornerRadii {4,4,4,4}
 				gfx.draw_box_filled(rect, corners, c)
 			}
-
 		}
+		scroll, is_scroll := decl.children_layout.(Layout_Scroll)
+		if is_scroll {
+			rect := SDL.Rect{
+				c.int(item.layout_rect.x),
+				c.int(item.layout_rect.y),
+				c.int(item.layout_rect.w),
+				c.int(item.layout_rect.h),
+			}
+			
+			SDL.SetRenderClipRect(gfx.renderer, &rect)
+			append(&draw_modifiers, ModifierInstance{decl.end})
+		}
+
 		if decl.override.type == TextStyle {
 			text_style := (^TextStyle)(decl.override.data)
 		
@@ -390,4 +441,10 @@ layout_draw :: proc() {
 			decl.custom.callback_render(layout_state, idx)
 		}
 	}
+
+		for ;(len(draw_modifiers) != 0); {
+			SDL.SetRenderClipRect(gfx.renderer, nil)
+			pop(&draw_modifiers)
+		}
+
 }

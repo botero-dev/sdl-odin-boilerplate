@@ -41,6 +41,9 @@ target_layout_state: LayoutState
 
 hovered_item_index: int
 
+scroll_state: [2]f32
+scroll_state2: [2]f32
+
 // TODO: maybe pass layout_state as param?
 _layout_debugger :: proc() {
 
@@ -60,15 +63,23 @@ _layout_debugger :: proc() {
 	{
 		// tree view
 		layout_linear_child({height = Sizing{type = .Weight, amount = 1}})
+
+		container_scroll(&scroll_state)
+
 		container_vertical(box_style=BoxStyleColored{
 			background = Color{0.5, 0, 0, 0.8}
 		})
 		layout_debugger_list()
 	}
 
+	layout_text("Item fields")
+
 	{
 		// details view
 		layout_linear_child({height = Sizing{type = .Weight, amount = 1}})
+
+		container_scroll(&scroll_state2)
+
 		container_vertical(box_style=BoxStyleColored{
 			background = Color{0, 0.5, 0, 0.8}
 		})
@@ -77,6 +88,21 @@ _layout_debugger :: proc() {
 		}
 	}
 }
+
+debugger_process_event :: proc(event: ^PointerEvent) {
+		base_layout_state := layout_state
+		target_layout_state = base_layout_state
+		
+		layout_state = debug_layout_state
+		
+	layout_process_event(event)
+
+		debug_layout_state = layout_state
+
+		layout_state = base_layout_state
+
+}
+
 
 layout_debugger_inspector :: proc() {
 	item := target_layout_state.items_decl[hovered_item_index]

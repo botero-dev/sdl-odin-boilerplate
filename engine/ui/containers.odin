@@ -51,3 +51,12 @@ container_horizontal :: proc(
 	container_linear(true, style, offsets, separation, box_style)
 }
 
+
+@(deferred_none=layout_close)
+container_scroll :: proc(
+	offset: ^f32x2
+) {
+	layout_scrollview(offset)
+}
+
+

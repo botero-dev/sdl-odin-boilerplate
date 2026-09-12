@@ -127,6 +127,8 @@ ui_push_pointer_event :: proc(event: ^Event) {
 
 	layout_process_event(&pointer_event)
 
+	debugger_process_event(&pointer_event)
+
 	//clay.SetPointerState({coords.x, coords.y}, pressed)
 
 	//finish_handling_mouse_input(event)
