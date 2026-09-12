@@ -12,6 +12,7 @@ import TTF "vendor:sdl3/ttf"
 
 import "../gfx"
 import abm "../math"
+import "../fs"
 
 
 layout_stack: [dynamic]ChildrenLayout
@@ -22,6 +23,9 @@ init :: proc() {
 	text_config_default = new(TextStyle)
 	text_config_default.size = 14
 	text_config_default.color = Color32{full=0xFFFFFFFF}
+	text_config_default.font = default_font_id
+
+	init_fonts()
 
 	_nav_init()
 }

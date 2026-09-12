@@ -128,7 +128,7 @@ panel_toolbox :: proc() {
 
 
 
-assign_font :: proc(result: ab.RequestResult) {
+assign_font :: proc(result: fs.RequestResult) {
 
 	bytes := result.bytes
 	assert(len(bytes) != 0)
@@ -140,7 +140,7 @@ assign_font :: proc(result: ab.RequestResult) {
 model: Model
 model_loaded: bool = false
 
-dxf_callback :: proc(result: ab.RequestResult) {
+dxf_callback :: proc(result: fs.RequestResult) {
 	if model_loaded {
 		return
 	}

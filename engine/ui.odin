@@ -34,23 +34,9 @@ print_render_commands: bool
 ui_init :: proc() {
 	ui.init()
 
-	// todo: move async file stuff to engine.core, and move this to ui.init procedure
-	request_data_async("InterVariable.ttf", &ui.default_font_id, assign_font)
-	request_data_async("MaterialSymbolsOutlined.ttf",  &ui.symbol_font_id, assign_font)
 }
 
 
-assign_font :: proc(result: RequestResult) {
-
-	bytes := result.bytes
-	assert(len(bytes) != 0)
-	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
-
-	slot := (^u16)(result.user_data)
-	slot^ = ui.load_font_io(io)
-
-	ui.refresh_font_styles()
-}
 
 
 

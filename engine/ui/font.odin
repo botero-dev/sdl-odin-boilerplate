@@ -7,6 +7,8 @@ import "core:log"
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
 
+import "../fs"
+
 
 FontId :: distinct u16
 
@@ -21,9 +23,27 @@ loaded_fonts: u16 = 0
 fonts: [dynamic]FontData
 text_engine: ^TTF.TextEngine
 
-default_font_id := NIL_FONT
-symbol_font_id := NIL_FONT
+default_font_id: FontId = NIL_FONT
+symbol_font_id: FontId = NIL_FONT
 
+init_fonts :: proc() {
+		
+	// todo: move async file stuff to engine.core, and move this to init procedure
+	fs.request_data_async("InterVariable.ttf", &default_font_id, assign_font)
+	fs.request_data_async("MaterialSymbolsOutlined.ttf",  &symbol_font_id, assign_font)
+}
+
+assign_font :: proc(result: fs.RequestResult) {
+
+	bytes := result.bytes
+	assert(len(bytes) != 0)
+	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
+
+	slot := (^u16)(result.user_data)
+	slot^ = load_font_io(io)
+
+	refresh_font_styles()
+}
 
 
 
@@ -94,4 +114,6 @@ refresh_font_styles :: proc() {
 
 	btn_icon_style := get_current_style(&class_btn_icon, ButtonStyle)
 	btn_icon_style.idle_text.font = symbol_font_id
+
+	text_config_default.font = default_font_id
 }

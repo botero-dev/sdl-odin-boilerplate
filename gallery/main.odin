@@ -23,6 +23,7 @@ import "base:runtime"
 
 import ab "engine:."
 import gfx "engine:gfx"
+import "engine:fs"
 import "engine:ui"
 
 when ODIN_PLATFORM_SUBTARGET == .Android {
@@ -43,7 +44,7 @@ when ODIN_PLATFORM_SUBTARGET == .Android {
 	}
 }
 
-on_gallery_loaded :: proc(result: ab.RequestResult) {
+on_gallery_loaded :: proc(result: fs.RequestResult) {
 	bytes := result.bytes
 	file := string(bytes)
 
@@ -62,10 +63,10 @@ on_gallery_loaded :: proc(result: ab.RequestResult) {
 		img_path := new(ImgPath)
 		img_path^ = {}
 		img_path.index = img_idx
-		ab.request_data_async(
+		fs.request_data_async(
 			c_path,
 			img_path,
-			proc(result: ab.RequestResult) {
+			proc(result: fs.RequestResult) {
 				img_path := (^ImgPath)(result.user_data)
 				img_path.data = result.bytes
 				unpack_texture(img_path)
@@ -143,7 +144,7 @@ init :: proc() {
 		return
 	}
 
-	ab.request_data_async("gallery/files.txt", nil, on_gallery_loaded)
+	fs.request_data_async("gallery/files.txt", nil, on_gallery_loaded)
 
 }
 

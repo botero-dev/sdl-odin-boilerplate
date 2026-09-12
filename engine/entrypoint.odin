@@ -1,6 +1,7 @@
 
 package engine
 
+import "engine:fs"
 import SDL "vendor:sdl3"
 
 import "core:strings"
@@ -187,7 +188,8 @@ sdl_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.App
 		return .FAILURE
 	}
 
-	load_queue = SDL.CreateAsyncIOQueue()
+	fs.init()
+	
 
 
 	when ODIN_OS == .Linux && !(ODIN_PLATFORM_SUBTARGET == .Android) {
@@ -209,7 +211,7 @@ sdl_event :: proc "c" (appstate: rawptr, event: ^SDL.Event) -> SDL.AppResult {
 sdl_iterate :: proc "c" (appstate: rawptr) -> SDL.AppResult {
 	context = ctx
 
-	idle_process_async()
+	fs.idle_process_async()
 	callback_iterate()
 	return app_status
 }

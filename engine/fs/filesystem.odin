@@ -1,10 +1,13 @@
-package engine
+package filesystem
 
-import "emscripten"
+import "../emscripten"
 import SDL "vendor:sdl3"
 
 import "core:fmt"
 import "core:log"
+
+import "base:runtime"
+
 
 RequestResult :: struct {
 	success:   bool,
@@ -18,6 +21,17 @@ RequestHandler :: struct {
 }
 
 RequestCallback :: #type proc(result: RequestResult)
+
+
+pending_tasks: [dynamic]^SDL.AsyncIO
+load_queue: ^SDL.AsyncIOQueue
+
+ctx: runtime.Context
+
+init :: proc() {
+	ctx = context
+	load_queue = SDL.CreateAsyncIOQueue()
+}
 
 
 // On desktop, it loads file relative to executable path
@@ -76,8 +90,6 @@ request_data_async :: proc(url: cstring, user_data: rawptr, callback: RequestCal
 	}
 }
 
-pending_tasks: [dynamic]^SDL.AsyncIO
-load_queue: ^SDL.AsyncIOQueue
 
 idle_process_async :: proc() {
 	outcome: SDL.AsyncIOOutcome
@@ -93,11 +105,6 @@ idle_process_async :: proc() {
 	}
 }
 
-
-aaa_fetch_error :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
-	context = ctx
-	fmt.println("aaaaa")
-}
 fetch_error :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
 	request_handler := (^RequestHandler)(fetch_result.userData)
 	context = ctx
@@ -109,11 +116,6 @@ fetch_error :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
 	free(request_handler)
 }
 
-
-aaa_fetch_success :: proc "c" (fetch_result: ^emscripten.emscripten_fetch_t) {
-	context = ctx
-	fetch_success(fetch_result)
-}
 fetch_success :: proc (fetch_result: ^emscripten.emscripten_fetch_t) {
 	request_handler := (^RequestHandler)(fetch_result.userData)
 	result := RequestResult {
