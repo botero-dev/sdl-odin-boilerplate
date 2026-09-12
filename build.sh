@@ -89,9 +89,13 @@ if [[ "$TARGET" = "linux" ]]; then
 
 elif [[ "$TARGET" = "win" ]]; then
 
+	# The Odin SDL bindings import their libraries as `system:SDL3*` on Windows,
+	# so point the linker at the libraries built into $INSTALL_PATH.
+	INSTALL_PATH_WIN=$(to_win_path "$INSTALL_PATH")
 	compile_cmd+=(
 		-debug
 		-out:"$PACKAGE_PATH/$PROJECT.exe"
+		-extra-linker-flags:"/LIBPATH:$INSTALL_PATH_WIN/lib"
 	)
 
 	# Odin defaults to /subsystem:console on Windows, which makes Windows

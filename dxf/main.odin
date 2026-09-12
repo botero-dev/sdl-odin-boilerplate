@@ -14,6 +14,7 @@ import "base:runtime"
 import ab "engine:."
 import "engine:gfx"
 import "engine:ui"
+import "engine:fs"
 import abm "engine:math"
 
 import SDL "vendor:sdl3"
@@ -56,14 +57,14 @@ init :: proc() {
 	//ab.app_add_event_handler(viewport_input_handler)
 
 	// TODO: check if called with startup args to avoid loading `casa`1
-	//ab.request_data_async("mailbox.dxf", nil, dxf_callback)
-	//ab.request_data_async("bogota.dxf", nil, dxf_callback)
-	//ab.request_data_async("casa0.dxf", nil, dxf_callback)
-	ab.request_data_async("casa1.dxf", nil, dxf_callback)
-	//ab.request_data_async("trex.dxf", nil, dxf_callback)
+	//fs.request_data_async("mailbox.dxf", nil, dxf_callback)
+	//fs.request_data_async("bogota.dxf", nil, dxf_callback)
+	//fs.request_data_async("casa0.dxf", nil, dxf_callback)
+	fs.request_data_async("casa1.dxf", nil, dxf_callback)
+	//fs.request_data_async("trex.dxf", nil, dxf_callback)
 
-	ab.request_data_async("NotoSansCJK-VF.otf.ttc", nil, assign_font)
-	//ab.request_data_async("Play-Regular.ttf", nil, assign_font)
+	fs.request_data_async("NotoSansCJK-VF.otf.ttc", nil, assign_font)
+	//fs.request_data_async("Play-Regular.ttf", nil, assign_font)
 
 
 	id_menus := ui.panels_register_definition({    callback=panel_menus,     name="menus"})
@@ -168,8 +169,8 @@ load_dxf_bytes_2 :: proc (ptr: [^]byte, size: int) {
 
 	model = model_from_dxf(ptr[:size])
 
-	scale_x := f64(ab.win_size.x) / model.size.x
-	scale_y := f64(ab.win_size.y) / model.size.y
+	scale_x := f64(gfx.win_size.x) / model.size.x
+	scale_y := f64(gfx.win_size.y) / model.size.y
 
 	scale := math.min(scale_x, scale_y) * 1.1
 
@@ -308,7 +309,7 @@ iterate :: proc() {
 	ui.ui_idle(0.01);
     free_all(context.temp_allocator)
 
-	ui.layout_begin({f32(ab.win_size.x), f32(ab.win_size.y)}, ab.dpi)
+	ui.layout_begin({f32(gfx.win_size.x), f32(gfx.win_size.y)}, ab.dpi)
 
 	ui.panels_present_layout(panels)
 
@@ -371,9 +372,9 @@ layer_change_color :: proc(layer_name: string) {
 	fmt.println("layer color:", layer_name)
 }
 
-
+offset: f32x2
 layout_layers :: proc() {
-	ui.layout_scrollview()
+	ui.layout_scrollview(&offset)
 	ui.layout_container(ui.Layout_Linear_Vertical{2, {}}, nil, "layers")
 
 	if model_loaded {

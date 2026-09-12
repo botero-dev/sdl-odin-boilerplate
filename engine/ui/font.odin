@@ -39,7 +39,7 @@ assign_font :: proc(result: fs.RequestResult) {
 	assert(len(bytes) != 0)
 	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
 
-	slot := (^u16)(result.user_data)
+	slot := (^FontId)(result.user_data)
 	slot^ = load_font_io(io)
 
 	refresh_font_styles()
@@ -47,11 +47,11 @@ assign_font :: proc(result: fs.RequestResult) {
 
 
 
-load_font_io :: proc(io: ^SDL.IOStream) -> u16 {
+load_font_io :: proc(io: ^SDL.IOStream) -> FontId {
 	new_font := FontData {
 		font_io = io,
 	}
-	loaded_font_id := loaded_fonts
+	loaded_font_id := FontId(loaded_fonts)
 	log.info("set font io:", loaded_font_id)
 	append(&fonts, new_font)
 	loaded_fonts += 1

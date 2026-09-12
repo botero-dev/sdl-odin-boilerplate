@@ -4,9 +4,11 @@
 [submodule "vendor/SDL"]
 	path = vendor/SDL
 	url = https://github.com/botero-dev/SDL.git
+	branch = wayland-scroll-touchpad
 [submodule "vendor/SDL_ttf"]
 	path = vendor/SDL_ttf
 	url = https://github.com/botero-dev/SDL_ttf.git
+	branch = abotero-test
 [submodule "vendor/SDL_image"]
 	path = vendor/SDL_image
 	url = https://github.com/libsdl-org/SDL_image.git
