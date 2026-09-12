@@ -17,10 +17,15 @@ if [[ "$PROJECT" = "" ]]; then
 	exit 1
 fi
 
-# ensure we have odin toolchain
-ODIN=$("./vendor/odin.sh")
-
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+pushd "$REPO_ROOT" > /dev/null
+
+git submodule update --init --recursive
+
+# ensure we have odin toolchain
+"./vendor/odin.sh"
+ODIN_ROOT="$REPO_ROOT/vendor/odin"
+ODIN="$ODIN_ROOT/odin"
 
 if [[ "${TARGET:-}" = "" ]]; then
 	if [[ "$(uname)" = "Linux" ]]; then

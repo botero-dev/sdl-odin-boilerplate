@@ -24,17 +24,15 @@ source_emsdk() {
 }
 export -f source_emsdk
 
-cmake_cmd() {
-	if [[ "$TARGET" = "web" ]]; then
-		source_emsdk
-		echo emcmake cmake "$@"
-		emcmake cmake "$@"
-	else
-		echo cmake "$@"
-		cmake "$@"
-	fi
+invoke_log() {
+	LOG_BASE="$REPO_ROOT/build/logs"
+	mkdir -p "$LOG_BASE"
+	LOG_NAME="$LOG_BASE/$(date +%Y%m%d_%H%M%S_%3N).log"
+	
+	echo "$@" ">> $LOG_NAME"
+	"$@" >> "$LOG_NAME"
 }
-export -f cmake_cmd
+export -f invoke_log
 
 # Convert Windows path format (C:/) to Unix bash format (/C/)
 to_bash_path() {
@@ -72,15 +70,22 @@ make_cmake_library() {
 	if [ ! -e "$cmake_build_dir" ]; then
 		echo "Generating cmake project: $cmake_build_dir"
 
-		cmake_cmd \
+		setup_cmd=("cmake")
+		if [[ "$TARGET" = "web" ]]; then
+			source_emsdk
+			setup_cmd=("emcmake" "cmake")
+		fi
+
+
+		invoke_log \
+			"${setup_cmd[@]}" \
 			-S "$lib_source" \
 			-B "$cmake_build_dir" \
 			-DCMAKE_INSTALL_PREFIX="$INSTALL_PATH" \
 			"${cmake_args[@]}"
 	fi
-	echo cmake --build "$cmake_build_dir" --config "$BUILD_CONFIG" --parallel
-	cmake --build "$cmake_build_dir" --config "$BUILD_CONFIG" --parallel > /dev/null
-	echo cmake --install "$cmake_build_dir" --config "$BUILD_CONFIG"
-	cmake --install "$cmake_build_dir" --config "$BUILD_CONFIG" > /dev/null
+
+	invoke_log cmake --build "$cmake_build_dir" --config "$BUILD_CONFIG" --parallel
+	invoke_log cmake --install "$cmake_build_dir" --config "$BUILD_CONFIG"
 }
 export -f make_cmake_library

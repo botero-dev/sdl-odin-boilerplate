@@ -53,6 +53,9 @@ request_data_async :: proc(url: cstring, user_data: rawptr, callback: RequestCal
 		io := SDL.AsyncIOFromFile(target_url, "r")
 
 		file_size := u64(SDL.GetAsyncIOSize(io))
+		if file_size < 0 {
+			log.warn("file not found:", target_url)
+		}
 
 		data := make([]byte, file_size)
 

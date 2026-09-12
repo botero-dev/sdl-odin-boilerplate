@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 
 set -euo pipefail
 pushd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null
@@ -11,10 +12,8 @@ fi
 
 
 if [ ! -f "odin/odin" ]; then
+	echo "Compiling Odin compiler..." 2>&1
     pushd "odin" > /dev/null
     "./build_odin.sh" release-native
     popd > /dev/null
 fi
-
-ODIN_ROOT="$(pwd)/odin"
-echo "$ODIN_ROOT/odin"
