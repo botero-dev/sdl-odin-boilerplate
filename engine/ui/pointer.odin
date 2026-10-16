@@ -8,11 +8,13 @@ Event :: evt.Event
 PointerEvent :: struct {
 	using event: ^Event,
 	coords: f32x2,
+	current_idx: int,
+	target_idx: int,
 }
 
 
 
-PointerHandler :: #type proc(event: ^Event, user_data: rawptr)
+PointerHandler :: #type proc(event: ^PointerEvent, user_data: rawptr)
 
 
 PointerHandlerEntry :: struct {
@@ -123,7 +125,9 @@ ui_push_pointer_event :: proc(event: ^Event) {
 
 	}
 
-	pointer_event := PointerEvent{event, coords}
+	pointer_event := PointerEvent{}
+	pointer_event.event = event
+	pointer_event.coords = coords
 
 	layout_process_event(&pointer_event)
 

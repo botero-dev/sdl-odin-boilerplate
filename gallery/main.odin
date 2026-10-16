@@ -26,22 +26,12 @@ import gfx "engine:gfx"
 import "engine:fs"
 import "engine:ui"
 
-when ODIN_PLATFORM_SUBTARGET == .Android {
-	@(export)
-	SDL_main :: proc "c" (argc: i32, argv: [^]cstring) -> i32 {
-		context = runtime.default_context()
-		context.logger = runtime.Logger {
-			procedure = ab.sdl_log_proc,
-		}
-		log.info("android SDL_main")
-		ab.app_init(nil, init, iterate)
-		return 0
-	}
-} else {
-	main :: proc() {
-		fmt.println("hello world")
-		ab.app_init(nil, init, iterate)
-	}
+// The Android entry point (exported SDL_main) lives in engine/entrypoint.odin so
+// that SDL's Java layer finds exactly one SDL_main in libmain.so. Defining one
+// here too causes "Non unique linking name for procedure 'SDL_main'".
+main :: proc() {
+	fmt.println("hello world")
+	ab.app_init(nil, init, iterate)
 }
 
 on_gallery_loaded :: proc(result: fs.RequestResult) {
@@ -403,7 +393,7 @@ hide_ui_time: f64
 
 toolbar_last_interaction_is_mouse := false
 
-main_handler :: proc(event: ^ab.Event, user_data: rawptr) {
+main_handler :: proc(event: ^ui.PointerEvent, user_data: rawptr) {
 	if event.type == .Keyboard {
 		//log.info(event)
 

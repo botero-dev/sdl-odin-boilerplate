@@ -54,9 +54,11 @@ container_horizontal :: proc(
 
 @(deferred_none=layout_close)
 container_scroll :: proc(
-	offset: ^f32x2
+	offset: ^f32x2,
+	horizontal: bool = false,
+	vertical: bool = true,
 ) {
-	layout_scrollview(offset)
+	layout_scrollview(offset, nil, horizontal, vertical)
 }
 
 

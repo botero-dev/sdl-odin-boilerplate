@@ -23,7 +23,7 @@ ui_add_button :: proc(label: string, info: ^HandlerInfo = nil) -> NavItemHandle 
 	return item_handle
 }
 
-ui_button_handler :: proc(event: ^Event, handler_info: rawptr) {
+ui_button_handler :: proc(event: ^PointerEvent, handler_info: rawptr) {
 	if event.phase == .Capturing {return}
 	commit := false
 	if event.sdl_event.type == .MOUSE_BUTTON_DOWN {

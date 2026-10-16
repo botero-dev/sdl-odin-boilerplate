@@ -201,7 +201,7 @@ SCALE_POWER :: 2
 
 
 
-viewport_input_handler :: proc(event: ^ab.Event, user_data: rawptr) {
+viewport_input_handler :: proc(event: ^ui.PointerEvent, user_data: rawptr) {
 	vp_size := f64x2 { f64(viewport.last_draw_rect.w), f64(viewport.last_draw_rect.h)}
 	if event.sdl_event.type == SDL.EventType.PINCH_BEGIN {
 		current_scale = 1

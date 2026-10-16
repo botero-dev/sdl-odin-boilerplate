@@ -201,31 +201,49 @@ layout_linear_child :: proc(rule: LinearChildSizingFixed, loc := #caller_locatio
 	layout_hint_loc = loc
 }
 
-scroll_handler :: proc(event: ^Event, user_data: rawptr) {
+scroll_handler :: proc(event: ^PointerEvent, user_data: rawptr) {
 	if event.phase == .Bubbling {
 		if event.type == .Mouse {
 			if event.sdl_event.type == SDL.EventType.MOUSE_WHEEL {
 				wheel_evt := event.sdl_event.wheel
-				offset := (^f32x2)(user_data)
-				offset.y += -wheel_evt.y * 24
-				offset.x += wheel_evt.x * 24
+				decl := &layout_state.items_decl[event.current_idx]
+				item := &layout_state.items_tree[event.current_idx]
+				item_rect := item.layout_rect
+				layout_scroll := (decl.children_layout.(Layout_Scroll))
+				offset := layout_scroll.offset
+
+				child_rect := &layout_state.items_tree[event.current_idx+1].layout_rect
+				max_offset := [2]f32{child_rect.w - item_rect.w, child_rect.h - item_rect.h }
+
+				if layout_scroll.vertical {
+					offset.y += -wheel_evt.y * 24
+					offset.y = clamp(offset.y, 0, max_offset.y)
+				}
+				if layout_scroll.horizontal {
+					offset.x += wheel_evt.x * 24
+					offset.x = clamp(offset.x, 0, max_offset.x)
+				}
 			}
 		}
 	}
 
 }
 
-layout_scrollview :: proc(offset: ^f32x2, maybe_tag:Maybe(string) = nil) {
+layout_scrollview :: proc(offset: ^f32x2, maybe_tag:Maybe(string) = nil, in_horizontal: bool = false, in_vertical: bool = true) {
 
-	_layout_create(Layout_Scroll{vertical=true, offset=offset})
+	idx := len(layout_state.items_decl)
+
+	_layout_create(Layout_Scroll{vertical=in_vertical, horizontal=in_horizontal, offset=offset})
 
 	scroll_style := BoxStyleColored {
 		border_color=Color{1,1,0,1},
 		border_width={2,2,2,2},
 	}
 	_layout_open_styled("scroll", &scroll_style)
+
+	user_ptr := &layout_state.items_decl[idx].children_layout.(Layout_Scroll)
 	
-	ui_pointer_handler(scroll_handler, offset)
+	ui_pointer_handler(scroll_handler, user_ptr)
 
 }
 

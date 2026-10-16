@@ -382,7 +382,6 @@ _layout_filling :: proc() {
 		child_tree := &layout_state.items_tree[layout_cursor]
 		#partial switch layout in item_decl.children_layout {
 			case Layout_Linear_Horizontal:
-				child_tree.layout_rect.x = cursor_along
 				child_width: f32 = 0
 				sizing_across := SizingAcross.Fill
 				ignore_fit_size := false
@@ -394,6 +393,10 @@ _layout_filling :: proc() {
 					ignore_fit_size = .IgnoreFit in layout_hint.width.flags
 					if layout_hint.width.type == .Weight {
 						child_width = size_to_spread * layout_hint.width.amount
+					}
+
+					if layout_hint.width.type == .Ratio {
+						child_width = available_size.w * layout_hint.width.amount
 					}
 					
 					
@@ -460,8 +463,8 @@ _layout_filling :: proc() {
 				scroll := layout.offset
 				child_tree.layout_rect.x = available_size.x - scroll.x
 				child_tree.layout_rect.y = available_size.y - scroll.y
-				child_tree.layout_rect.w = max(child_tree.fit_size.x, available_size.x)
-				child_tree.layout_rect.h = max(child_tree.fit_size.y, available_size.y)
+				child_tree.layout_rect.w = max(child_tree.fit_size.x, available_size.w)
+				child_tree.layout_rect.h = max(child_tree.fit_size.y, available_size.h)
 
 			case Layout_Extend, Layout_Overlay_Float:
 				sizing_x := ChildSizingAxis.Fill
@@ -533,6 +536,8 @@ layout_process_event_item :: proc(event: ^PointerEvent) {
 	item_decl := layout_state.items_decl[index]
 	item_tree := layout_state.items_tree[index]
 
+	target := index
+
 	// todo: check drag-release-out interaction
 	// todo: check drag with touch in scroll views
 	cursor_hovers := abm.point_in_rect(event.coords, item_tree.layout_rect) 
@@ -545,6 +550,9 @@ layout_process_event_item :: proc(event: ^PointerEvent) {
 		}
 
 		if item_decl.handler != nil {
+			event.target_idx = target
+			event.current_idx = index
+	
 			item_decl.handler(event, item_decl.handler_data)
 		
 			if event.event.handled {
@@ -574,6 +582,9 @@ layout_process_event_item :: proc(event: ^PointerEvent) {
 			fmt.println(event.event.phase, index, item_tree)
 		}
 		if item_decl.handler != nil {
+			event.target_idx = target
+			event.current_idx = index
+	
 			item_decl.handler(event, item_decl.handler_data)
 			when LOG_POINTER_EVENTS {
 				if event.event.handled {

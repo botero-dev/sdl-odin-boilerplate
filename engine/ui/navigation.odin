@@ -179,14 +179,17 @@ _calc_focus_stack :: proc() {
 	}
 }
 
-nav_handle_input :: proc(event: ^Event) {
+nav_handle_input :: proc(raw_evt: ^Event) {
 
-	if event.type == .Unknown {
+	if raw_evt.type == .Unknown {
 		return
 	}
-	if event.type == .Mouse {
+	if raw_evt.type == .Mouse {
 		return // maybe not entirely correct? if we use mouse buttons for navigation
 	}
+
+	event_mem := PointerEvent{event = raw_evt}
+	event := &event_mem
 
 	nav_target_id := root_item
 	if nav_target_id >= u32(len(nav_item_buffer)) {
