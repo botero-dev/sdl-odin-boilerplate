@@ -5,6 +5,8 @@ import "core:strings"
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
 
+import "ui"
+
 
 create_window :: proc(name: string, size: [2]i32) -> bool {
 
@@ -15,21 +17,20 @@ create_window :: proc(name: string, size: [2]i32) -> bool {
     if ! success { return false }
 
     name_cstring := strings.clone_to_cstring(name, context.temp_allocator)
-	renderer: ^SDL.Renderer
-	window: ^SDL.Window
 
-	success = SDL.CreateWindowAndRenderer(
-		name_cstring,
-		size.x,
-		size.y,
-		{.RESIZABLE, .HIGH_PIXEL_DENSITY},
-		&window,
-		&renderer,
-	)
-    if ! success { return false }
+	window_id := ui.window_create(name, size, 1)
+
+
+	window := ui.windows[window_id]
+	renderer := SDL.CreateRenderer(window.sdl_window, nil)
+	
+	// device := SDL.CreateGPUDevice({.SPIRV})
+	// renderer := SDL.CreateGPURenderer(window.sdl_window)
+	
+	assert(renderer != nil, "Failed to create SDL renderer.")
 
    	ui_init()
-	gfx_init(renderer, window)
+	gfx_init(renderer, window.sdl_window)
 	
     return success;
 }
