@@ -36,6 +36,18 @@ text_round_policy := RoundingPolicy.Round
 border_round_policy := RoundingPolicy.Round
 padding_round_policy := RoundingPolicy.Round
 
+scaled_padding :: proc "contextless" (value: BoxOffsets) -> BoxOffsets {
+	return {
+		left = scaling_apply_rounded(padding_round_policy, value.left),
+		right = scaling_apply_rounded(padding_round_policy, value.right),
+		top = scaling_apply_rounded(padding_round_policy, value.top),
+		bottom = scaling_apply_rounded(padding_round_policy, value.bottom),
+	}
+}
+
+scaled_text_size :: proc "contextless" (value: u16) -> u16 {
+	return u16(scaling_apply_rounded(text_round_policy, f32(value)))
+}
 
 
 _layout_set_default_config :: proc() {
@@ -112,14 +124,14 @@ _layout_open_styled :: proc(comment: string = "", style: ^$T = nil) {
 		when T ==  BoxStyleColored {
 			box_colored := (^BoxStyleColored)(style)
 			item_decl.color = box_colored.background
-			item_decl.padding = box_colored.padding
+			item_decl.padding = scaled_padding(box_colored.padding)
 			item_decl.box_style = style^ // copied, maybe we should store pointer?
 			
 		} else when T == ButtonStyle {
 			button_style := (^ButtonStyle)(style)
 			box_colored := button_style.idle_box.(BoxStyleColored)
 			item_decl.color = box_colored.background
-			item_decl.padding = box_colored.padding
+			item_decl.padding = scaled_padding(box_colored.padding)
 		}
 		item_decl.override = {T, style}
 	} 
@@ -329,7 +341,7 @@ _layout_item :: proc() -> int {
 
 	if item.override.type == TextStyle {
 		text_style := (^TextStyle)(item.override.data)
-		text_calc_size := measure_text(item.text, text_style.font, text_style.size)
+		text_calc_size := measure_text(item.text, text_style.font, scaled_text_size(text_style.size))
 		fit_size.x += text_calc_size.x
 		fit_size.y += text_calc_size.y
 	}

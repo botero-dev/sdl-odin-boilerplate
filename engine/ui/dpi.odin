@@ -31,9 +31,30 @@ scaling_set_factor :: proc (value: f32) {
 	scale_factor_user = value
 }
 
-scaling_apply :: proc "contextless" (value: $T) -> f32 {
+scaling_logical_to_pixels :: proc (logical_size: [2]f32, scale: f32) -> [2]i32 {
+	assert(scale != 0)
+	return {
+		i32(logical_size.x * scale + 0.5), // round, tie towards zero
+		i32(logical_size.y * scale + 0.5),
+	}
+}
+
+scaling_pixels_to_logical :: proc (pixel_size: [2]i32, scale: f32) -> [2]f32 {
+	assert(scale != 0)
+	return {
+		f32(pixel_size.x) / scale,
+		f32(pixel_size.y) / scale,
+	}
+}
+
+scaling_apply_value :: proc "contextless" (value: $T) -> f32 {
 
 	return f32(value) * scale_factor
+}
+
+scaling_apply :: proc {
+	scaling_apply_value,
+	scaling_apply_rounded,
 }
 
 border_apply :: proc "contextless" (flags: BorderFlags, value: $T) -> f32 where intrinsics.type_is_numeric(T) {

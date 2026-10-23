@@ -38,12 +38,13 @@ init :: proc() {
 layout_begin_window :: proc(window_id: Window_ID = 0) {
 	window := windows[window_id]
 	surface := surfaces[window.surface_id]
-	layout_begin_rect(f32x2{f32(window.size.x), f32(window.size.y)}, surface.dpi)
+	pixel_size := window_pixel_size(window_id)
+	layout_begin_rect(f32x2{f32(pixel_size.x), f32(pixel_size.y)}, surface.dpi)
 }
 
-layout_begin_rect :: proc(size: f32x2, in_scale_factor: f32) {
+layout_begin_rect :: proc(pixel_size: f32x2, in_scale_factor: f32) {
 	
-	scale_factor_window = in_scale_factor
+	scale_factor_window = in_scale_factor if in_scale_factor > 0 else 1
 	scale_factor = scale_factor_user * scale_factor_window
 
 	if layout_hint != nil {
@@ -51,9 +52,7 @@ layout_begin_rect :: proc(size: f32x2, in_scale_factor: f32) {
 		layout_hint = nil
 	}
 	
-	
-	//assert(3 == 2)
-	_layout_set_dimensions({f32(size.x), f32(size.y)})
+	_layout_set_dimensions({f32(pixel_size.x), f32(pixel_size.y)})
 	_layout_set_default_config()
 	_layout_begin(scale_factor)
 
@@ -318,7 +317,7 @@ layout_container_new :: proc(
 		// hack:
 		if container_style != nil {
 			item_decl := &layout_state.items_decl[new_item_idx]
-			item_decl.padding = container_style.padding
+			item_decl.padding = scaled_padding(container_style.padding)
 			item_decl.box_style = container_style.box_style
 		}
 
@@ -458,7 +457,8 @@ layout_draw :: proc() {
 
 
 			//////////// when we handle horizontal alignment
-			font := get_font_with_size(text_style.font, text_style.size)
+			font_size := scaled_text_size(text_style.size)
+			font := get_font_with_size(text_style.font, font_size)
 			TTF.SetFontWrapAlignment(font, .LEFT)
 			//
 
@@ -470,7 +470,7 @@ layout_draw :: proc() {
 			draw_rect.y += (draw_rect.h - fit_size.y) * 0.5
 			
 	
-			sdl_text := get_text_with_font_size(text_style.font, text_style.size)
+			sdl_text := get_text_with_font_size(text_style.font, font_size)
 			color := text_style.color.channels
 			TTF.SetTextColor(sdl_text, color.r, color.g, color.b, color.a)
 			TTF.SetTextString(sdl_text, cstr, uint(len(decl.text)))

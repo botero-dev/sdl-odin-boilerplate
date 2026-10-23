@@ -181,7 +181,7 @@ sdl_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.App
 	app_event_init()
 
 	// SDL prefers wayland only if fifo-v1 is available (KDE 6.4+). Uncomment to force enable
-	// SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11") 
+	//SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11") 
 
 
 	// SDL_Init must run before SDL_CreateAsyncIOQueue: the queue's worker

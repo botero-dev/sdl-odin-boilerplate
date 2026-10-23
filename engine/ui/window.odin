@@ -1,5 +1,6 @@
 package ui
 
+import "../gfx"
 
 // a priori, a window is just a container that can render stuff. .
 
@@ -19,7 +20,7 @@ package ui
 
 Window :: struct {
     surface_id: Surface_ID,
-    size: [2]i32, // this is in pixels
+    logical_size: [2]f32, // logical pixels
 }
 
 Window_ID :: distinct int
@@ -30,34 +31,55 @@ next_win_id: Window_ID = 0
 windows: map[Window_ID]Window
 
 
-// size is assumed to be pixels for now
+// logical_size is in logical pixels.
 window_create :: proc(
     title: Maybe(string) = nil,
-    size: Maybe([2]i32) = nil,
-    surface_id: Maybe(Surface_ID) = nil, // if not nil, a surface is created
+    logical_size: Maybe([2]f32) = nil,
+    surface_id: Maybe(Surface_ID) = nil,
 ) -> Window_ID {
 
-    window := Window{}
-    window.size = size.? or_else {1280, 720}
-    
+    requested_logical_size := logical_size.? or_else [2]f32{1280, 720}
+
     window_id := next_win_id
+    result_surface_id := surface_id.? or_else surface_create(title, requested_logical_size, window_id)
+
+    if result_surface_id == SURFACE_INVALID {
+        return WINDOW_INVALID
+
+    }
+
+    surface := surfaces[result_surface_id]
+    window := Window{}
+    window.surface_id = result_surface_id
 
     if surface_id == nil {
-        window.surface_id = surface_create(title, window.size, window_id)
-    } else {
-        window.surface_id = surface_id.?
-        surface := &surfaces[window.surface_id]
+        // if we were creating a new surface:
+        // The OS may have given us a different size, we recalculate logical size
+        window.logical_size = scaling_pixels_to_logical(surface.pixel_size, surface.dpi)
+    } else { // if surface_id != nil
+        // we were adding a window to a surface
+        window.logical_size = requested_logical_size
+
         append(&surface.subwindows, window_id)
-    }
-
-    if window.surface_id == SURFACE_INVALID {
-        return WINDOW_INVALID
-    }
-
+    } 
 
     // commit changes
     windows[window_id] = window
     next_win_id += 1
 
+    // activate window
+   	gfx.drawcontext_activate(surface.draw_context)
+
     return window_id
+}
+
+window_pixel_size :: proc(window_id: Window_ID) -> [2]i32 {
+    window := windows[window_id]
+    surface := surfaces[window.surface_id]
+
+    if surface.owner_id == window_id {
+        return surface.pixel_size
+    }
+
+    return scaling_logical_to_pixels(window.logical_size, surface.dpi)
 }

@@ -57,23 +57,10 @@ system_handler :: proc(event: ^Event) {
 		event.handled = true
 		app_quit()
 
-	case .WINDOW_PIXEL_SIZE_CHANGED:
-		event.handled = true
-		window_event := sdl_event.window
-		sdl_window := SDL.GetWindowFromEvent(sdl_event^)
-		surface_id := ui.sdl_win_to_surface_id[sdl_window]
-		surface := &ui.surfaces[surface_id]
-		surface.size = {window_event.data1, window_event.data2}
-		window := &ui.windows[surface.owner_id]
-		window.size = surface.size
-
-	case .WINDOW_DISPLAY_SCALE_CHANGED:
+	case .WINDOW_PIXEL_SIZE_CHANGED, .WINDOW_DISPLAY_SCALE_CHANGED:
 		event.handled = true
 		sdl_window := SDL.GetWindowFromEvent(sdl_event^)
-		
-		surface_id := ui.sdl_win_to_surface_id[sdl_window]
-		surface := &ui.surfaces[surface_id]
-		surface.dpi = SDL.GetWindowDisplayScale(sdl_window)
+		ui.surface_update_from_window(sdl_window)
 	}
 
 	if pressed, matches := evt.match_mapping_button(event, input_fullscreen); matches && pressed {

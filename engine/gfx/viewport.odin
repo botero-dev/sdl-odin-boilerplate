@@ -1,5 +1,6 @@
 package gfx
 
+import "core:c"
 import "core:log"
 
 import SDL "vendor:sdl3"
@@ -154,9 +155,10 @@ update_matrix :: proc() {
 	draw_rect := draw_state.draw_rect
 	draw_size := draw_rect[1]
 	if draw_size == {0, 0} {
-		// TODO: how to find current window size?
-		win_size := [2]i32{1280, 720}
-		draw_size = {win_size.x, win_size.y}
+		output_width, output_height: c.int
+		if SDL.GetRenderOutputSize(draw_context.renderer, &output_width, &output_height) {
+			draw_size = {i32(output_width), i32(output_height)}
+		}
 	}
 	
 	switch view_mode in draw_state.view_mode {

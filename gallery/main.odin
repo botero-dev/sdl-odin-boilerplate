@@ -124,7 +124,7 @@ ImgPath :: struct {
 init :: proc() {
 	log.info("init")
 
-	ab.create_window("Gallery", {1280, 720})
+	ab.create_window("Gallery", {960, 540})
 
 	err: runtime.Allocator_Error
 	channel, err = chan.create_raw(size_of(^ImgPath), align_of(^ImgPath), 1, context.allocator)

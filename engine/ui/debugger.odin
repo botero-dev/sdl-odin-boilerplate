@@ -19,7 +19,7 @@ inspector_set_enabled :: proc(in_enabled: bool) {
 		_inspector_inited = true
 
 		// YOLO: assume surface 0 exists. we should allow using own surface in the future
-		_inspector_window = window_create(size = [2]i32{400, 600}, surface_id = 0) 
+		_inspector_window = window_create(logical_size = [2]f32{400, 600}, surface_id = 0)
 	}
 }
 
