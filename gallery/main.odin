@@ -387,7 +387,7 @@ main_nav := ui.NavigationScope {
 }
 
 
-hide_ui_timeout := f32(5)
+hide_ui_timeout := f32(10)
 hide_ui_time: f64
 
 toolbar_last_interaction_is_mouse := false

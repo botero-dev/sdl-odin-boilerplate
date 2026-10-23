@@ -112,6 +112,8 @@ debugger_process_event :: proc(event: ^PointerEvent) {
 
 
 layout_debugger_inspector :: proc() {
+	layout_text("Declaration")
+
 	item := target_layout_state.items_decl[hovered_item_index]
 
 	idx := 0
@@ -135,7 +137,9 @@ layout_debugger_inspector :: proc() {
 		idx += 1
 	}
 
-	result := target_layout_state.items_decl[hovered_item_index]
+	layout_text("Result")
+
+	result := target_layout_state.items_tree[hovered_item_index]
 	for field in reflect.struct_fields_zipped(LayoutItemResult) {
 		value := reflect.struct_field_value(result, field)
 		//composed := fmt.tprintf("%s: %s", field.name, value)

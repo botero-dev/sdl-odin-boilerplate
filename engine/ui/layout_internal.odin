@@ -494,7 +494,8 @@ _layout_filling :: proc() {
 						child_tree.layout_rect.x = available_size.x
 						child_tree.layout_rect.w = child_tree.fit_size.x
 					case .Middle:
-						child_tree.layout_rect.x = available_size.x + (available_size.w - child_tree.fit_size.x) * 0.5
+						size_x := (available_size.w - child_tree.fit_size.x) * 0.5
+						child_tree.layout_rect.x = available_size.x + f32(i32(size_x+0.5)) // maybe implement under pixel-perfect flag?
 						child_tree.layout_rect.w = child_tree.fit_size.x
 					case .End:
 						child_tree.layout_rect.x = available_size.x + available_size.w - child_tree.fit_size.x
@@ -509,7 +510,8 @@ _layout_filling :: proc() {
 						child_tree.layout_rect.y = available_size.y
 						child_tree.layout_rect.h = child_tree.fit_size.y
 					case .Middle:
-						child_tree.layout_rect.y = available_size.y + (available_size.h - child_tree.fit_size.y) * 0.5
+						size_y := (available_size.h - child_tree.fit_size.y) * 0.5
+						child_tree.layout_rect.y = available_size.y + f32(i32(size_y+0.5)) // maybe implement under pixel-perfect flag?
 						child_tree.layout_rect.h = child_tree.fit_size.y
 					case .End:
 						child_tree.layout_rect.y = available_size.y + available_size.h - child_tree.fit_size.y

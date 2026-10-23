@@ -6,6 +6,7 @@ import "core:log"
 import "core:mem"
 import "core:fmt"
 import "core:c"
+import "core:math"
 
 import SDL "vendor:sdl3"
 import TTF "vendor:sdl3/ttf"
@@ -468,7 +469,10 @@ layout_draw :: proc() {
 
 			// if valign = middle:
 			draw_rect.y += (draw_rect.h - fit_size.y) * 0.5
+
 			
+			draw_rect.x = math.round(draw_rect.x)
+			draw_rect.y = math.round(draw_rect.y)
 	
 			sdl_text := get_text_with_font_size(text_style.font, font_size)
 			color := text_style.color.channels
