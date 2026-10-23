@@ -72,11 +72,25 @@ _handle_proc_simple :: proc(userdata: ^HandlerInfo) {
 }
 
 
+// Registers the button's navigation item and returns its handle, without
+// creating a layout item yet. Use this when the handle is needed before laying
+// out the button (e.g. to push a layout modifier driven by navigation focus),
+// then create the item with layout_button_begin_registered.
+layout_button_nav :: proc(text: string, info: ^HandlerInfo = nil) -> NavItemHandle {
+	return nav_add_item(text, ui_button_handler, info)
+}
+
 // Creates the button's layout item, registers it for pointer and navigation
 // input, and opens its styled box. Complete it with layout_button_end, or with
 // layout_text + layout_close if something needs to be laid out inside the box.
 layout_button_begin :: proc(text: string, info: ^HandlerInfo = nil, variant: ^StyleClass = nil) -> NavItemHandle {
-	return _layout_button_open(text, info, variant, true)
+	return _layout_button_open(text, info, variant, nil, true)
+}
+
+// Creates the button's layout item for a navigation item previously registered
+// with layout_button_nav.
+layout_button_begin_registered :: proc(text: string, info: ^HandlerInfo, nav_item: NavItemHandle, variant: ^StyleClass = nil) -> NavItemHandle {
+	return _layout_button_open(text, info, variant, nav_item, false)
 }
 
 layout_button_end :: proc(text: string) {
@@ -84,7 +98,7 @@ layout_button_end :: proc(text: string) {
 	layout_close() // box
 }
 
-_layout_button_open :: proc(text: string, info: ^HandlerInfo, variant: ^StyleClass, register: bool) -> NavItemHandle {
+_layout_button_open :: proc(text: string, info: ^HandlerInfo, variant: ^StyleClass, nav_item: Maybe(NavItemHandle), register: bool) -> NavItemHandle {
 	style_class := variant
 	if style_class == nil {
 		style_class = &class_btn
@@ -94,7 +108,10 @@ _layout_button_open :: proc(text: string, info: ^HandlerInfo, variant: ^StyleCla
 	_layout_create(Layout_Extend{}, )
 
 	item_handle: NavItemHandle
-	if register {
+	if registered, ok := nav_item.?; ok {
+		ui_pointer_handler(ui_button_handler, info)
+		item_handle = registered
+	} else if register {
 		item_handle = ui_add_button(text, info)
 	}
 
@@ -104,7 +121,7 @@ _layout_button_open :: proc(text: string, info: ^HandlerInfo, variant: ^StyleCla
 }
 
 layout_button_handler :: proc(text: string, info: ^HandlerInfo = nil, variant: ^StyleClass = nil) {
-	_layout_button_open(text, info, variant, info != nil)
+	_layout_button_open(text, info, variant, nil, info != nil)
 	layout_button_end(text)
 }
 

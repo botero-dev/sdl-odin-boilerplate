@@ -736,9 +736,9 @@ handle_proc_simple :: proc(userdata: ^ui.HandlerInfo) {
 toolbar_button_handlerinfo :: proc($label: string, info: ^ui.HandlerInfo = nil) {
 
 	//clay.UI(clay.ID(label))
-	// The button item must be declared before adding the handler; adding it first
-	// would attach the handler to the previously declared item (the enclosing container).
-	item_handle := ui.layout_button_begin(label, info)
+	// Register the nav item first: the layout item is created afterwards so the
+	// focus rotation modifier can wrap the whole button.
+	item_handle := ui.layout_button_nav(label, info)
 
 	is_focused := false
 	if toolbar_last_interaction_is_mouse {
@@ -747,12 +747,8 @@ toolbar_button_handlerinfo :: proc($label: string, info: ^ui.HandlerInfo = nil) 
 		is_focused = ui.nav_get_focused(item_handle)
 	}
 
-	ui.layout_set_focused(is_focused)
 	if is_focused {
 		toolbar_navigation_focused = true
-	}
-
-	if is_focused {
 		rotate_modifier = ab.ui_modifier_transform(
 			linalg.matrix3_rotate(math.sin(f32(app_time * 3)) * 0.1, [3]f32{0, 0, 1}),
 			{0.5, 0.5},
@@ -760,12 +756,13 @@ toolbar_button_handlerinfo :: proc($label: string, info: ^ui.HandlerInfo = nil) 
 		ab.ui_modifier_push(&rotate_modifier)
 	}
 
+	ui.layout_button_begin_registered(label, info, item_handle)
+	ui.layout_set_focused(is_focused)
 	ui.layout_text(label)
+	ui.layout_close() // button box
 
 	if is_focused {
 		ab.ui_modifier_pop(&rotate_modifier)
 	}
-
-	ui.layout_close() // button box
 
 }

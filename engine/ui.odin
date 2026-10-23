@@ -109,10 +109,23 @@ UIModifierFlatten :: struct {}
 
 current_modifier: ^UIModifier
 
+ui_modifier_render :: proc(layout: ui.LayoutState, index: int) {
+	decl := layout.items_decl[index]
+	modifier := (^UIModifier)(decl.custom.user_data)
+	if modifier == nil || modifier.callback == nil {
+		return
+	}
+
+	render_command := RenderCommand {
+		boundingBox = layout.items_tree[index].layout_rect,
+	}
+	modifier.callback(&modifier.custom_render_data, &render_command)
+}
+
 ui_modifier_push :: proc(modifier: ^UIModifier) {
 	// only open
 	ui._layout_create(ui.Layout_Extend{})
-	//ui.clay_elem.custom = {modifier}
+	ui.layout_set_custom({callback_render = ui_modifier_render, user_data = modifier})
 	ui._layout_open()
 
 	if !modifier.wrap {
@@ -121,13 +134,16 @@ ui_modifier_push :: proc(modifier: ^UIModifier) {
 }
 
 ui_modifier_pop :: proc(modifier: ^UIModifier) {
+	// The marker is declared inside the wrapper so it renders right after the
+	// wrapped elements, without adding an extra slot to linear layouts.
+	ui._layout_create(ui.Layout_Extend{})
+	ui.layout_set_custom({callback_render = ui_modifier_render, user_data = modifier})
+	ui._layout_open()
+	ui._layout_close()
+
 	if modifier.wrap {
 		ui._layout_close()
 	}
-	ui._layout_create(ui.Layout_Extend{})
-	//ui.clay_elem.custom = {modifier}
-	ui._layout_open()
-	ui._layout_close()
 }
 
 @(deferred_in = ui_modifier_pop)

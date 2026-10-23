@@ -365,6 +365,14 @@ layout_set_focused :: proc(focused: bool) {
 	layout_state.items_decl[new_item_idx].focused = focused
 }
 
+// Sets the custom render data of the item that was just declared.
+layout_set_custom :: proc(custom: Layout_Custom_Data) {
+	if len(layout_state.items_decl) == 0 {
+		return
+	}
+	layout_state.items_decl[new_item_idx].custom = custom
+}
+
 
 
 
@@ -485,9 +493,21 @@ layout_draw :: proc() {
 	
 			sdl_text := get_text_with_font_size(text_style.font, font_size)
 			color := text_style.color.channels
-			TTF.SetTextColor(sdl_text, color.r, color.g, color.b, color.a)
+			modulate := gfx.draw_state.modulate
+			TTF.SetTextColor(sdl_text, 
+				u8(math.round(f32(color.r) * modulate[0])),
+				u8(math.round(f32(color.g) * modulate[1])),
+				u8(math.round(f32(color.b) * modulate[2])),
+				u8(math.round(f32(color.a) * modulate[3])))
 			TTF.SetTextString(sdl_text, cstr, uint(len(decl.text)))
-			TTF.DrawRendererText(sdl_text, draw_rect.x, draw_rect.y)
+
+			// follow the active draw transform (e.g. modifier rotations)
+			mat := gfx.draw_state.user_matrix
+			text_transform := [6]f32 {
+				mat[0][0], mat[1][0], mat[2][0],
+				mat[0][1], mat[1][1], mat[2][1],
+			}
+			TTF.DrawRendererTextTx(sdl_text, draw_rect.x, draw_rect.y, &text_transform[0])
 		}
 
 		if decl.custom.callback_render != nil {
