@@ -72,27 +72,40 @@ _handle_proc_simple :: proc(userdata: ^HandlerInfo) {
 }
 
 
-layout_button_handler :: proc(text: string, info: ^HandlerInfo = nil, variant: ^StyleClass = nil) {
+// Creates the button's layout item, registers it for pointer and navigation
+// input, and opens its styled box. Complete it with layout_button_end, or with
+// layout_text + layout_close if something needs to be laid out inside the box.
+layout_button_begin :: proc(text: string, info: ^HandlerInfo = nil, variant: ^StyleClass = nil) -> NavItemHandle {
+	return _layout_button_open(text, info, variant, true)
+}
 
+layout_button_end :: proc(text: string) {
+	layout_text(text)
+	layout_close() // box
+}
+
+_layout_button_open :: proc(text: string, info: ^HandlerInfo, variant: ^StyleClass, register: bool) -> NavItemHandle {
 	style_class := variant
 	if style_class == nil {
 		style_class = &class_btn
 	}
 	btn_style := get_current_style(style_class, ButtonStyle)
 
-	
 	_layout_create(Layout_Extend{}, )
 
-	if info !=  nil {
-		ui_add_button(text, info)
+	item_handle: NavItemHandle
+	if register {
+		item_handle = ui_add_button(text, info)
 	}
-	style: ^BoxStyle = &btn_style.idle_box
 
 	_layout_open_styled(text, btn_style)
-	
-	layout_text(text)
 
-	layout_close() // box
+	return item_handle
+}
+
+layout_button_handler :: proc(text: string, info: ^HandlerInfo = nil, variant: ^StyleClass = nil) {
+	_layout_button_open(text, info, variant, info != nil)
+	layout_button_end(text)
 }
 
 

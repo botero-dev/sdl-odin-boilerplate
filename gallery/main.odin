@@ -534,11 +534,13 @@ render_gallery :: proc(render_data: ^ab.CustomRenderData, render_command: ^ab.Re
 
 toolbar_opacity: f32
 toolbar_nav: ui.NavigationScope
+// set while laying out the toolbar, read by idle_toolbar on the next frame
+toolbar_navigation_focused := false
 
 idle_toolbar :: proc(dt: f64) {
 
 	mouse_activity_visible := hide_ui_time > app_time
-	navigation_focused := false
+	navigation_focused := toolbar_navigation_focused && !toolbar_last_interaction_is_mouse
 	toolbar_visible := mouse_activity_visible || navigation_focused
 
 	if toolbar_visible {
@@ -570,8 +572,11 @@ layout_toolbar :: proc() {
 	ui.nav_scope(&toolbar_nav)
 
 	if toolbar_opacity == 0 {
+		toolbar_navigation_focused = false
 		return
 	}
+
+	toolbar_navigation_focused = false
 
 	opacity_modifier = ab.ui_modifier_modulate({1, 1, 1, toolbar_opacity})
 
@@ -731,7 +736,9 @@ handle_proc_simple :: proc(userdata: ^ui.HandlerInfo) {
 toolbar_button_handlerinfo :: proc($label: string, info: ^ui.HandlerInfo = nil) {
 
 	//clay.UI(clay.ID(label))
-	item_handle := ui.ui_add_button(label, info)
+	// The button item must be declared before adding the handler; adding it first
+	// would attach the handler to the previously declared item (the enclosing container).
+	item_handle := ui.layout_button_begin(label, info)
 
 	is_focused := false
 	if toolbar_last_interaction_is_mouse {
@@ -740,22 +747,25 @@ toolbar_button_handlerinfo :: proc($label: string, info: ^ui.HandlerInfo = nil) 
 		is_focused = ui.nav_get_focused(item_handle)
 	}
 
-	color := color_idle
+	ui.layout_set_focused(is_focused)
+	if is_focused {
+		toolbar_navigation_focused = true
+	}
+
 	if is_focused {
 		rotate_modifier = ab.ui_modifier_transform(
 			linalg.matrix3_rotate(math.sin(f32(app_time * 3)) * 0.1, [3]f32{0, 0, 1}),
 			{0.5, 0.5},
 		)
 		ab.ui_modifier_push(&rotate_modifier)
-		color = color_hover
 	}
 
-	ui.layout_button(label)
-
-	//ui.layout_text(label)
+	ui.layout_text(label)
 
 	if is_focused {
 		ab.ui_modifier_pop(&rotate_modifier)
 	}
+
+	ui.layout_close() // button box
 
 }

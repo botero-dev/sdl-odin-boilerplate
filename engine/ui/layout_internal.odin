@@ -200,6 +200,7 @@ LayoutItemDeclaration :: struct {
 	handler: PointerHandler,
 	handler_data: rawptr,
 	custom: Layout_Custom_Data,
+	focused: bool,
 }
 
 LayoutItemResult :: struct {

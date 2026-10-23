@@ -356,6 +356,15 @@ layout_custom :: proc(custom_data: Layout_Custom_Data) {
 	_layout_close()
 }
 
+// Marks the item that was just declared as focused, so button styles render it
+// with their hover appearance (used for keyboard navigation focus).
+layout_set_focused :: proc(focused: bool) {
+	if len(layout_state.items_decl) == 0 {
+		return
+	}
+	layout_state.items_decl[new_item_idx].focused = focused
+}
+
 
 
 
@@ -427,7 +436,7 @@ layout_draw :: proc() {
 				}
 			} else if decl.override.type == ButtonStyle {
 				button_style := (^ButtonStyle)(decl.override.data)
-				hovered := abm.point_in_rect(coords, rect)
+				hovered := decl.focused || abm.point_in_rect(coords, rect)
 				if hovered {
 					draw_box_styled(rect, button_style.hover_box.(BoxStyleColored))
 				} else {

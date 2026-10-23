@@ -254,6 +254,10 @@ nav_handle_input :: proc(raw_evt: ^Event) {
 
 			if delta != 0 {
 				num_items := i32(len(scope.contents))
+				if num_items == 0 {
+					// An empty scope (e.g. a hidden panel) has nothing to navigate.
+					continue
+				}
 				new_focused := i32(scope.current) + delta
 				if new_focused < 0 {
 					if scope.wrap {
