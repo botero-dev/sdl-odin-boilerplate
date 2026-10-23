@@ -3,6 +3,7 @@ package engine
 
 import "engine:fs"
 import SDL "vendor:sdl3"
+import TTF "vendor:sdl3/ttf"
 
 import "core:strings"
 import "core:log"
@@ -179,6 +180,10 @@ sdl_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.App
 
 	app_event_init()
 
+	// SDL prefers wayland only if fifo-v1 is available (KDE 6.4+). Uncomment to force enable
+	// SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11") 
+
+
 	// SDL_Init must run before SDL_CreateAsyncIOQueue: the queue's worker
 	// thread does JNI/app-metadata lookups (SDL_GetExeName) that require
 	// SDL's platform init, which is only set up by SDL_Init. On Android this
@@ -189,11 +194,11 @@ sdl_init :: proc "c" (appstate: ^rawptr, argc: i32, argv: [^]cstring) -> SDL.App
 	}
 
 	fs.init()
-	
 
+	ttf_init_success := TTF.Init()
+	assert(ttf_init_success)
 
 	when ODIN_OS == .Linux && !(ODIN_PLATFORM_SUBTARGET == .Android) {
-		SDL.SetHint(SDL.HINT_VIDEO_DRIVER, "wayland,x11") // prefer wayland if available
 		SDL.SetHint(SDL.HINT_PEN_MOUSE_EVENTS, "0")
 		SDL.SetHint(SDL.HINT_PEN_TOUCH_EVENTS, "0")
 	}

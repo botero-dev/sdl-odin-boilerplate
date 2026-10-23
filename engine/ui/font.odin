@@ -21,12 +21,12 @@ FontData :: struct {
 
 loaded_fonts: u16 = 0
 fonts: [dynamic]FontData
-text_engine: ^TTF.TextEngine
 
 default_font_id: FontId = NIL_FONT
 symbol_font_id: FontId = NIL_FONT
 
 init_fonts :: proc() {
+    
 		
 	// todo: move async file stuff to engine.core, and move this to init procedure
 	fs.request_data_async("InterVariable.ttf", &default_font_id, assign_font)
@@ -87,6 +87,7 @@ get_text_with_font_size :: proc(font_id: FontId, size: u16) -> ^TTF.Text {
 		return nil
 	}
 	if single_text == nil {
+		text_engine := surfaces[0].sdl_textengine // YOLO
 		single_text = TTF.CreateText(text_engine, font, "My Text", 0)
 	}
 	TTF.SetTextFont(single_text, font)

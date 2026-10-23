@@ -169,8 +169,10 @@ load_dxf_bytes_2 :: proc (ptr: [^]byte, size: int) {
 
 	model = model_from_dxf(ptr[:size])
 
-	scale_x := f64(gfx.win_size.x) / model.size.x
-	scale_y := f64(gfx.win_size.y) / model.size.y
+	win_size := [2]f32{800, 600}
+
+	scale_x := f64(win_size.x) / model.size.x
+	scale_y := f64(win_size.y) / model.size.y
 
 	scale := math.min(scale_x, scale_y) * 1.1
 
@@ -303,13 +305,13 @@ counter: i32 = 0
 toogle: bool = false
 
 iterate :: proc() {
-
-	SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 0)
-	SDL.RenderClear(ab.renderer)
+	renderer := gfx.draw_context.renderer
+	SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 0)
+	SDL.RenderClear(renderer)
 	ui.ui_idle(0.01);
     free_all(context.temp_allocator)
 
-	ui.layout_begin({f32(gfx.win_size.x), f32(gfx.win_size.y)}, ab.dpi)
+	ui.layout_begin(ui.Window_ID(0))
 
 	ui.panels_present_layout(panels)
 
@@ -344,22 +346,23 @@ draw_viewport :: proc(box: ab.Rect) {
 
 	viewport.last_draw_rect = box
 
-	ab.draw_set_draw_rect(ab.renderer, {i32(box.x), i32(box.y)}, {i32(box.w), i32(box.h)} )
-	SDL.SetRenderTarget(ab.renderer, nil)
+	gfx.draw_set_draw_rect({i32(box.x), i32(box.y)}, {i32(box.w), i32(box.h)} )
+	renderer := gfx.draw_context.renderer
+	SDL.SetRenderTarget(renderer, nil)
 
-	SDL.SetRenderDrawColorFloat(ab.renderer, 0, 0, 0, 1)
+	SDL.SetRenderDrawColorFloat(renderer, 0, 0, 0, 1)
 
 	rect := transmute(SDL.FRect) box
-	SDL.RenderFillRect(ab.renderer, &rect)
+	SDL.RenderFillRect(renderer, &rect)
 
-	SDL.SetRenderDrawColorFloat(ab.renderer, 1,1,1,1)
+	SDL.SetRenderDrawColorFloat(renderer, 1,1,1,1)
 
 	if model_loaded {
 		viewport.data = &model
 		vp_draw(viewport)
 	}
 
-	ab.draw_clear_draw_rect(ab.renderer)
+	gfx.draw_clear_draw_rect()
 }
 
 

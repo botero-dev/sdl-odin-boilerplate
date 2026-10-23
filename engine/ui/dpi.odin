@@ -22,7 +22,14 @@ BorderFlags :: bit_field(u8) {
 	rounding: RoundingPolicy | 7,
 }
 
+
 scale_factor: f32 = 1
+scale_factor_user: f32 = 1
+scale_factor_window: f32 = 1
+
+scaling_set_factor :: proc (value: f32) {
+	scale_factor_user = value
+}
 
 scaling_apply :: proc "contextless" (value: $T) -> f32 {
 

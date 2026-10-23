@@ -1,23 +1,31 @@
 package ui
 
-import "base:runtime"
 import "engine:ui"
-import "core:log"
-import "core:mem"
 import "core:fmt"
 
 import "core:reflect"
 
-import SDL "vendor:sdl3"
-import TTF "vendor:sdl3/ttf"
-
-import "../gfx"
 import abm "../math"
+
+_inspector_inited := false
+_inspector_enabled := false
+
+_inspector_window: Window_ID
+
+
+inspector_set_enabled :: proc(in_enabled: bool) {
+	_inspector_enabled = in_enabled
+	if _inspector_enabled && !_inspector_inited {
+		_inspector_inited = true
+
+		// YOLO: assume surface 0 exists. we should allow using own surface in the future
+		_inspector_window = window_create(size = [2]i32{400, 600}, surface_id = 0) 
+	}
+}
 
 debugger_draw :: proc() {
 	// if showing debugger, make ui to represent layout
-	UI_DEBUGGER :: true
-	if UI_DEBUGGER {
+	if _inspector_enabled {
 		
 		base_layout_state := layout_state
 		target_layout_state = base_layout_state
@@ -46,13 +54,12 @@ scroll_state2: [2]f32
 
 // TODO: maybe pass layout_state as param?
 _layout_debugger :: proc() {
-
-	layout_begin({f32(gfx.win_size.x), f32(gfx.win_size.y)}, 1)
+	layout_begin(_inspector_window)
 	defer layout_end()
 
 	hovered_item_index = -1
 
-	layout_overlay_child({sizing_x = .Begin})
+	layout_overlay_child({sizing_x = .Fill})
 	container_vertical(
 		box_style=BoxStyleColored{background = Color{0, 0, 0, 0.8}},
 		offsets = BoxOffsets{12, 12, 12, 12}

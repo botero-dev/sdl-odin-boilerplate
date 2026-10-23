@@ -82,9 +82,9 @@ unpack_tex_thread :: proc(in_data: rawptr) {
 	bytes := img_path.data
 	io := SDL.IOFromConstMem(&bytes[0], len(bytes))
 
-	log.info("unpacking texture thread", img_path.index, len(img_path.data))
+	//log.info("unpacking texture thread", img_path.index, len(img_path.data))
 	surface := IMG.Load_IO(io, false)
-	log.info("unpacked  texture thread", img_path.index, len(img_path.data))
+	//log.info("unpacked  texture thread", img_path.index, len(img_path.data))
 	img_path.surface = surface
 
 	finish_img_load(img_path)
@@ -124,8 +124,7 @@ ImgPath :: struct {
 init :: proc() {
 	log.info("init")
 
-	success := ab.create_window("Gallery", {1280, 720})
-	assert(success)
+	ab.create_window("Gallery", {1280, 720})
 
 	err: runtime.Allocator_Error
 	channel, err = chan.create_raw(size_of(^ImgPath), align_of(^ImgPath), 1, context.allocator)
@@ -242,9 +241,9 @@ GalleryImage :: struct {
 }
 
 finish_img_load_main_thread :: proc(img_path: ^ImgPath) {
-	log.info("finishing:", img_path.index)
-	texture := SDL.CreateTextureFromSurface(ab.renderer, img_path.surface)
-	log.info("finished: ", img_path.index)
+	//log.info("finishing:", img_path.index)
+	texture := SDL.CreateTextureFromSurface(gfx.draw_context.renderer, img_path.surface)
+	//log.info("finished: ", img_path.index)
 	image := &images[img_path.index]
 	image.texture = texture
 
@@ -295,7 +294,7 @@ layout_clock :: proc() {
 draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^ab.RenderCommand) {
 	box := render_command.boundingBox
 
-	ab.draw_push_state()
+	gfx.draw_push_state()
 
 	angle := f32(1) + f32(app_time * 0.2)
 	axis := [3]f32{0, 0, 1}
@@ -305,11 +304,11 @@ draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^ab.Render
 	mat *= {1.2, 0, 0, 0, 1, 0, 0, 0, 1}
 	mat *= linalg.matrix3_rotate(-angle, axis)
 
-	ab.draw_set_draw_rect(ab.renderer, {i32(box.x), i32(box.y)}, {i32(box.w), i32(box.h)})
-	ab.draw_set_view_rect({-1.2, 1.2}, {1.2, -1.2})
+	gfx.draw_set_draw_rect({i32(box.x), i32(box.y)}, {i32(box.w), i32(box.h)})
+	gfx.draw_set_view_rect({-1.2, 1.2}, {1.2, -1.2})
 
 	LINE_SCALE :: 0.02
-	ab.draw_set_line_scale(0.02)
+	gfx.draw_set_line_scale(0.02)
 
 	gfx.draw_circle_basic({0, 0}, 1.1, {0, 0, 0, 0.8})
 
@@ -320,14 +319,14 @@ draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^ab.Render
 	mat_cos := math.cos(delta_angle)
 	mat_sin := math.sin(delta_angle)
 
-	ab.draw_set_matrix(mat)
+	gfx.draw_set_matrix(mat)
 
 	for _ in 0 ..< segments {
 		vert_pos = {
 			vert_pos.x * mat_cos - vert_pos.y * mat_sin,
 			vert_pos.x * mat_sin + vert_pos.y * mat_cos,
 		}
-		gfx.draw_line(ab.renderer, vert_pos * 0.8, vert_pos, 2)
+		gfx.draw_line(vert_pos * 0.8, vert_pos, 2)
 	}
 
 	time_now := time.now()
@@ -371,12 +370,12 @@ draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^ab.Render
 	min_dir := [2]f32{min_cos, min_sin}
 	sec_dir := [2]f32{sec_cos, sec_sin}
 
-	gfx.draw_line(ab.renderer, -0.1 * hour_dir, 0.5 * hour_dir, 2)
-	gfx.draw_line(ab.renderer, -0.15 * min_dir, 0.75 * min_dir, 2)
-	gfx.draw_line(ab.renderer, -0.15 * sec_dir, 0.7 * sec_dir, 2, {1, 0, 0, 1})
-	ab.draw_clear_matrix()
+	gfx.draw_line(-0.1 * hour_dir, 0.5 * hour_dir, 2)
+	gfx.draw_line(-0.15 * min_dir, 0.75 * min_dir, 2)
+	gfx.draw_line(-0.15 * sec_dir, 0.7 * sec_dir, 2, {1, 0, 0, 1})
+	gfx.draw_clear_matrix()
 
-	ab.draw_pop_state()
+	gfx.draw_pop_state()
 }
 
 
@@ -413,7 +412,7 @@ main_handler :: proc(event: ^ui.PointerEvent, user_data: rawptr) {
 create_layout :: proc() {
 	// Begin constructing the layout.
 
-	ui.layout_begin({f32(gfx.win_size.x), f32(gfx.win_size.y)}, ab.dpi)
+	ui.layout_begin(0)
 
 	{
 		//ui.ui_reset_handler_buffer()
@@ -493,7 +492,7 @@ draw_tex_rect_aspect :: proc(rect: SDL.FRect, tex: ^SDL.Texture, fill: bool, col
 	SDL.SetTextureBlendMode(tex, {.BLEND})
 	SDL.SetTextureColorModFloat(tex, color[0], color[1], color[2])
 	SDL.SetTextureAlphaModFloat(tex, color[3])
-	SDL.RenderTexture(ab.renderer, tex, &srcrect, &dstrect)
+	SDL.RenderTexture(gfx.draw_context.renderer, tex, &srcrect, &dstrect)
 }
 
 render_gallery :: proc(render_data: ^ab.CustomRenderData, render_command: ^ab.RenderCommand) {
@@ -639,7 +638,8 @@ layout_toolbar :: proc() {
 
 
 select_directory :: proc() {
-	SDL.ShowOpenFolderDialog(select_directory_callback, nil, ab.window, nil, true)
+	sdl_window := ui.surfaces[0].sdl_window
+	SDL.ShowOpenFolderDialog(select_directory_callback, nil, sdl_window, nil, true)
 }
 
 select_directory_callback: SDL.DialogFileCallback : proc "c" (
@@ -690,8 +690,9 @@ dpi_levels := []f32{0.5, 0.8, 1, 1.5, 2, 3, 4}
 playback_last :: proc() {
 	log.info("last")
 	dpi_index = (dpi_index + 1) % len(dpi_levels)
-	ab.dpi_user = dpi_levels[dpi_index]
-	ab.DPI_set(ab.dpi_user * ab.dpi_window)
+	dpi_user := dpi_levels[dpi_index]
+	ui.scaling_set_factor(dpi_user)
+	// ab.DPI_set(ab.dpi_user * ab.dpi_window)
 }
 
 

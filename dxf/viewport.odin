@@ -44,14 +44,14 @@ draw_text :: proc(text: dxf.Entity_Text, color: Color) {
     // gfx.draw_line(ab.renderer, pos.xy + {-dbg, 0}, pos.xy + {dbg, 0}, 1, {1, 0, 0, 1})
     // gfx.draw_line(ab.renderer, pos.xy + {0, -dbg}, pos.xy + {0, dbg}, 1, {1, 0, 0, 1})
 
-    new_pos := ab.draw_matrix * pos
+    new_pos := gfx.draw_matrix * pos
 
     cstr := cstring(raw_data(content))
 
 
     in_fwd := [3]f32{ f32(text.end.x), f32(text.end.y), f32(text.end.z)}
     fwd := pos + (in_fwd * f32(text.height))
-    pos_fwd := ab.draw_matrix * fwd
+    pos_fwd := gfx.draw_matrix * fwd
 
     dir_fwd := pos_fwd - new_pos
     
@@ -347,7 +347,7 @@ draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
     content := text.content
     entity := text.entity
     pos := [3]f32{f32(in_pos.x), f32(in_pos.y), 1}
-    new_pos := ab.draw_matrix * pos
+    new_pos := gfx.draw_matrix * pos
 
     commands := compute_mtext_draw(text)
 
@@ -355,7 +355,7 @@ draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
 
     in_fwd := [3]f32{ f32(text.end.x), f32(text.end.y), f32(text.end.z)}
     fwd := pos + (in_fwd * f32(text.height))
-    pos_fwd := ab.draw_matrix * fwd
+    pos_fwd := gfx.draw_matrix * fwd
 
     dir_fwd := pos_fwd - new_pos
     
@@ -469,7 +469,7 @@ draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
 current_block_color := 0
 
 vp_draw :: proc(vp: ViewportState) {
-	ab.draw_set_view_basis(vconv(vp.basis_x), vconv(vp.basis_y), vconv(vp.origin))
+	gfx.draw_set_view_basis(vconv(vp.basis_x), vconv(vp.basis_y), vconv(vp.origin))
 
 
     draw_entities(vp.data.dxf.entities, vp.data)
@@ -540,7 +540,7 @@ DrawBuffer :: struct {
             {f32(line.end.x), f32(line.end.y)},
             1.0,)
 
-        gfx.draw_buffer(ab.renderer, &buffer, style.color)
+        gfx.draw_buffer(&buffer, style.color)
         buffer.num_indices = 0
         buffer.num_vertices = 0
     
@@ -593,7 +593,6 @@ DrawBuffer :: struct {
                 next := lerp(labc, lbcd, t)
 
                 gfx.draw_line(
-                    ab.renderer,
                     {f32(prev.x), f32(prev.y)},
                     {f32(next.x), f32(next.y)},
                     1.0,
@@ -605,8 +604,8 @@ DrawBuffer :: struct {
     }
 
     for insert in entities.inserts {
-        ab.draw_push_state()
-        defer ab.draw_pop_state()
+        gfx.draw_push_state()
+        defer gfx.draw_pop_state()
 
         prev_color := current_block_color
         current_block_color = insert.color
@@ -629,7 +628,7 @@ DrawBuffer :: struct {
         rotate := linalg.matrix3_rotate(f32(insert.rotation) * math.RAD_PER_DEG, f32x3{0,0,1})
         user_matrix *= rotate
 
-        ab.draw_set_matrix(user_matrix)
+        gfx.draw_set_matrix(user_matrix)
 
         maybe_block: Maybe(dxf.Block)
 
@@ -707,21 +706,18 @@ DrawBuffer :: struct {
                 pos_end := d.pos_def + line_end_relative
 
                 gfx.draw_line(
-                    ab.renderer,
                     {f32(d.pos_def.x), f32(d.pos_def.y)},
                     {f32(d.def_point_b.x), f32(d.def_point_b.y)},
                     1.0,
                     color_ext,
                 )
                 gfx.draw_line(
-                    ab.renderer,
                     {f32(pos_end.x), f32(pos_end.y)},
                     {f32(d.def_point_a.x), f32(d.def_point_a.y)},
                     1.0,
                     color_ext,
                 )
                 gfx.draw_line(
-                    ab.renderer,
                     {f32(d.pos_def.x), f32(d.pos_def.y)},
                     {f32(pos_end.x), f32(pos_end.y)},
                     1.0,
@@ -760,7 +756,6 @@ draw_poly_segment :: proc(prev: f64x2, next: f64x2, bulge: f64, style: gfx.LineS
     
     if bulge == 0 {
         gfx.draw_line(
-            ab.renderer,
             {f32(prev.x), f32(prev.y)},
             {f32(next.x), f32(next.y)},
             1.0,
@@ -786,7 +781,6 @@ draw_poly_segment :: proc(prev: f64x2, next: f64x2, bulge: f64, style: gfx.LineS
             delta = rot * delta
             new := center + delta
             gfx.draw_line(
-                ab.renderer,
                 {f32(curr.x), f32(curr.y)},
                 {f32(new.x), f32(new.y)},
                 1.0,
@@ -809,7 +803,6 @@ sweep_point :: proc(center: f64x2, in_delta: f64x2, angle: f64, style: gfx.LineS
         delta = rot * delta
         new := center + delta
         gfx.draw_line(
-            ab.renderer,
             {f32(curr.x), f32(curr.y)},
             {f32(new.x), f32(new.y)},
             1.0,

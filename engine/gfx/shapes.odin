@@ -80,7 +80,7 @@ draw_circle_basic :: proc(
 	buffer.num_vertices = 0
 	buffer.num_indices = 0
 	buffer_circle(&buffer, in_center, in_radius, int_coords)
-	draw_buffer(renderer, &buffer, in_color)
+	draw_buffer(&buffer, in_color)
 }
 
 // corner_idx indices: (top_left, top_right, bottom_left, bottom_right)
@@ -152,7 +152,6 @@ buffer_circle :: proc(
 
 
 draw_line :: proc(
-	renderer: ^SDL.Renderer,
 	in_start: f32x2,
 	in_end: f32x2,
 	in_width: f32,
@@ -161,7 +160,7 @@ draw_line :: proc(
 	buffer.num_vertices = 0
 	buffer.num_indices = 0
 	buffer_line(&buffer, in_start, in_end, in_width)
-	draw_buffer(renderer, &buffer, in_color)
+	draw_buffer(&buffer, in_color)
 }
 
 
@@ -265,14 +264,14 @@ draw_circle :: proc(
         shared_buffer.num_vertices = 0
         shared_buffer.num_indices = 0
         buffer_circle_fill(shared_buffer, shape.center, shape.radius)
-        draw_buffer(renderer, shared_buffer, in_color)
+        draw_buffer(shared_buffer, in_color)
     }
     if simpleline, simpleline_ok := style.line.(LineStyleSimple); simpleline_ok {
 		if simpleline.width != 0 {
 			shared_buffer.num_vertices = 0
 			shared_buffer.num_indices = 0
 			buffer_circle_outline(shared_buffer, shape.center, shape.radius, simpleline.width)
-			draw_buffer(renderer, shared_buffer, in_color)
+			draw_buffer(shared_buffer, in_color)
 		}
     }
 }

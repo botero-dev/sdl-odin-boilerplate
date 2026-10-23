@@ -1,9 +1,5 @@
 package ui
 
-import "core:strings"
-import "core:log"
-
-import SDL "vendor:sdl3"
 
 // a priori, a window is just a container that can render stuff. .
 
@@ -22,49 +18,46 @@ import SDL "vendor:sdl3"
 // mobile or web)
 
 Window :: struct {
-    sdl_window: ^SDL.Window,
+    surface_id: Surface_ID,
     size: [2]i32, // this is in pixels
-    dpi: f32,
 }
 
 Window_ID :: distinct int
-
 WINDOW_INVALID :: Window_ID(-1)
+
 
 next_win_id: Window_ID = 0
 windows: map[Window_ID]Window
+
 
 // size is assumed to be pixels for now
 window_create :: proc(
     title: Maybe(string) = nil,
     size: Maybe([2]i32) = nil,
-    dpi: Maybe(f32) = nil
+    surface_id: Maybe(Surface_ID) = nil, // if not nil, a surface is created
 ) -> Window_ID {
 
     window := Window{}
     window.size = size.? or_else {1280, 720}
-    window.dpi = dpi.? or_else 1
-    
-    title_cstring: cstring = nil // not stored as pointer may get invalid
-    if title != nil {
-        title_cstring = strings.clone_to_cstring(title.?, context.temp_allocator)
-    }
-
-    window.sdl_window = SDL.CreateWindow(
-        title_cstring,
-        window.size.x, window.size.y, 
-    	{.RESIZABLE, .HIGH_PIXEL_DENSITY},
-    )
-
-    if window.sdl_window == nil {
-        log.error(SDL.GetError())
-        return WINDOW_INVALID
-    }
     
     window_id := next_win_id
-    next_win_id += 1
 
+    if surface_id == nil {
+        window.surface_id = surface_create(title, window.size, window_id)
+    } else {
+        window.surface_id = surface_id.?
+        surface := &surfaces[window.surface_id]
+        append(&surface.subwindows, window_id)
+    }
+
+    if window.surface_id == SURFACE_INVALID {
+        return WINDOW_INVALID
+    }
+
+
+    // commit changes
     windows[window_id] = window
+    next_win_id += 1
 
     return window_id
 }

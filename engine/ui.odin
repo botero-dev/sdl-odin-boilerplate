@@ -1,44 +1,18 @@
 
 package engine
 
-import "engine:ui"
-import "core:c"
-import "core:fmt"
-import "core:log"
-import "core:math"
-import "core:math/linalg"
-import "core:strings"
 
-import SDL "vendor:sdl3"
-import TTF "vendor:sdl3/ttf"
+import "gfx"
+import "ui"
 
 
 
 vec2 :: [2]f32
-dpi_user := f32(1)
-dpi_window := f32(1)
-
-
-dpi := f32(1.0)
-DPI_set :: proc(new_dpi: f32) {
-	dpi = new_dpi
-	log.info("set dpi to:", dpi)
-}
-
-DPI_mult :: proc "contextless" (value: f32) -> f32 {
-	return value * dpi
-}
 
 print_render_commands: bool
 
-ui_init :: proc() {
-	ui.init()
 
-}
-
-
-
-
+Rect :: ui.Rect
 
 CustomRenderData :: struct {
 	callback: proc(render_data: ^CustomRenderData, render_command: ^RenderCommand),
@@ -70,11 +44,11 @@ ui_modifier_modulate_callback :: proc(
 ) {
 	modulate := (^UIModifierModulate)(render_data)
 	if !modulate.pushed {
-		draw_push_state()
-		draw_state.modulate *= modulate.color
+		gfx.draw_push_state()
+		gfx.draw_state.modulate *= modulate.color
 		modulate.pushed = true
 	} else {
-		draw_pop_state()
+		gfx.draw_pop_state()
 		modulate.pushed = false
 	}
 }
@@ -96,7 +70,7 @@ ui_modifier_transform_callback :: proc(
 ) {
 	modifier := (^UIModifierTransform)(render_data)
 	if !modifier.pushed {
-		draw_push_state()
+		gfx.draw_push_state()
 
 		box := transmute(Rect)render_command.boundingBox
 
@@ -119,11 +93,11 @@ ui_modifier_transform_callback :: proc(
 
 		mat = pivot_mat * mat
 
-		draw_set_matrix(mat)
+		gfx.draw_set_matrix(mat)
 
 		modifier.pushed = true
 	} else {
-		draw_pop_state()
+		gfx.draw_pop_state()
 		modifier.pushed = false
 	}
 }

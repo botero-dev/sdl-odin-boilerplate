@@ -169,12 +169,12 @@ draw_box_filled :: proc(box: abmath.Rect, corners: CornerRadii, color: abmath.Co
 	rect_color *= draw_state.modulate
 	fcolor := SDL.FColor(rect_color)
 
-	SDL.SetRenderTextureAddressMode(renderer, .CLAMP, .CLAMP)
-	SDL.SetRenderDrawBlendMode(renderer, {.BLEND})
+	SDL.SetRenderTextureAddressMode(draw_context.renderer, .CLAMP, .CLAMP)
+	SDL.SetRenderDrawBlendMode(draw_context.renderer, {.BLEND})
 
 	SDL.RenderGeometryRaw(
-		renderer,
-		helper, // texture
+		draw_context.renderer,
+		draw_context.helper, // texture
 		&vertices_buf[0][0],
 		8, // verts, stride
 		&fcolor,
@@ -348,8 +348,8 @@ draw_box_border :: proc(box: abmath.Rect, corners: CornerRadii, borders: BorderW
 	color := in_color * draw_state.modulate
 	fcolor := SDL.FColor(color)
 	SDL.RenderGeometryRaw(
-		renderer,
-		helper, // texture
+		draw_context.renderer,
+		draw_context.helper, // texture
 		&buffer.vertices[0][0],
 		8, // verts + stride
 		&fcolor,

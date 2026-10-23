@@ -9,8 +9,6 @@ ZERO_PIX_CLAMP := f32x2{0.5, 1.5} / TEX_SIZE
 PIXEL_X := f32x2{1, 0} / TEX_SIZE
 PIXEL_Y := f32x2{1, 0} / TEX_SIZE
 
-helper: ^SDL.Texture
-
 
 txv :: proc(vert: f32x2) -> f32x2 {
 	vert3 := [3]f32{vert.x, vert.y, 1}
@@ -53,7 +51,7 @@ draw_pop_state :: proc() {
 	if reverting_draw_state.draw_rect != draw_state.draw_rect {
 		rect_size := reverting_draw_state.draw_rect[1]
 		if rect_size == {} {
-			SDL.SetRenderClipRect(renderer, nil)
+			SDL.SetRenderClipRect(draw_context.renderer, nil)
 		} else {
 			rect_pos := reverting_draw_state.draw_rect[0]
 			clip_rect := SDL.Rect {
@@ -62,7 +60,7 @@ draw_pop_state :: proc() {
 				w = rect_size.x,
 				h = rect_size.y,
 			}
-			SDL.SetRenderClipRect(renderer, &clip_rect)
+			SDL.SetRenderClipRect(draw_context.renderer, &clip_rect)
 		}
 	}
 
@@ -70,12 +68,6 @@ draw_pop_state :: proc() {
 	update_matrix()
 }
 
-draw_present :: proc() {
-	if len(draw_state_stack) != 0 {
-		log.warn("Draw State Stack should be empty when presenting.")
-	}
-	SDL.RenderPresent(renderer)
-}
 
 draw_set_matrix :: proc(in_user_matrix: matrix[3, 3]f32) {
 	draw_state.user_matrix = in_user_matrix
@@ -95,7 +87,7 @@ draw_set_line_scale :: proc(scale: f32) {
 	draw_state.line_scale = scale
 }
 
-draw_set_draw_rect :: proc(renderer: ^SDL.Renderer, position: [2]i32, size: [2]i32) {
+draw_set_draw_rect :: proc(position: [2]i32, size: [2]i32) {
 
 	draw_state.draw_rect = {position, size}
 	clip_rect := SDL.Rect {
@@ -104,15 +96,16 @@ draw_set_draw_rect :: proc(renderer: ^SDL.Renderer, position: [2]i32, size: [2]i
 		w = (size.x),
 		h = (size.y),
 	}
-	SDL.SetRenderClipRect(renderer, &clip_rect)
+	SDL.SetRenderClipRect(draw_context.renderer, &clip_rect)
 	update_matrix()
 }
 
-draw_clear_draw_rect :: proc(renderer: ^SDL.Renderer) {
+draw_clear_draw_rect :: proc() {
 	draw_state.draw_rect = {}
-	SDL.SetRenderClipRect(renderer, nil)
+	SDL.SetRenderClipRect(draw_context.renderer, nil)
 	update_matrix()
 }
+
 
 draw_clear_view_rect :: proc() {
 	draw_state.view_mode = {}
@@ -161,7 +154,8 @@ update_matrix :: proc() {
 	draw_rect := draw_state.draw_rect
 	draw_size := draw_rect[1]
 	if draw_size == {0, 0} {
-		// TODO: maybe find current framebuffer size before?
+		// TODO: how to find current window size?
+		win_size := [2]i32{1280, 720}
 		draw_size = {win_size.x, win_size.y}
 	}
 	

@@ -1,36 +1,24 @@
 package engine
 
-import "core:strings"
 
 import SDL "vendor:sdl3"
-import TTF "vendor:sdl3/ttf"
 
 import "ui"
+import "gfx"
 
 
-create_window :: proc(name: string, size: [2]i32) -> bool {
+create_window :: proc(name: string, size: [2]i32) {
 
-	success := SDL.Init({.VIDEO})
-    if ! success { return false }
 
-	success = TTF.Init()
-    if ! success { return false }
-
-    name_cstring := strings.clone_to_cstring(name, context.temp_allocator)
-
-	window_id := ui.window_create(name, size, 1)
-
+	window_id := ui.window_create(name, size)
 
 	window := ui.windows[window_id]
-	renderer := SDL.CreateRenderer(window.sdl_window, nil)
-	
-	// device := SDL.CreateGPUDevice({.SPIRV})
-	// renderer := SDL.CreateGPURenderer(window.sdl_window)
-	
+	surface := ui.surfaces[window.surface_id]
+	renderer := surface.sdl_renderer
+
 	assert(renderer != nil, "Failed to create SDL renderer.")
 
-   	ui_init()
-	gfx_init(renderer, window.sdl_window)
-	
-    return success;
+	ui.init()
+	gfx.drawcontext_activate(surface.draw_context)
 }
+

@@ -17,21 +17,34 @@ import "../fs"
 
 layout_stack: [dynamic]ChildrenLayout
 
+_ui_inited := false
 
 
 init :: proc() {
-	text_config_default = new(TextStyle)
-	text_config_default.size = 14
-	text_config_default.color = Color32{full=0xFFFFFFFF}
-	text_config_default.font = default_font_id
+	if !_ui_inited {
+		text_config_default = new(TextStyle)
+		text_config_default.size = 14
+		text_config_default.color = Color32{full=0xFFFFFFFF}
+		text_config_default.font = default_font_id
 
-	init_fonts()
+		init_fonts()
 
-	_nav_init()
+		_nav_init()
+
+		_ui_inited = true
+	}
 }
 
+layout_begin_window :: proc(window_id: Window_ID = 0) {
+	window := windows[window_id]
+	surface := surfaces[window.surface_id]
+	layout_begin_rect(f32x2{f32(window.size.x), f32(window.size.y)}, surface.dpi)
+}
 
-layout_begin :: proc(size: f32x2, scale_factor: f32) {
+layout_begin_rect :: proc(size: f32x2, in_scale_factor: f32) {
+	
+	scale_factor_window = in_scale_factor
+	scale_factor = scale_factor_user * scale_factor_window
 
 	if layout_hint != nil {
 		log.info("layout hint:", layout_hint, "wasn't consumed in previous frame")
@@ -46,6 +59,11 @@ layout_begin :: proc(size: f32x2, scale_factor: f32) {
 
 	_layout_create(Layout_Overlay_Float{})
 	_layout_open("--root--")
+}
+
+layout_begin :: proc {
+	layout_begin_rect,
+	layout_begin_window,
 }
 
 debug_guard := false
@@ -376,7 +394,7 @@ layout_draw :: proc() {
 	num_items := len(layout_state.items_tree)
 	for idx in 0..<num_items {
 		for ;((len(draw_modifiers) != 0) && (draw_modifiers[len(draw_modifiers)-1].end_idx == idx)); {
-			SDL.SetRenderClipRect(gfx.renderer, nil)
+			SDL.SetRenderClipRect(gfx.draw_context.renderer, nil)
 			pop(&draw_modifiers)
 		}
 
@@ -384,16 +402,16 @@ layout_draw :: proc() {
 		item := layout_state.items_tree[idx]
 		if decl.box_style != nil {
 			rect := item.layout_rect
-			SDL.SetRenderDrawColorFloat(gfx.renderer, 1, 1, 1, 1)
-			SDL.SetRenderDrawBlendMode(gfx.renderer, {.BLEND})
+			SDL.SetRenderDrawColorFloat(gfx.draw_context.renderer, 1, 1, 1, 1)
+			SDL.SetRenderDrawBlendMode(gfx.draw_context.renderer, {.BLEND})
 			#partial switch v in decl.box_style {
 				case BoxStyleColored:
 					draw_box_styled(rect, v)
 			}
 		} else if item.color.a != 0 {
 			rect := item.layout_rect
-			SDL.SetRenderDrawColorFloat(gfx.renderer, 1, 1, 1, 1)
-			SDL.SetRenderDrawBlendMode(gfx.renderer, {.BLEND})
+			SDL.SetRenderDrawColorFloat(gfx.draw_context.renderer, 1, 1, 1, 1)
+			SDL.SetRenderDrawBlendMode(gfx.draw_context.renderer, {.BLEND})
 
 			c := item.color
 			c.a = 1
@@ -429,7 +447,7 @@ layout_draw :: proc() {
 				c.int(item.layout_rect.h),
 			}
 			
-			SDL.SetRenderClipRect(gfx.renderer, &rect)
+			SDL.SetRenderClipRect(gfx.draw_context.renderer, &rect)
 			append(&draw_modifiers, ModifierInstance{decl.end})
 		}
 
@@ -465,7 +483,7 @@ layout_draw :: proc() {
 	}
 
 		for ;(len(draw_modifiers) != 0); {
-			SDL.SetRenderClipRect(gfx.renderer, nil)
+			SDL.SetRenderClipRect(gfx.draw_context.renderer, nil)
 			pop(&draw_modifiers)
 		}
 
