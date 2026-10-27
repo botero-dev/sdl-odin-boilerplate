@@ -357,6 +357,12 @@ _layout_item :: proc() -> int {
 		fit_size.y += text_calc_size.y
 	}
 
+	if item.custom.calc_fitsize != nil {
+		custom_size := item.custom.calc_fitsize()
+		fit_size.x = max(fit_size.x, custom_size.x)
+		fit_size.y = max(fit_size.y, custom_size.y)
+	}
+
 	layout_result := &layout_state.items_tree[index]
 	layout_result.fit_size = fit_size
 	layout_result.weight_sum = weight_sum
