@@ -88,7 +88,7 @@ get_text_with_font_size :: proc(font_id: FontId, size: u16) -> ^TTF.Text {
 	}
 	if single_text == nil {
 		text_engine := surfaces[0].sdl_textengine // YOLO
-		single_text = TTF.CreateText(text_engine, font, "My Text", 0)
+		single_text = TTF.CreateText(text_engine, font, raw_data(string("My Text")), 0)
 	}
 	TTF.SetTextFont(single_text, font)
 	return single_text
@@ -102,7 +102,7 @@ measure_text :: proc(text: string, font_id: FontId, font_size: u16) -> f32x2 {
 		return {}
 	}
 	size := [2]c.int{}
-	TTF.GetStringSizeWrapped(font, cstring(raw_data(text)), len(text), 0, &size.x, &size.y)
+	TTF.GetStringSizeWrapped(font, raw_data(text), len(text), 0, &size.x, &size.y)
 
 	return {f32(size.x), f32(size.y)}
 }

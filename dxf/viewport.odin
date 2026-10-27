@@ -31,7 +31,7 @@ ViewportState :: struct {
     origin:  f64x2,
     data: ^Model,
 
-    last_draw_rect: ab.Rect,
+    last_draw_rect: ui.Rect,
 }
 
 
@@ -46,7 +46,7 @@ draw_text :: proc(text: dxf.Entity_Text, color: Color) {
 
     new_pos := gfx.draw_matrix * pos
 
-    cstr := cstring(raw_data(content))
+    cstr := raw_data(content)
 
 
     in_fwd := [3]f32{ f32(text.end.x), f32(text.end.y), f32(text.end.z)}
@@ -410,7 +410,7 @@ draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
                     cursor.y += f32(font_size)
                 case MText_Command_DrawText:
 
-                    cstr := cstring(raw_data(cmd.substring))
+                    cstr := raw_data(cmd.substring)
 
                     TTF.SetTextColor(
                         sdl_text,
@@ -430,11 +430,11 @@ draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
                     size_num: [2]i32
                     size_denom: [2]i32
                     
-                    cstr := cstring(raw_data(cmd.numerator))
+                    cstr := raw_data(cmd.numerator)
                     TTF.SetTextString(sdl_text, cstr, uint(len(cmd.numerator)))
                     TTF.GetTextSize(sdl_text, &size_num.x, &size_num.y)
                     
-                    cstr = cstring(raw_data(cmd.denominator))
+                    cstr = raw_data(cmd.denominator)
                     TTF.SetTextString(sdl_text, cstr, uint(len(cmd.denominator)))
                     TTF.GetTextSize(sdl_text, &size_denom.x, &size_denom.y)
                     
@@ -450,11 +450,11 @@ draw_mtext :: proc(text: dxf.Entity_MText, dxf_file: dxf.DXF_Data) {
                     
                     half_height := f32(size_num.y) * 0.5
 
-                    cstr = cstring(raw_data(cmd.numerator))
+                    cstr = raw_data(cmd.numerator)
                     TTF.SetTextString(sdl_text, cstr, uint(len(cmd.numerator)))
                     TTF.DrawRendererTextTx(sdl_text, cursor.x, cursor.y - half_height, &tx[0][0])
                     
-                    cstr = cstring(raw_data(cmd.denominator))
+                    cstr = raw_data(cmd.denominator)
                     TTF.SetTextString(sdl_text, cstr, uint(len(cmd.denominator)))
                     TTF.DrawRendererTextTx(sdl_text, cursor.x, cursor.y + half_height, &tx[0][0])
                     

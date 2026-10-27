@@ -342,7 +342,7 @@ draw_viewport_ab :: proc(layout: ui.LayoutState, index: int) {
 	draw_viewport(item.layout_rect)
 }
 
-draw_viewport :: proc(box: ab.Rect) {
+draw_viewport :: proc(box: ui.Rect) {
 
 	viewport.last_draw_rect = box
 

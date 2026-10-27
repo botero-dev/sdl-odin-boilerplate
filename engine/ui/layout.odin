@@ -78,7 +78,6 @@ layout_end :: proc() {
 	}
 	_layout_end()
 
-
 }
 
 LayoutDirection :: enum {
@@ -373,8 +372,16 @@ layout_set_custom :: proc(custom: Layout_Custom_Data) {
 	layout_state.items_decl[new_item_idx].custom = custom
 }
 
-
-
+// Registers a modifier on the item that was just declared: it is called with .Begin
+// before the item is drawn and with .End once its subtree is done.
+layout_attach_modifier :: proc(modifier: Modifier) {
+	if len(layout_state.items_decl) == 0 {
+		return
+	}
+	assert(modifier.callback != nil)
+	decl := &layout_state.items_decl[new_item_idx]
+	decl.custom.modifier = modifier
+}
 
 layout_textbox :: proc(text: string, variant: ^StyleClass = nil, info: ^HandlerInfo = nil) {
 
@@ -398,126 +405,142 @@ layout_textbox :: proc(text: string, variant: ^StyleClass = nil, info: ^HandlerI
 	layout_close() // box
 }
 
-ModifierInstance :: struct {
-	end_idx: int,
-}
- 
-draw_modifiers : [dynamic]ModifierInstance
-
+// Walks the tree the same way layout_process_event_item does, so every scope that
+// has to be opened around an item and its children (clip rects, begin/end
+// callbacks) is scoped to the recursion instead of being tracked by hand.
 layout_draw :: proc() {
+	if len(layout_state.items_tree) == 0 {
+		return
+	}
+	layout_cursor = 0
+	_layout_draw_item()
+}
 
-	clear(&draw_modifiers)
+_layout_draw_item :: proc() {
+	index := layout_cursor
+	decl := layout_state.items_decl[index]
+	item := layout_state.items_tree[index]
 
-	num_items := len(layout_state.items_tree)
-	for idx in 0..<num_items {
-		for ;((len(draw_modifiers) != 0) && (draw_modifiers[len(draw_modifiers)-1].end_idx == idx)); {
-			SDL.SetRenderClipRect(gfx.draw_context.renderer, nil)
-			pop(&draw_modifiers)
+	rc := ModifierContext {}
+	rc.rect = item.layout_rect
+
+	rc.focused = decl.focused
+	rc.hovered = item.hovered
+	
+
+	if decl.custom.modifier.callback != nil {
+		rc.state = .Begin
+		decl.custom.modifier.callback(decl.custom.modifier.data, &rc)
+	}
+
+	if decl.box_style != nil {
+		rect := item.layout_rect
+		SDL.SetRenderDrawColorFloat(gfx.draw_context.renderer, 1, 1, 1, 1)
+		SDL.SetRenderDrawBlendMode(gfx.draw_context.renderer, {.BLEND})
+		#partial switch v in decl.box_style {
+			case BoxStyleColored:
+				draw_box_styled(rect, v)
 		}
+	} else if item.color.a != 0 {
+		rect := item.layout_rect
+		SDL.SetRenderDrawColorFloat(gfx.draw_context.renderer, 1, 1, 1, 1)
+		SDL.SetRenderDrawBlendMode(gfx.draw_context.renderer, {.BLEND})
 
-		decl := layout_state.items_decl[idx]
-		item := layout_state.items_tree[idx]
-		if decl.box_style != nil {
-			rect := item.layout_rect
-			SDL.SetRenderDrawColorFloat(gfx.draw_context.renderer, 1, 1, 1, 1)
-			SDL.SetRenderDrawBlendMode(gfx.draw_context.renderer, {.BLEND})
-			#partial switch v in decl.box_style {
+		c := item.color
+		c.a = 1
+
+		if decl.override.type == BoxStyleColored {
+			box_style := (^BoxStyleColored)(decl.override.data)
+			draw_box_styled(rect, box_style^)
+		} else if decl.override.type == BoxStyle {
+			box_style := (^BoxStyle)(decl.override.data)
+			#partial switch v in box_style {
 				case BoxStyleColored:
 					draw_box_styled(rect, v)
 			}
-		} else if item.color.a != 0 {
-			rect := item.layout_rect
-			SDL.SetRenderDrawColorFloat(gfx.draw_context.renderer, 1, 1, 1, 1)
-			SDL.SetRenderDrawBlendMode(gfx.draw_context.renderer, {.BLEND})
-
-			c := item.color
-			c.a = 1
-
-			if decl.override.type == BoxStyleColored {
-				box_style := (^BoxStyleColored)(decl.override.data)
-				draw_box_styled(rect, box_style^)
-			} else if decl.override.type == BoxStyle {
-				box_style := (^BoxStyle)(decl.override.data)
-				#partial switch v in box_style {
-					case BoxStyleColored:
-						draw_box_styled(rect, v)
-				}
-			} else if decl.override.type == ButtonStyle {
-				button_style := (^ButtonStyle)(decl.override.data)
-				hovered := decl.focused || abm.point_in_rect(coords, rect)
-				if hovered {
-					draw_box_styled(rect, button_style.hover_box.(BoxStyleColored))
-				} else {
-					draw_box_styled(rect, button_style.idle_box.(BoxStyleColored))
-				}
+		} else if decl.override.type == ButtonStyle {
+			button_style := (^ButtonStyle)(decl.override.data)
+			hovered := decl.focused || abm.point_in_rect(coords, rect)
+			if hovered {
+				draw_box_styled(rect, button_style.hover_box.(BoxStyleColored))
 			} else {
-				corners := gfx.CornerRadii {4,4,4,4}
-				gfx.draw_box_filled(rect, corners, c)
+				draw_box_styled(rect, button_style.idle_box.(BoxStyleColored))
 			}
-		}
-		scroll, is_scroll := decl.children_layout.(Layout_Scroll)
-		if is_scroll {
-			rect := SDL.Rect{
-				c.int(item.layout_rect.x),
-				c.int(item.layout_rect.y),
-				c.int(item.layout_rect.w),
-				c.int(item.layout_rect.h),
-			}
-			
-			SDL.SetRenderClipRect(gfx.draw_context.renderer, &rect)
-			append(&draw_modifiers, ModifierInstance{decl.end})
-		}
-
-		if decl.override.type == TextStyle {
-			text_style := (^TextStyle)(decl.override.data)
-		
-			cstr := cstring(raw_data(decl.text))
-
-
-			//////////// when we handle horizontal alignment
-			font_size := scaled_text_size(text_style.size)
-			font := get_font_with_size(text_style.font, font_size)
-			TTF.SetFontWrapAlignment(font, .LEFT)
-			//
-
-			// when we handle vertical alignment
-			fit_size := item.fit_size
-			draw_rect := item.layout_rect
-
-			// if valign = middle:
-			draw_rect.y += (draw_rect.h - fit_size.y) * 0.5
-
-			
-			draw_rect.x = math.round(draw_rect.x)
-			draw_rect.y = math.round(draw_rect.y)
-	
-			sdl_text := get_text_with_font_size(text_style.font, font_size)
-			color := text_style.color.channels
-			modulate := gfx.draw_state.modulate
-			TTF.SetTextColor(sdl_text, 
-				u8(math.round(f32(color.r) * modulate[0])),
-				u8(math.round(f32(color.g) * modulate[1])),
-				u8(math.round(f32(color.b) * modulate[2])),
-				u8(math.round(f32(color.a) * modulate[3])))
-			TTF.SetTextString(sdl_text, cstr, uint(len(decl.text)))
-
-			// follow the active draw transform (e.g. modifier rotations)
-			mat := gfx.draw_state.user_matrix
-			text_transform := [6]f32 {
-				mat[0][0], mat[1][0], mat[2][0],
-				mat[0][1], mat[1][1], mat[2][1],
-			}
-			TTF.DrawRendererTextTx(sdl_text, draw_rect.x, draw_rect.y, &text_transform[0])
-		}
-
-		if decl.custom.callback_render != nil {
-			decl.custom.callback_render(layout_state, idx)
+		} else {
+			corners := gfx.CornerRadii {4,4,4,4}
+			gfx.draw_box_filled(rect, corners, c)
 		}
 	}
-
-		for ;(len(draw_modifiers) != 0); {
-			SDL.SetRenderClipRect(gfx.draw_context.renderer, nil)
-			pop(&draw_modifiers)
+	// the clip is released once the children below have been drawn, see the end of this proc
+	_, is_scroll := decl.children_layout.(Layout_Scroll)
+	if is_scroll {
+		rect := SDL.Rect{
+			c.int(item.layout_rect.x),
+			c.int(item.layout_rect.y),
+			c.int(item.layout_rect.w),
+			c.int(item.layout_rect.h),
 		}
+		
+		SDL.SetRenderClipRect(gfx.draw_context.renderer, &rect)
+	}
 
+	if decl.override.type == TextStyle {
+		text_style := (^TextStyle)(decl.override.data)
+	
+		cstr := raw_data(decl.text)
+
+
+		//////////// when we handle horizontal alignment
+		font_size := scaled_text_size(text_style.size)
+		font := get_font_with_size(text_style.font, font_size)
+		TTF.SetFontWrapAlignment(font, .LEFT)
+		//
+
+		// when we handle vertical alignment
+		fit_size := item.fit_size
+		draw_rect := item.layout_rect
+
+		// if valign = middle:
+		draw_rect.y += (draw_rect.h - fit_size.y) * 0.5
+
+		
+		draw_rect.x = math.round(draw_rect.x)
+		draw_rect.y = math.round(draw_rect.y)
+
+		sdl_text := get_text_with_font_size(text_style.font, font_size)
+		color := text_style.color.channels
+		modulate := gfx.draw_state.modulate
+		TTF.SetTextColor(sdl_text, 
+			u8(math.round(f32(color.r) * modulate[0])),
+			u8(math.round(f32(color.g) * modulate[1])),
+			u8(math.round(f32(color.b) * modulate[2])),
+			u8(math.round(f32(color.a) * modulate[3])))
+		TTF.SetTextString(sdl_text, cstr, uint(len(decl.text)))
+
+		// follow the active draw transform (e.g. modifier rotations)
+		mat := gfx.draw_state.user_matrix
+		text_transform := [6]f32 {
+			mat[0][0], mat[1][0], mat[2][0],
+			mat[0][1], mat[1][1], mat[2][1],
+		}
+		TTF.DrawRendererTextTx(sdl_text, draw_rect.x, draw_rect.y, &text_transform[0])
+	}
+
+	if decl.custom.callback_render != nil {
+		decl.custom.callback_render(layout_state, index)
+	}
+
+	layout_cursor = index + 1
+	for layout_cursor < decl.end {
+		_layout_draw_item()
+	}
+
+	if is_scroll {
+		SDL.SetRenderClipRect(gfx.draw_context.renderer, nil)
+	}
+
+	if decl.custom.modifier.callback != nil {
+		rc.state = .End
+		decl.custom.modifier.callback(decl.custom.modifier.data, &rc)
+	}
 }

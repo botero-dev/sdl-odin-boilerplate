@@ -16,11 +16,16 @@ Layout_Custom_GetFitSize :: #type proc() -> f32x2
 Layout_Custom_LayoutCallback :: #type proc()
 Layout_Custom_RenderCallback :: #type proc(layout: LayoutState, index: int)
 
+
+
 Layout_Custom_Data :: struct {
 	calc_fitsize: Layout_Custom_GetFitSize,
 	calc_layout: Layout_Custom_LayoutCallback,
+	// called after the item itself is drawn (children still pending)
 	callback_render: Layout_Custom_RenderCallback,
 	user_data: rawptr,
+	// called before the item is drawn and after its subtree, see layout_attach_modifier
+	modifier: Modifier,
 }
 
 
@@ -246,6 +251,11 @@ _layout_compute :: proc() {
 	_layout_filling()
 
 	layout_cursor = 0
+
+	for &item in layout_state.items_tree {
+		item.hovered = abm.point_in_rect(coords, item.layout_rect)
+	}
+
 	//print_layout_result()
 }
 

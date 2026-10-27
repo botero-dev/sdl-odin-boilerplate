@@ -282,8 +282,8 @@ layout_clock :: proc() {
 		calc_fitsize = proc() -> [2]f32 { return {CLK_SIZE, CLK_SIZE}},
 		callback_render = proc(layout: ui.LayoutState, index: int) {
 			computed := layout.items_tree[index].layout_rect
-			comm := ab.RenderCommand { boundingBox = computed }
-			draw_clock(nil, &comm)
+			comm := ui.RenderCommand { rect = computed }
+			draw_clock(&comm)
 		}
 	})
 
@@ -291,8 +291,8 @@ layout_clock :: proc() {
 	ui.ui_pointer_handler()
 }
 
-draw_clock :: proc(render_data: ^ab.CustomRenderData, render_command: ^ab.RenderCommand) {
-	box := render_command.boundingBox
+draw_clock :: proc(render_command: ^ui.RenderCommand) {
+	box := render_command.rect
 
 	gfx.draw_push_state()
 
@@ -441,8 +441,8 @@ layout_gallery :: proc() {
 	ui.layout_custom({
 		callback_render = proc(layout: ui.LayoutState, index: int) {
 			computed := layout.items_tree[index].layout_rect
-			comm := ab.RenderCommand { boundingBox = computed }
-			render_gallery(nil, &comm)
+			comm := ui.RenderCommand { rect = computed }
+			render_gallery(&comm)
 		}
 	})
 }
@@ -495,8 +495,8 @@ draw_tex_rect_aspect :: proc(rect: SDL.FRect, tex: ^SDL.Texture, fill: bool, col
 	SDL.RenderTexture(gfx.draw_context.renderer, tex, &srcrect, &dstrect)
 }
 
-render_gallery :: proc(render_data: ^ab.CustomRenderData, render_command: ^ab.RenderCommand) {
-	in_rect := render_command.boundingBox
+render_gallery :: proc(render_command: ^ui.RenderCommand) {
+	in_rect := render_command.rect
 
 	if len(images) <= 0 {
 		return
@@ -536,12 +536,13 @@ toolbar_opacity: f32
 toolbar_nav: ui.NavigationScope
 // set while laying out the toolbar, read by idle_toolbar on the next frame
 toolbar_navigation_focused := false
+toolbar_hovered := false
 
 idle_toolbar :: proc(dt: f64) {
 
 	mouse_activity_visible := hide_ui_time > app_time
 	navigation_focused := toolbar_navigation_focused && !toolbar_last_interaction_is_mouse
-	toolbar_visible := mouse_activity_visible || navigation_focused
+	toolbar_visible := mouse_activity_visible || navigation_focused || toolbar_hovered
 
 	if toolbar_visible {
 		if toolbar_opacity != 1.0 {
@@ -559,8 +560,6 @@ idle_toolbar :: proc(dt: f64) {
 }
 
 
-opacity_modifier: ab.UIModifierModulate
-
 layout_toolbar :: proc() {
 
 	idle_toolbar(app_dt)
@@ -573,12 +572,12 @@ layout_toolbar :: proc() {
 
 	if toolbar_opacity == 0 {
 		toolbar_navigation_focused = false
+		toolbar_hovered = false
 		return
 	}
 
 	toolbar_navigation_focused = false
-
-	opacity_modifier = ab.ui_modifier_modulate({1, 1, 1, toolbar_opacity})
+	toolbar_hovered = false
 
 		@static init := false
 		style_panel := ui.style_class("panel")
@@ -601,9 +600,13 @@ layout_toolbar :: proc() {
 		// overlay on top of root node
 		ui.layout_overlay_child({.Middle, .End})
 		ui.container_horizontal(separation = 20, offsets = ui.BoxOffsets{30, 30, 30, 30})
-	
+
+		ui.layout_attach_modifier(
+			ui.modifier_modulate({1, 1, 1, toolbar_opacity})
+		)
+		
+
 		//ui.ui_pointer_handler()
-		ab.ui_modifier(&opacity_modifier)
 		{
 			ui.container_vertical(&style_panel)
 
@@ -674,7 +677,6 @@ select_directory_callback: SDL.DialogFileCallback : proc "c" (
 
 playback_first :: proc() {
 	log.info("first")
-	ab.print_render_commands = true
 }
 
 playback_previous :: proc() {
@@ -705,7 +707,23 @@ color_hover := gfx.f32x4{0.4, 0.4, 0.4, 1}
 color_text := gfx.f32x4{0.8, 0.8, 0.8, 1}
 
 
-rotate_modifier: ab.UIModifierTransform
+// Rotates the button while it is the interaction target: hovered in mouse mode,
+// focused in keyboard mode. Returning early on both .Begin and .End for the others
+// keeps the draw state balanced.
+toolbar_rotate_callback :: proc(data: rawptr, render_command: ^ui.ModifierContext) {
+	// rotate only if focused or hovered
+	active := toolbar_last_interaction_is_mouse ? render_command.hovered : render_command.focused
+	if active {
+		tx := ui.modifier_transform({
+			mat   = linalg.matrix3_rotate(math.sin(f32(app_time * 3)) * 0.1, [3]f32{0, 0, 1}),
+			pivot = {0.5, 0.5},
+		})
+		tx.callback(tx.data, render_command)
+		
+	}
+}
+
+
 
 // Re-useable components are just normal procs.
 toolbar_button :: proc {
@@ -731,34 +749,26 @@ handle_proc_simple :: proc(userdata: ^ui.HandlerInfo) {
 
 toolbar_button_handlerinfo :: proc($label: string, info: ^ui.HandlerInfo = nil) {
 
-	//clay.UI(clay.ID(label))
-	// Register the nav item first: the layout item is created afterwards so the
-	// focus rotation modifier can wrap the whole button.
+	// Register the nav item first so its handle is available before the layout
+	// item exists. The rotation is a draw-time modifier, so it reads this frame's
+	// hover/focus state while drawing.
 	item_handle := ui.layout_button_nav(label, info)
 
 	is_focused := false
-	if toolbar_last_interaction_is_mouse {
-		//is_focused = clay.Hovered()
-	} else {
+	if !toolbar_last_interaction_is_mouse {
 		is_focused = ui.nav_get_focused(item_handle)
 	}
-
 	if is_focused {
 		toolbar_navigation_focused = true
-		rotate_modifier = ab.ui_modifier_transform(
-			linalg.matrix3_rotate(math.sin(f32(app_time * 3)) * 0.1, [3]f32{0, 0, 1}),
-			{0.5, 0.5},
-		)
-		ab.ui_modifier_push(&rotate_modifier)
 	}
 
 	ui.layout_button_begin_registered(label, info, item_handle)
 	ui.layout_set_focused(is_focused)
+
+	ui.layout_attach_modifier({toolbar_rotate_callback, nil})
+
 	ui.layout_text(label)
 	ui.layout_close() // button box
 
-	if is_focused {
-		ab.ui_modifier_pop(&rotate_modifier)
-	}
-
 }
+

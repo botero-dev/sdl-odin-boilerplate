@@ -64,7 +64,7 @@ compile_cmd=("$ODIN" build "$PROJECT" "-collection:engine=engine")
 if [[ "$TARGET" = "linux" ]]; then
 
 	rpath_var='$ORIGIN/lib'
-	runtime_lib_flag="-Wl,-rpath,'$rpath_var'"
+	runtime_lib_flag="-Wl,-rpath,$rpath_var"
 	compile_lib_flag="-L$INSTALL_PATH/lib"
 	compile_cmd+=(
 		-extra-linker-flags:"$compile_lib_flag $runtime_lib_flag"
