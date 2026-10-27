@@ -114,3 +114,12 @@ scaling_apply_rounded :: proc "contextless" (policy: RoundingPolicy, value: $T) 
 border_policy :: proc "contextless" (border: $T) -> u16 {
 	return u16(scaling_apply_rounded(.Round, f32(border))) // could also be ceil or floor
 }
+
+// available user scaling factors, stepped through with Ctrl+= / Ctrl+-
+dpi_index := 4
+dpi_levels := []f32{0.5, 0.66666666666666, 0.8, 0.9, 1, 1.1, 1.25, 1.3333333333333, 1.5, 2, 2.5, 3, 4}
+
+dpi_offset :: proc(offset: int) {
+	dpi_index = clamp(dpi_index + offset, 0, len(dpi_levels) - 1)
+	scaling_set_factor(dpi_levels[dpi_index])
+}

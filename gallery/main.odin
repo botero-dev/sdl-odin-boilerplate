@@ -690,13 +690,9 @@ playback_next :: proc() {
 }
 
 
-dpi_index := 2
-dpi_levels := []f32{0.5, 0.8, 1, 1.5, 2, 3, 4}
+// the slideshow demo reuses this button to step the UI scale
 playback_last :: proc() {
-	log.info("last")
-	dpi_index = (dpi_index + 1) % len(dpi_levels)
-	dpi_user := dpi_levels[dpi_index]
-	ui.scaling_set_factor(dpi_user)
+	ui.dpi_offset(1)
 	// ab.DPI_set(ab.dpi_user * ab.dpi_window)
 }
 

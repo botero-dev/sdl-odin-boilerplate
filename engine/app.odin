@@ -29,12 +29,16 @@ EventHandler :: evt.EventHandler
 event_handler_stack: [dynamic]EventHandler
 
 input_fullscreen: MappingIndex
+input_zoom_in: MappingIndex
+input_zoom_out: MappingIndex
 input_quit: MappingIndex
 input_inspector: MappingIndex
 
 app_event_init :: proc() {
 
 	input_fullscreen = evt.create_keyboard_mapping(.F11)
+	input_zoom_in = evt.create_keyboard_mapping(.EQUALS, evt.KeyboardEventModifiers{.Control})
+	input_zoom_out = evt.create_keyboard_mapping(.MINUS, evt.KeyboardEventModifiers{.Control})
 	input_quit = evt.create_keyboard_mapping(.ESCAPE)
 	input_inspector = evt.create_keyboard_mapping(.F8)
 
@@ -70,6 +74,16 @@ system_handler :: proc(event: ^Event) {
 			current_fullscreen := (SDL.GetWindowFlags(window) & SDL.WINDOW_FULLSCREEN) != {}
 			SDL.SetWindowFullscreen(window, !current_fullscreen)
 		}
+	}
+
+	if pressed, matches := evt.match_mapping_button(event, input_zoom_in); matches && pressed {
+		event.handled = true
+		ui.dpi_offset(1)
+	}
+
+	if pressed, matches := evt.match_mapping_button(event, input_zoom_out); matches && pressed {
+		event.handled = true
+		ui.dpi_offset(-1)
 	}
 
 	if pressed, matches := evt.match_mapping_button(event, input_quit); matches && pressed {
